@@ -1,0 +1,51 @@
+{
+  "name": "Belliar system",
+  "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8894786",
+  "star": {
+    "name": "Belliar",
+    "type": "Red Supergiant",
+    "color": "#EF4444",
+    "secondaryColor": "#7F1D1D"
+  },
+  "bodies": [
+    {
+      "id": "leo-1",
+      "name": "Gallor",
+      "type": "planet",
+      "biome": "molten",
+      "orbitPosition": 40,
+      "orbitDistance": 0.6,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8909208"
+    },
+    {
+      "id": "leo-2",
+      "name": "Leo 2",
+      "type": "planet",
+      "biome": "gas-giant",
+      "orbitPosition": 210,
+      "orbitDistance": 0.65,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915786"
+    },
+    {
+      "id": "leo-3",
+      "name": "Leo 3",
+      "type": "planet",
+      "biome": "irradiated",
+      "orbitPosition": 300,
+      "orbitDistance": 0.85,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915788"
+    },
+    {
+      "id": "reliquary",
+      "name": "The Reliquary",
+      "type": "station",
+      "orbitPosition": 10,
+      "orbitDistance": 0.4,
+      "labelPosition": "bottom"
+    }
+  ]
+}

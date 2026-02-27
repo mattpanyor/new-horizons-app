@@ -1,0 +1,52 @@
+{
+  "name": "Pernat System",
+  "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8641988",
+  "star": {
+    "name": "Pernat",
+    "type": "Blue Main Sequence",
+    "color": "#60A5FA",
+    "secondaryColor": "#1D4ED8"
+  },
+  "bodies": [
+    {
+      "id": "menlar-1",
+      "name": "Indra (Menlar 1)",
+      "type": "planet",
+      "biome": "jungle",
+      "orbitPosition": 130,
+      "orbitDistance": 0.7,
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8641989"
+    },
+    {
+      "id": "menlar-2",
+      "name": "Menlar 2",
+      "type": "planet",
+      "biome": "gas-giant",
+      "orbitPosition": 20,
+      "orbitDistance": 0.55,
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8894030"
+    },
+    {
+      "id": "menlar-3",
+      "name": "Menlar 3",
+      "type": "planet",
+      "biome": "ash",
+      "orbitPosition": 35,
+      "orbitDistance": 0.60,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8894032"
+    },
+    {
+      "id": "tetras",
+      "name": "Tetras station",
+      "type": "station",
+      "orbitPosition": 280,
+      "orbitDistance": 0.30,
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8894034"
+    }
+  ]
+}

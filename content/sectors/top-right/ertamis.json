@@ -1,0 +1,43 @@
+{
+  "name": "Ertamis System",
+  "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8424926",
+  "star": {
+    "name": "Ertamis",
+    "type": "Orange Dwarf",
+    "color": "#FB923C",
+    "secondaryColor": "#C2410C"
+  },
+  "bodies": [
+    {
+      "id": "novax-7",
+      "name": "Novax 7",
+      "type": "planet",
+      "biome": "mining",
+      "orbitPosition": 130,
+      "orbitDistance": 0.48,
+      "labelPosition": "top",
+      "lathanium": true,
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8424928"
+    },
+    {
+      "id": "novax-5",
+      "name": "Novax 5",
+      "type": "planet",
+      "biome": "toxic",
+      "orbitPosition": 100,
+      "orbitDistance": 0.9,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8424929"
+    },
+    {
+      "id": "lights-mercy",
+      "name": "Light's Mercy station",
+      "type": "station",
+      "orbitPosition": 140,
+      "orbitDistance": 0.55,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8424931"
+    }
+  ]
+}

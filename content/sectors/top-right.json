@@ -1,0 +1,48 @@
+{
+  "name": "Atlas sector",
+  "description": "The outermost frontier of charted space. Ancient ruins dot the fringe worlds here, and the silence between stars feels older than memory.",
+  "color": "#6366F1",
+  "nebulaColor": "#1E1B4B",
+  "published": true,
+  "vortexes": [
+    {
+      "slug": "cadrian-vortex",
+      "name": "Cadrian Vortex",
+      "x": 500,
+      "y": 550,
+      "color": "#A78BFA",
+      "radius": 120,
+      "ratio": [
+        5,
+        3
+      ]
+    }
+  ],
+  "systems": [
+    {
+      "slug": "pelao",
+      "x": 800,
+      "y": 280
+    },
+    {
+      "slug": "belliar",
+      "x": 190,
+      "y": -70
+    },
+    {
+      "slug": "ertamis",
+      "x": 250,
+      "y": 380
+    },
+    {
+      "slug": "pernat",
+      "x": 900,
+      "y": 600
+    },
+    {
+      "slug": "callisto",
+      "x": 500,
+      "y": 150
+    }
+  ]
+}

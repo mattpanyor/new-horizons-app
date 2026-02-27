@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Deep space background layers */
+.space-bg {
+  background: radial-gradient(ellipse at 20% 50%,
+      rgba(30, 27, 75, 0.4) 0%,
+      transparent 50%),
+    radial-gradient(ellipse at 80% 20%,
+      rgba(88, 28, 135, 0.2) 0%,
+      transparent 40%),
+    radial-gradient(ellipse at 50% 80%,
+      rgba(15, 23, 42, 0.3) 0%,
+      transparent 50%),
+    linear-gradient(to bottom,
+      #030014 0%,
+      #0a0a2e 40%,
+      #0f0f23 100%);
+}
+
+.space-stars {
+  background-image: radial-gradient(1px 1px at 10% 15%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 25% 45%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(2px 2px at 40% 25%, rgba(200, 220, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 55% 65%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 70% 35%, rgba(255, 200, 150, 0.6), transparent),
+    radial-gradient(2px 2px at 85% 55%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 15% 75%, rgba(200, 200, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 95% 85%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 50% 10%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 35% 90%, rgba(255, 220, 200, 0.5), transparent);
+  background-repeat: repeat;
+  background-size: 250px 250px;
+  animation: twinkle 5s ease-in-out infinite;
+}
+
+/* Sci-fi card with glass morphism and holographic border */
+.scifi-card {
+  position: relative;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 0.5rem;
+  box-shadow:
+    0 0 15px rgba(99, 102, 241, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark .scifi-card {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(139, 92, 246, 0.4);
+  box-shadow:
+    0 0 20px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Star glow pulse animation */
+@keyframes starPulse {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}

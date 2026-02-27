@@ -1,0 +1,63 @@
+{
+  "name": "Callisto System",
+  "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8893889",
+  "star": {
+    "name": "Callisto",
+    "type": "White Dwarf",
+    "color": "#E2E8F0",
+    "secondaryColor": "#94A3B8"
+  },
+  "bodies": [
+    {
+      "id": "drent",
+      "name": "Drent",
+      "type": "planet",
+      "biome": "mining",
+      "orbitPosition": 340,
+      "orbitDistance": 0.8,
+      "labelPosition": "bottom",
+      "lathanium": true,
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893899"
+    },
+    {
+      "id": "fulcrum",
+      "name": "Fulcrum station",
+      "type": "station",
+      "orbitPosition": 200,
+      "orbitDistance": 0.5,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893933"
+    },
+    {
+      "id": "eterna",
+      "name": "Eterna",
+      "type": "planet",
+      "biome": "continental",
+      "orbitPosition": 190,
+      "orbitDistance": 0.4,
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899890"
+    },
+    {
+      "id": "altara",
+      "name": "Altara",
+      "type": "planet",
+      "biome": "alpine",
+      "orbitPosition": 140,
+      "orbitDistance": 0.6,
+      "labelPosition": "bottom",
+      "nobility": true,
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893898"
+    },
+    {
+      "id": "2nd-exp-fleet",
+      "name": "2nd Exploratory Fleet",
+      "type": "fleet",
+      "orbitPosition": 270,
+      "orbitDistance": 0.7,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893940"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "name": "Pelao System",
+  "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8893960",
+  "star": {
+    "name": "Pelao",
+    "type": "Yellow Dwarf",
+    "color": "#FCD34D",
+    "secondaryColor": "#F59E0B"
+  },
+  "bodies": [
+    {
+      "id": "bertan-4",
+      "name": "Elsbeth field",
+      "type": "asteroid-field",
+      "orbitPosition": 75,
+      "orbitDistance": 0.55,
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899789"
+    },
+    {
+      "id": "bertan-2",
+      "name": "Bertan 2",
+      "type": "planet",
+      "biome": "desert",
+      "orbitPosition": 315,
+      "orbitDistance": 0.55,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899796"
+    },
+    {
+      "id": "bertan-3",
+      "name": "Verdantia",
+      "type": "planet",
+      "biome": "tropical",
+      "orbitPosition": 210,
+      "orbitDistance": 0.65,
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899809"
+    },
+    {
+      "id": "bertan-1",
+      "name": "Bertan 1",
+      "type": "planet",
+      "biome": "molten",
+      "orbitPosition": 135,
+      "orbitDistance": 0.35,
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899795"
+    },
+    {
+      "id": "first-light",
+      "name": "First light station",
+      "type": "station",
+      "orbitPosition": 155,
+      "orbitDistance": 0.4,
+      "labelPosition": "bottom"
+    }
+  ]
+}
