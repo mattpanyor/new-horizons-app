@@ -1,0 +1,35 @@
+[
+  {
+    "username": "gamemaster",
+    "group": "GM",
+    "password": "gm123"
+  },
+  {
+    "username": "geri",
+    "group": "Applied Discorvery",
+    "role": "Sentinel",
+    "character": "Vaelin Thryndal",
+    "password": "AD"
+  },
+  {
+    "username": "gary",
+    "group": "Cathedral of Solis Invictus",
+    "role": "Justicar",
+    "character": "Malrik Thane",
+    "password": "CSI"
+  },
+  {
+    "username": "tundi",
+    "group": "Lenard Institute of Interspecies and Xenosciences",
+    "role": "Chancelor",
+    "character": "Baronet Danarill Lenard",
+    "password": "LIIX"
+  },
+  {
+    "username": "alex",
+    "group": "Sanctum Arcanum",
+    "role": "Senior Artificer",
+    "character": "Arion Fabrius",
+    "password": "SA"
+  }
+]

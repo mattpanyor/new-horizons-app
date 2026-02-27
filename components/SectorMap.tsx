@@ -137,15 +137,20 @@ function getBodyPos(orbitPos: number, orbitDist: number) {
 interface SectorMapProps {
   sector: SectorMetadata;
   systemsData?: Record<string, StarSystemMetadata>;
+  onSystemChange?: (slug: string | null) => void;
 }
 
-export default function SectorMap({ sector, systemsData = {} }: SectorMapProps) {
+export default function SectorMap({ sector, systemsData = {}, onSystemChange }: SectorMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [vb, setVb] = useState<ViewBox>(DEFAULT_VB);
   const [cursorGrab, setCursorGrab] = useState(false);
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
   const [activeBodyId, setActiveBodyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    onSystemChange?.(activeSystemSlug);
+  }, [activeSystemSlug, onSystemChange]);
   const panStart = useRef<{ x: number; y: number; vbX: number; vbY: number } | null>(null);
   const pinchStart = useRef<{ dist: number; vb: ViewBox } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

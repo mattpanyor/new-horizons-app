@@ -1,6 +1,7 @@
 import { getAllSectors } from "@/lib/sectors";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import GalacticMap from "@/components/GalacticMap";
+import PresenceCard from "@/components/PresenceCard";
 
 export default function SectorsPage() {
   const sectors = getAllSectors();
@@ -17,6 +18,7 @@ export default function SectorsPage() {
         </p>
         <GalacticMap sectors={sectors} />
       </div>
+      <PresenceCard position="Galactic Map" />
     </>
   );
 }
