@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# New Horizons
+
+An interactive galactic map and session companion for tabletop RPG campaigns. Players log in to their faction account and explore charted star systems together in real time.
+
+## Features
+
+- **Login** — per-player accounts with faction, role, and character data
+- **Welcome screen** — personalized faction greeting on each login
+- **Galactic Map** — interactive SVG overview of all sectors
+- **Sector Maps** — zoomable, pannable maps with star systems and celestial bodies
+- **Live Presence** — see where other crew members are navigating in real time
+- **Navbar** — faction identity bar visible across all session pages
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). You'll be directed to the login screen.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Users
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Users are defined in `data/users.json`. Each entry supports:
 
-## Learn More
+| Field | Required | Description |
+|---|---|---|
+| `username` | ✓ | Login username |
+| `password` | ✓ | Login password |
+| `group` | ✓ | Faction name |
+| `character` | | Full character name |
+| `role` | | Title or rank |
 
-To learn more about Next.js, take a look at the following resources:
+Sessions expire after **1 hour**. Visit `/logout` to log out manually.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Content
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Sector and star system data lives in `content/sectors/`. Each sector has a JSON file at the root level and a subdirectory for its star systems.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+content/
+  sectors/
+    top-right.json
+    top-right/
+      callisto.json
+      pelao.json
+      ...
+```
