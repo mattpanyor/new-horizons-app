@@ -17,6 +17,8 @@ export default function PresenceCard({ position }: { position: string }) {
   const [users, setUsers] = useState<UserPresence[]>([]);
   const [open, setOpen] = useState(true);
   const usernameRef = useRef<string | null>(null);
+  const lastUsersJsonRef = useRef<string>("");
+  const prevPositionRef = useRef<string | null>(null);
 
   // Resolve username once on mount
   useEffect(() => {
@@ -25,6 +27,8 @@ export default function PresenceCard({ position }: { position: string }) {
 
   // Report own position whenever it changes
   useEffect(() => {
+    if (prevPositionRef.current === position) return;
+    prevPositionRef.current = position;
     const username = usernameRef.current ?? getUsername();
     if (!username) return;
     fetch("/api/presence", {
@@ -38,11 +42,33 @@ export default function PresenceCard({ position }: { position: string }) {
   useEffect(() => {
     const poll = async () => {
       const res = await fetch("/api/presence");
-      if (res.ok) setUsers(await res.json());
+      if (res.ok) {
+        const data: UserPresence[] = await res.json();
+        const json = JSON.stringify(data);
+        if (json !== lastUsersJsonRef.current) {
+          lastUsersJsonRef.current = json;
+          setUsers(data);
+        }
+      }
     };
     poll();
-    const id = setInterval(poll, 5000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | null = setInterval(poll, 5000);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (id) { clearInterval(id); id = null; }
+      } else {
+        if (id) clearInterval(id);
+        poll();
+        id = setInterval(poll, 5000);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (id) clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   if (users.length === 0) return null;
