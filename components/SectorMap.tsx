@@ -395,7 +395,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
           className="absolute inset-0 w-full h-full"
           style={{ userSelect: "none" }}
-          onClick={() => { if (activeSystemSlug) exitSystem(); else if (activeBodyId) setActiveBodyId(null); }}
+          onClick={() => { if (activeBodyId) setActiveBodyId(null); }}
         >
           {/* Gradient defs for every system */}
           <defs>
