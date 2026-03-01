@@ -6,6 +6,8 @@ import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors } from "@/lib/bodyColors";
 import { toRad, annularSectorPath, arcStrokePath } from "@/lib/svgGeometry";
 import { SvgTooltip } from "@/components/SvgTooltip";
+import { useSvgTooltipTimer } from "@/hooks/useSvgTooltipTimer";
+import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 
 const FULL_W = 1200;
 const FULL_H = 800;
@@ -59,8 +61,6 @@ const FOCUS_ZOOM = 5.5; // zoom level when a system is clicked
 const SYS_SCALE = 0.28;
 const SYS_MAX_R = 250;
 
-interface ViewBox { x: number; y: number; w: number; h: number }
-const DEFAULT_VB: ViewBox = { x: 0, y: 0, w: FULL_W, h: FULL_H };
 
 const BG_STARS = [
   { x: 80,   y: 60  }, { x: 200,  y: 35  }, { x: 380,  y: 20  }, { x: 550,  y: 55  },
@@ -127,226 +127,53 @@ interface SectorMapProps {
 }
 
 export default function SectorMap({ sector, systemsData = {}, onSystemChange }: SectorMapProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [vb, setVb] = useState<ViewBox>(DEFAULT_VB);
-  const [cursorGrab, setCursorGrab] = useState(false);
+  const {
+    containerRef, vb, setVb, zoom, cursorGrab, didDragRef,
+    zoomIn, zoomOut, resetView: resetPanZoom, handlers,
+  } = useSvgPanZoom({ width: FULL_W, height: FULL_H, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
+
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
-  const [activeBodyId, setActiveBodyId] = useState<string | null>(null);
+  const {
+    activeId: activeBodyId, activeIdRef: activeBodyIdRef, cardHoveredRef,
+    show: showBody, hideNow: hideBody, scheduleHide, proximityHide, cardEnter, cardLeave,
+  } = useSvgTooltipTimer();
 
   useEffect(() => {
     onSystemChange?.(activeSystemSlug);
   }, [activeSystemSlug, onSystemChange]);
-  const panStart = useRef<{ x: number; y: number; vbX: number; vbY: number } | null>(null);
-  const pinchStart = useRef<{ dist: number; vb: ViewBox } | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const didDragRef = useRef(false);
-  const wheelHandlerRef = useRef<(e: WheelEvent) => void>(() => {});
-  const rafIdRef = useRef<number | null>(null);
+
   const bodyRafRef = useRef<number | null>(null);
-  const pinchRafRef = useRef<number | null>(null);
-  const activeBodyIdRef = useRef(activeBodyId);
-  useEffect(() => { activeBodyIdRef.current = activeBodyId; }, [activeBodyId]);
   const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
 
-  const zoom = FULL_W / vb.w;
-  const nebulaColor = sector.nebulaColor ?? sector.color;
-
-  const screenToSvg = useCallback(
-    (clientX: number, clientY: number) => {
-      const el = containerRef.current;
-      if (!el) return { x: FULL_W / 2, y: FULL_H / 2 };
-      const rect = el.getBoundingClientRect();
-      return {
-        x: vb.x + ((clientX - rect.left) / rect.width) * vb.w,
-        y: vb.y + ((clientY - rect.top) / rect.height) * vb.h,
-      };
-    },
-    [vb]
-  );
-
-  const zoomAt = useCallback((svgX: number, svgY: number, factor: number) => {
-    setVb((prev) => {
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (FULL_W / prev.w) * factor));
-      const newW = FULL_W / newZoom;
-      const newH = FULL_H / newZoom;
-      const ratio = newW / prev.w;
-      return {
-        x: svgX - (svgX - prev.x) * ratio,
-        y: svgY - (svgY - prev.y) * ratio,
-        w: newW, h: newH,
-      };
-    });
-  }, []);
-
-  const wheelRafRef = useRef<number | null>(null);
-  const handleWheel = useCallback(
-    (e: WheelEvent) => {
-      e.preventDefault();
-      const pt = screenToSvg(e.clientX, e.clientY);
-      const factor = e.deltaY < 0 ? 1 + ZOOM_STEP : 1 / (1 + ZOOM_STEP);
-      if (wheelRafRef.current !== null) cancelAnimationFrame(wheelRafRef.current);
-      wheelRafRef.current = requestAnimationFrame(() => {
-        wheelRafRef.current = null;
-        zoomAt(pt.x, pt.y, factor);
-      });
-    },
-    [screenToSvg, zoomAt]
-  );
-  wheelHandlerRef.current = handleWheel;
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.button !== 0) return;
-      didDragRef.current = false;
-      setCursorGrab(true);
-      panStart.current = { x: e.clientX, y: e.clientY, vbX: vb.x, vbY: vb.y };
-    },
-    [vb.x, vb.y]
-  );
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const pan = panStart.current;
-    if (!pan || !containerRef.current) return;
-    if (Math.abs(e.clientX - pan.x) > 3 || Math.abs(e.clientY - pan.y) > 3) {
-      didDragRef.current = true;
-    }
-    const rect = containerRef.current.getBoundingClientRect();
-    const clientX = e.clientX;
-    const clientY = e.clientY;
-    if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-    rafIdRef.current = requestAnimationFrame(() => {
-      rafIdRef.current = null;
-      setVb((prev) => ({
-        ...prev,
-        x: pan.vbX - ((clientX - pan.x) / rect.width) * prev.w,
-        y: pan.vbY - ((clientY - pan.y) / rect.height) * prev.h,
-      }));
-    });
-  }, []);
-
-  const handleMouseUp = useCallback(() => {
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-    setCursorGrab(false);
-    panStart.current = null;
-  }, []);
-
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      if (e.touches.length === 1) {
-        const t = e.touches[0];
-        didDragRef.current = false;
-        panStart.current = { x: t.clientX, y: t.clientY, vbX: vb.x, vbY: vb.y };
-        pinchStart.current = null;
-      } else if (e.touches.length === 2) {
-        panStart.current = null;
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        pinchStart.current = { dist: Math.sqrt(dx * dx + dy * dy), vb: { ...vb } };
-      }
-    },
-    [vb]
-  );
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 1 && panStart.current && containerRef.current) {
-      const t = e.touches[0];
-      const pan = panStart.current;
-      if (Math.abs(t.clientX - pan.x) > 3 || Math.abs(t.clientY - pan.y) > 3) {
-        didDragRef.current = true;
-      }
-      const rect = containerRef.current.getBoundingClientRect();
-      const clientX = t.clientX;
-      const clientY = t.clientY;
-      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = requestAnimationFrame(() => {
-        rafIdRef.current = null;
-        setVb((prev) => ({
-          ...prev,
-          x: pan.vbX - ((clientX - pan.x) / rect.width) * prev.w,
-          y: pan.vbY - ((clientY - pan.y) / rect.height) * prev.h,
-        }));
-      });
-    } else if (e.touches.length === 2 && pinchStart.current && containerRef.current) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const pinch = pinchStart.current;
-      const rect = containerRef.current.getBoundingClientRect();
-      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      if (pinchRafRef.current !== null) cancelAnimationFrame(pinchRafRef.current);
-      pinchRafRef.current = requestAnimationFrame(() => {
-        pinchRafRef.current = null;
-        const scale = dist / pinch.dist;
-        const svgX = pinch.vb.x + ((midX - rect.left) / rect.width) * pinch.vb.w;
-        const svgY = pinch.vb.y + ((midY - rect.top) / rect.height) * pinch.vb.h;
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (FULL_W / pinch.vb.w) * scale));
-        const newW = FULL_W / newZoom;
-        const newH = FULL_H / newZoom;
-        const ratio = newW / pinch.vb.w;
-        setVb({
-          x: svgX - (svgX - pinch.vb.x) * ratio,
-          y: svgY - (svgY - pinch.vb.y) * ratio,
-          w: newW, h: newH,
-        });
-      });
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    panStart.current = null;
-    pinchStart.current = null;
-  }, []);
-
+  // Cleanup body proximity RAF on unmount
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => wheelHandlerRef.current(e);
-    const prevent = (e: TouchEvent) => e.preventDefault();
-    el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("touchmove", prevent, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("touchmove", prevent);
-      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-      if (wheelRafRef.current !== null) cancelAnimationFrame(wheelRafRef.current);
-      if (bodyRafRef.current !== null) cancelAnimationFrame(bodyRafRef.current);
-      if (pinchRafRef.current !== null) cancelAnimationFrame(pinchRafRef.current);
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
+    return () => { if (bodyRafRef.current !== null) cancelAnimationFrame(bodyRafRef.current); };
   }, []);
+
+  const nebulaColor = sector.nebulaColor ?? sector.color;
 
   const resetView = useCallback(() => {
     setActiveSystemSlug(null);
-    setActiveBodyId(null);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    setVb(DEFAULT_VB);
-  }, []);
-
-  const zoomIn  = useCallback(() => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1 + ZOOM_STEP * 2), [vb, zoomAt]);
-  const zoomOut = useCallback(() => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1 / (1 + ZOOM_STEP * 2)), [vb, zoomAt]);
+    hideBody();
+    resetPanZoom();
+  }, [hideBody, resetPanZoom]);
 
   // Focus a system: zoom the viewBox to centre on it
   const focusSystem = useCallback((pin: SystemPin) => {
     setActiveSystemSlug(pin.slug);
-    setActiveBodyId(null);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideBody();
     const w = FULL_W / FOCUS_ZOOM;
     const h = FULL_H / FOCUS_ZOOM;
     setVb({ x: pin.x - w / 2, y: pin.y - h / 2, w, h });
-  }, []);
+  }, [hideBody]);
 
   // Exit system view, return to sector overview
   const exitSystem = useCallback(() => {
     setActiveSystemSlug(null);
-    setActiveBodyId(null);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    setVb(DEFAULT_VB);
-  }, []);
+    hideBody();
+    resetPanZoom();
+  }, [hideBody, resetPanZoom]);
 
   // Escape key exits system zoom
   useEffect(() => {
@@ -376,61 +203,14 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
       // Only activate if the system is within the visible viewport
       if (best && bestDist < Math.min(vb.w, vb.h) * 0.6) {
         setActiveSystemSlug(best.slug);
-        setActiveBodyId(null);
+        hideBody();
       }
     } else if (currentZoom < AUTO_SELECT_ZOOM && activeSystemSlug) {
       // Auto-deactivate when zooming back out
       setActiveSystemSlug(null);
-      setActiveBodyId(null);
+      hideBody();
     }
-  }, [vb, activeSystemSlug, sector.systems]);
-
-  // Body hover/tap helpers — instant show, smart hide:
-  // proximityHide: if tooltip visible < 200ms (fly-by), hide instantly; else 450ms gap tolerance
-  // scheduleHide: always 450ms delay (used by mouseleave and card leave — needs gap tolerance)
-  const cardHovered = useRef(false);
-  const shownAt = useRef<number>(0);
-
-  const showBody = useCallback((id: string) => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (activeBodyIdRef.current === id) return;
-    activeBodyIdRef.current = id;
-    cardHovered.current = false;
-    shownAt.current = Date.now();
-    setActiveBodyId(id);
-  }, []);
-
-  const scheduleHide = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => { activeBodyIdRef.current = null; setActiveBodyId(null); }, 450);
-  }, []);
-
-  /** Hide triggered by proximity detection (cursor left all hit zones) */
-  const proximityHide = useCallback(() => {
-    const elapsed = Date.now() - shownAt.current;
-    if (elapsed < 200) {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      activeBodyIdRef.current = null;
-      setActiveBodyId(null);
-    } else {
-      scheduleHide();
-    }
-  }, [scheduleHide]);
-
-  const cancelHide = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-  }, []);
-
-  const cardEnter = useCallback(() => {
-    cardHovered.current = true;
-    cancelHide();
-  }, [cancelHide]);
-
-  const cardLeave = useCallback(() => {
-    cardHovered.current = false;
-    if (Date.now() - shownAt.current < 150) return;
-    scheduleHide();
-  }, [scheduleHide]);
+  }, [vb, activeSystemSlug, sector.systems, hideBody]);
 
   // Proximity-based hover: find nearest body to cursor within the scaled group
   // Hit radius scales with body visual size so small bodies don't have huge hover zones
@@ -443,30 +223,27 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     }
   }, []);
 
-  const nearestBody = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
-    const g = e.currentTarget;
+  // Shared hit-test: find nearest body to a screen point within a scaled <g>
+  const findNearestBody = useCallback((
+    clientX: number, clientY: number,
+    g: SVGGElement, bodies: StarSystemMetadata["bodies"]
+  ) => {
     const svg = g.ownerSVGElement;
     if (!svg) return null;
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
     const ctm = g.getScreenCTM();
     if (!ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
     const localPt = pt.matrixTransform(ctm.inverse());
-
     let nearest: string | null = null;
-    let bestRatio = 1; // dist / hitRadius — lower = closer relative to allowed range
+    let bestRatio = 1;
     for (const body of bodies) {
       const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
       const dx = localPt.x - pos.x;
       const dy = localPt.y - pos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const hr = bodyHitRadius(body);
-      const ratio = dist / hr;
-      if (ratio < bestRatio) {
-        bestRatio = ratio;
-        nearest = body.id;
-      }
+      const ratio = Math.sqrt(dx * dx + dy * dy) / bodyHitRadius(body);
+      if (ratio < bestRatio) { bestRatio = ratio; nearest = body.id; }
     }
     return nearest;
   }, [bodyHitRadius]);
@@ -479,45 +256,27 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     const target = e.currentTarget;
     bodyRafRef.current = requestAnimationFrame(() => {
       bodyRafRef.current = null;
-      const svg = target.ownerSVGElement;
-      if (!svg) return;
-      const ctm = target.getScreenCTM();
-      if (!ctm) return;
-      const pt = svg.createSVGPoint();
-      pt.x = clientX;
-      pt.y = clientY;
-      const localPt = pt.matrixTransform(ctm.inverse());
-      let nearest: string | null = null;
-      let bestRatio = 1;
-      for (const body of bodies) {
-        const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
-        const dx = localPt.x - pos.x;
-        const dy = localPt.y - pos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const hr = bodyHitRadius(body);
-        const ratio = dist / hr;
-        if (ratio < bestRatio) { bestRatio = ratio; nearest = body.id; }
-      }
+      const nearest = findNearestBody(clientX, clientY, target, bodies);
       if (nearest && nearest !== activeBodyIdRef.current) {
         showBody(nearest);
-      } else if (!nearest && !cardHovered.current) {
+      } else if (!nearest && !cardHoveredRef.current) {
         proximityHide();
       }
     });
-  }, [showBody, proximityHide, bodyHitRadius]);
+  }, [findNearestBody, showBody, proximityHide]);
 
   const handleBodyClick = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
-    const nearest = nearestBody(e, bodies);
+    const nearest = findNearestBody(e.clientX, e.clientY, e.currentTarget, bodies);
     if (nearest) {
       e.stopPropagation();
       showBody(nearest);
     }
-  }, [nearestBody, showBody]);
+  }, [findNearestBody, showBody]);
 
   const handleSvgClick = useCallback(() => {
     if (didDragRef.current) return;
-    if (activeBodyId) setActiveBodyId(null);
-  }, [activeBodyId]);
+    if (activeBodyIdRef.current) hideBody();
+  }, [activeBodyIdRef, hideBody]);
 
   const gradientDefs = useMemo(() => (
     <defs>
@@ -579,13 +338,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
           cursor: cursorGrab ? "grabbing" : "grab",
           touchAction: "none",
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        {...handlers}
+        onMouseLeave={handlers.onMouseUp}
         onDoubleClick={() => { if (!didDragRef.current) resetView(); }}
       >
         {/* ── Layer 1: Fixed nebula background (CSS, never zooms) ── */}
