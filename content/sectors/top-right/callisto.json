@@ -15,7 +15,7 @@
       "type": "planet",
       "biome": "mining",
       "orbitPosition": 340,
-      "orbitDistance": 0.8,
+      "orbitDistance": 0.6,
       "labelPosition": "bottom",
       "lathanium": true,
       "kankaUrl": "https://app.kanka.io/w/96303/entities/8893899"

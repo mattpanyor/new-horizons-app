@@ -96,11 +96,15 @@ const BG_STARS = [
 const tri = (cx: number, cy: number, r: number) =>
   `${cx},${cy - r} ${cx - r * 0.7},${cy + r * 0.6} ${cx + r * 0.7},${cy + r * 0.6}`;
 
-// Fleet formation: lead (large) + left-medium + right-small
+// Triangle pointing left, centered at (cx, cy) with half-width r
+const triLeft = (cx: number, cy: number, r: number) =>
+  `${cx - r},${cy} ${cx + r * 0.6},${cy - r * 0.7} ${cx + r * 0.6},${cy + r * 0.7}`;
+
+// Fleet formation: lead at front-left, two escorts trailing right
 const FLEET_SHIPS = [
-  { dx: 0,   dy:  0, r: 14 },
-  { dx: -18, dy: 10, r: 10 },
-  { dx:  14, dy: 12, r:  7 },
+  { dx:  0,  dy:  0, r: 14 },
+  { dx: 20,  dy: -9, r: 10 },
+  { dx: 20,  dy:  9, r:  7 },
 ];
 
 // Deterministic dot cluster for asteroid fields — seed from body id
@@ -399,6 +403,11 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
         >
           {/* Gradient defs for every system */}
           <defs>
+            {/* Fleet ships: tip (left) = blue, base (right) = grey */}
+            <linearGradient id="fleetGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%"   stopColor="#FFD700" />
+              <stop offset="100%" stopColor="#4169E1" />
+            </linearGradient>
             {sector.systems.flatMap((pin) => {
               const sys = systemsData[pin.slug];
               if (!sys) return [];
@@ -618,8 +627,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
                               {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
                                 <polygon
                                   key={i}
-                                  points={tri(pos.x + dx, pos.y + dy, r)}
-                                  fill={bodyColor}
+                                  points={triLeft(pos.x + dx, pos.y + dy, r)}
+                                  fill="url(#fleetGrad)"
                                   fillOpacity={0.9}
                                   stroke={activeStroke}
                                   strokeWidth={isBodyActive ? "1.5" : "0.6"}
@@ -812,7 +821,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
       {activeSystemSlug && (
         <button
           onClick={exitSystem}
-          className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded scifi-card text-xs text-slate-300 hover:text-white transition-colors"
+          className="absolute top-3 left-3 z-10 flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-1.5 md:py-2.5 rounded scifi-card text-xs md:text-xl text-slate-300 hover:text-white transition-colors"
           style={{ fontFamily: "var(--font-cinzel), serif" }}
         >
           <span>&#x2190;</span>
