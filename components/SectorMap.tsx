@@ -5,6 +5,7 @@ import type { SectorMetadata, VortexPin, SystemPin } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors } from "@/lib/bodyColors";
 import { toRad, annularSectorPath, arcStrokePath } from "@/lib/svgGeometry";
+import { SvgTooltip } from "@/components/SvgTooltip";
 
 const FULL_W = 1200;
 const FULL_H = 800;
@@ -142,6 +143,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
   const pinchRafRef = useRef<number | null>(null);
   const activeBodyIdRef = useRef(activeBodyId);
   useEffect(() => { activeBodyIdRef.current = activeBodyId; }, [activeBodyId]);
+  const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   const zoom = FULL_W / vb.w;
   const nebulaColor = sector.nebulaColor ?? sector.color;
@@ -379,22 +381,63 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     }
   }, [vb, activeSystemSlug, sector.systems]);
 
-  // Body hover/tap helpers (900ms gap tolerance)
+  // Body hover/tap helpers — instant show, smart hide:
+  // proximityHide: if tooltip visible < 200ms (fly-by), hide instantly; else 450ms gap tolerance
+  // scheduleHide: always 450ms delay (used by mouseleave and card leave — needs gap tolerance)
+  const cardHovered = useRef(false);
+  const shownAt = useRef<number>(0);
+
   const showBody = useCallback((id: string) => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (activeBodyIdRef.current === id) return;
+    activeBodyIdRef.current = id;
+    cardHovered.current = false;
+    shownAt.current = Date.now();
     setActiveBodyId(id);
   }, []);
 
   const scheduleHide = useCallback(() => {
-    hideTimer.current = setTimeout(() => setActiveBodyId(null), 900);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => { activeBodyIdRef.current = null; setActiveBodyId(null); }, 450);
   }, []);
+
+  /** Hide triggered by proximity detection (cursor left all hit zones) */
+  const proximityHide = useCallback(() => {
+    const elapsed = Date.now() - shownAt.current;
+    if (elapsed < 200) {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      activeBodyIdRef.current = null;
+      setActiveBodyId(null);
+    } else {
+      scheduleHide();
+    }
+  }, [scheduleHide]);
 
   const cancelHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }, []);
 
+  const cardEnter = useCallback(() => {
+    cardHovered.current = true;
+    cancelHide();
+  }, [cancelHide]);
+
+  const cardLeave = useCallback(() => {
+    cardHovered.current = false;
+    if (Date.now() - shownAt.current < 150) return;
+    scheduleHide();
+  }, [scheduleHide]);
+
   // Proximity-based hover: find nearest body to cursor within the scaled group
-  const HIT_RADIUS = 80; // max distance in local (unscaled) coords to trigger hover
+  // Hit radius scales with body visual size so small bodies don't have huge hover zones
+  const bodyHitRadius = useCallback((body: StarSystemMetadata["bodies"][0]) => {
+    switch (body.type) {
+      case "fleet": return 40;
+      case "asteroid-field": return 50;
+      case "station": return 30;
+      default: return 30; // planets, moons
+    }
+  }, []);
 
   const nearestBody = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
     const g = e.currentTarget;
@@ -408,24 +451,27 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     const localPt = pt.matrixTransform(ctm.inverse());
 
     let nearest: string | null = null;
-    let minDist = HIT_RADIUS;
+    let bestRatio = 1; // dist / hitRadius — lower = closer relative to allowed range
     for (const body of bodies) {
       const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
       const dx = localPt.x - pos.x;
       const dy = localPt.y - pos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < minDist) {
-        minDist = dist;
+      const hr = bodyHitRadius(body);
+      const ratio = dist / hr;
+      if (ratio < bestRatio) {
+        bestRatio = ratio;
         nearest = body.id;
       }
     }
     return nearest;
-  }, []);
+  }, [bodyHitRadius]);
 
   const handleBodyProximity = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
     if (bodyRafRef.current !== null) return;
     const clientX = e.clientX;
     const clientY = e.clientY;
+    lastCursorRef.current = { x: clientX, y: clientY };
     const target = e.currentTarget;
     bodyRafRef.current = requestAnimationFrame(() => {
       bodyRafRef.current = null;
@@ -438,21 +484,23 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
       pt.y = clientY;
       const localPt = pt.matrixTransform(ctm.inverse());
       let nearest: string | null = null;
-      let minDist = HIT_RADIUS;
+      let bestRatio = 1;
       for (const body of bodies) {
         const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
         const dx = localPt.x - pos.x;
         const dy = localPt.y - pos.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < minDist) { minDist = dist; nearest = body.id; }
+        const hr = bodyHitRadius(body);
+        const ratio = dist / hr;
+        if (ratio < bestRatio) { bestRatio = ratio; nearest = body.id; }
       }
       if (nearest && nearest !== activeBodyIdRef.current) {
         showBody(nearest);
-      } else if (!nearest) {
-        scheduleHide();
+      } else if (!nearest && !cardHovered.current) {
+        proximityHide();
       }
     });
-  }, [showBody, scheduleHide]);
+  }, [showBody, proximityHide, bodyHitRadius]);
 
   const handleBodyClick = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
     const nearest = nearestBody(e, bodies);
@@ -684,7 +732,17 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
                   <g
                     transform={`translate(${pin.x}, ${pin.y}) scale(${SYS_SCALE})`}
                     onMouseMove={isActive ? (e) => handleBodyProximity(e, sys.bodies) : undefined}
-                    onMouseLeave={isActive ? scheduleHide : undefined}
+                    onMouseLeave={isActive ? (e) => {
+                      // SVG DOM changes (tooltip appearing) fire spurious mouseleave with
+                      // null relatedTarget. Verify cursor is actually outside this <g>.
+                      const g = e.currentTarget;
+                      const cursor = lastCursorRef.current;
+                      if (cursor) {
+                        const el = document.elementFromPoint(cursor.x, cursor.y);
+                        if (el && g.contains(el)) return;
+                      }
+                      scheduleHide();
+                    } : undefined}
                     onClick={isActive ? (e) => handleBodyClick(e, sys.bodies) : undefined}
                   >
                     {/* Interaction surface — captures mouse events across entire system area */}
@@ -739,12 +797,27 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
                         body.type === "fleet" ? 22 :
                         body.type === "asteroid-field" ? 32 :
                         body.type === "station" ? 10 : 12;
+                      const highlightR = labelR + 6;
 
                       return (
                         <g
                           key={body.id}
                           style={{ cursor: isActive ? "pointer" : "default", pointerEvents: "none" }}
                         >
+                          {/* Pulsing highlight ring around the active body */}
+                          {isBodyActive && (
+                            <circle
+                              cx={pos.x} cy={pos.y} r={highlightR}
+                              fill="none"
+                              stroke={bodyColor}
+                              strokeWidth="1.5"
+                              strokeOpacity="0.6"
+                              style={{ filter: `drop-shadow(0 0 6px ${bodyColor})` }}
+                            >
+                              <animate attributeName="r" values={`${highlightR};${highlightR + 4};${highlightR}`} dur="2s" repeatCount="indefinite" />
+                              <animate attributeName="stroke-opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
+                            </circle>
+                          )}
 
                           {body.type === "station" && (
                             <polygon
@@ -849,83 +922,72 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
                       const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
                       const { color: bodyColor } = getBodyColors(body);
                       const cardW = 220;
-                      const cardH = 90
-                        + (body.lathanium ? 24 : 0)
-                        + (body.nobility ? 24 : 0)
-                        + (body.kankaUrl ? 36 : 0)
-                        + 10;
-                      const cardX = pos.x - cardW / 2;
-                      const cardY = pos.y - cardH - 16;
+                      const cardH = 50
+                        + (body.lathanium ? 20 : 0)
+                        + (body.nobility ? 20 : 0)
+                        + (body.kankaUrl ? 34 : 0);
+
+                      // Body radius determines how far card must offset to avoid overlap
+                      const bodyR =
+                        body.type === "fleet" ? 22 :
+                        body.type === "asteroid-field" ? 32 :
+                        body.type === "station" ? 10 : 12;
+
                       return (
-                        <>
-                          {/* Hover zone covers card + gap so card stays visible; sits below foreignObject in z-order */}
-                          <rect
-                            x={cardX}
-                            y={cardY}
-                            width={cardW}
-                            height={cardH + 16}
-                            fill="transparent"
-                            pointerEvents="all"
-                            onMouseEnter={cancelHide}
-                            onMouseLeave={scheduleHide}
-                          />
-                          <foreignObject
-                            x={cardX} y={cardY}
-                            width={cardW} height={cardH}
-                            style={{ pointerEvents: "none" }}
-                          >
-                            <div style={{
-                              background: "rgba(10,10,30,0.92)",
-                              border: `1px solid ${bodyColor}55`,
-                              borderRadius: "6px",
-                              padding: "8px 10px",
-                              fontFamily: "var(--font-cinzel), serif",
-                              width: `${cardW}px`,
-                              boxSizing: "border-box",
-                              boxShadow: `0 0 20px ${bodyColor}30`,
-                            }}>
-                              <div style={{ color: bodyColor, fontSize: "11px", fontWeight: 600, marginBottom: "3px" }}>
-                                {body.name}
-                              </div>
-                              <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", marginBottom: body.lathanium ? "6px" : "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                {body.type}{body.biome ? ` · ${body.biome}` : ""}
-                              </div>
-                              {body.lathanium && (
-                                <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: body.nobility ? "4px" : undefined }}>
-                                  <span style={{ display: "inline-block", width: "7px", height: "7px", background: "#1D4ED8", transform: "rotate(45deg)", boxShadow: "0 0 4px #3B82F6", flexShrink: 0 }} />
-                                  <span style={{ color: "#93C5FD", fontSize: "9px", letterSpacing: "0.05em" }}>This planet has Lathanium</span>
-                                </div>
-                              )}
-                              {body.nobility && (
-                                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                  <svg width="9" height="9" viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
-                                    <polygon points="0,1 10,1 5,9" fill="none" stroke="#FDE047" strokeWidth="1.5" />
-                                  </svg>
-                                  <span style={{ color: "#FDE047", fontSize: "9px", letterSpacing: "0.05em" }}>Restricted to nobility only</span>
-                                </div>
-                              )}
-                              {body.kankaUrl && (
-                                <a href={body.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
-                                  display: "block",
-                                  marginTop: "8px",
-                                  padding: "4px 8px",
-                                  background: "rgba(99,102,241,0.15)",
-                                  border: "1px solid rgba(99,102,241,0.3)",
-                                  borderRadius: "4px",
-                                  color: "rgba(165,180,252,0.9)",
-                                  fontSize: "9px",
-                                  textAlign: "center",
-                                  letterSpacing: "0.08em",
-                                  textDecoration: "none",
-                                  textTransform: "uppercase",
-                                  pointerEvents: "auto",
-                                }}>
-                                  View on Kanka ↗
-                                </a>
-                              )}
+                        <SvgTooltip
+                          anchorX={pos.x}
+                          anchorY={pos.y}
+                          cardW={cardW}
+                          cardH={cardH}
+                          color={bodyColor}
+                          clearance={bodyR + 16}
+                          viewBox={vb}
+                          parentOffsetX={pin.x}
+                          parentOffsetY={pin.y}
+                          scale={SYS_SCALE}
+                          onMouseEnter={cardEnter}
+                          onMouseLeave={cardLeave}
+                        >
+                          <div style={{ color: bodyColor, fontSize: "11px", fontWeight: 600, marginBottom: "3px" }}>
+                            {body.name}
+                          </div>
+                          <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", marginBottom: body.lathanium ? "6px" : "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            {body.type}{body.biome ? ` · ${body.biome}` : ""}
+                          </div>
+                          {body.lathanium && (
+                            <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: body.nobility ? "4px" : undefined }}>
+                              <span style={{ display: "inline-block", width: "7px", height: "7px", background: "#1D4ED8", transform: "rotate(45deg)", boxShadow: "0 0 4px #3B82F6", flexShrink: 0 }} />
+                              <span style={{ color: "#93C5FD", fontSize: "9px", letterSpacing: "0.05em" }}>This planet has Lathanium</span>
                             </div>
-                          </foreignObject>
-                        </>
+                          )}
+                          {body.nobility && (
+                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                              <svg width="9" height="9" viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
+                                <polygon points="0,1 10,1 5,9" fill="none" stroke="#FDE047" strokeWidth="1.5" />
+                              </svg>
+                              <span style={{ color: "#FDE047", fontSize: "9px", letterSpacing: "0.05em" }}>Restricted to nobility only</span>
+                            </div>
+                          )}
+                          {body.kankaUrl && (
+                            <a href={body.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
+                              display: "block",
+                              marginTop: "8px",
+                              padding: "4px 8px",
+                              background: "rgba(99,102,241,0.15)",
+                              border: "1px solid rgba(99,102,241,0.3)",
+                              borderRadius: "4px",
+                              color: "rgba(165,180,252,0.9)",
+                              fontSize: "9px",
+                              textAlign: "center",
+                              letterSpacing: "0.08em",
+                              textDecoration: "none",
+                              textTransform: "uppercase",
+                              pointerEvents: "auto",
+                            }}>
+                              View on Kanka ↗
+                            </a>
+                          )}
+                        </SvgTooltip>
                       );
                     })()}
                   </g>
