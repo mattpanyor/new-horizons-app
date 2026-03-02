@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import StarSystemBackground from "@/components/StarSystemBackground";
+import { useCountdown } from "@/hooks/useCountdown";
 
 const DELAY = 5;
-const AUTO_REDIRECT = true;
 
 interface Props {
   username: string;
@@ -16,23 +16,9 @@ interface Props {
 
 export default function WelcomeScreen({ username, character, role, group }: Props) {
   const router = useRouter();
-  const [count, setCount] = useState(DELAY);
+  const handleComplete = useCallback(() => router.push("/sectors"), [router]);
+  const { count, progress } = useCountdown(DELAY, handleComplete);
 
-  useEffect(() => {
-    if (!AUTO_REDIRECT) return;
-    const id = setInterval(() => {
-      setCount((n) => (n > 0 ? n - 1 : 0));
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (AUTO_REDIRECT && count === 0) {
-      router.push("/sectors");
-    }
-  }, [count, router]);
-
-  const progress = ((DELAY - count) / DELAY) * 100;
   const isGM = !character && !role;
   const lastName = character ? character.split(" ").at(-1) : undefined;
 

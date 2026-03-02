@@ -1,53 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
-interface UserPresence {
-  username: string;
-  position: string;
-}
-
-function getUsername(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|; )nh_user=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
+import { useState } from "react";
+import { usePresence, type UserPresence } from "@/hooks/usePresence";
 
 export default function PresenceCard({ position }: { position: string }) {
-  const [users, setUsers] = useState<UserPresence[]>([]);
+  const { users, currentUser } = usePresence(position);
   const [open, setOpen] = useState(true);
-  const usernameRef = useRef<string | null>(null);
-
-  // Resolve username once on mount
-  useEffect(() => {
-    usernameRef.current = getUsername();
-  }, []);
-
-  // Report own position whenever it changes
-  useEffect(() => {
-    const username = usernameRef.current ?? getUsername();
-    if (!username) return;
-    fetch("/api/presence", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, position }),
-    });
-  }, [position]);
-
-  // Poll all users every 5 seconds
-  useEffect(() => {
-    const poll = async () => {
-      const res = await fetch("/api/presence");
-      if (res.ok) setUsers(await res.json());
-    };
-    poll();
-    const id = setInterval(poll, 5000);
-    return () => clearInterval(id);
-  }, []);
 
   if (users.length === 0) return null;
-
-  const currentUser = usernameRef.current ?? getUsername();
 
   // Collapsed pill — just show count + reopen button
   if (!open) {

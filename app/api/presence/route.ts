@@ -13,8 +13,12 @@ const STALE_MS = 30_000; // drop users not seen in 30 seconds
 
 export async function GET() {
   const now = Date.now();
+  for (const [key, u] of presenceMap) {
+    if (now - u.lastSeen >= STALE_MS) {
+      presenceMap.delete(key);
+    }
+  }
   const active = Array.from(presenceMap.values())
-    .filter((u) => now - u.lastSeen < STALE_MS)
     .map(({ username, position }) => ({ username, position }));
   return NextResponse.json(active);
 }
