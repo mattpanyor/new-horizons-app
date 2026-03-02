@@ -13,9 +13,12 @@ import type { SvgViewBox } from "@/components/SvgTooltip";
 import { SvgTooltip } from "@/components/SvgTooltip";
 import { getBodyColors } from "@/lib/bodyColors";
 import {
-  SYS_SCALE, SYS_MAX_R, FLEET_SHIPS,
-  tri, triLeft, asteroidDots, getBodyPos, bodyHitRadius,
+  SYS_SCALE, SYS_MAX_R,
 } from "@/lib/sectorMapHelpers";
+import { getBodyPos, bodyHitRadius } from "@/lib/sectorMapHelpers";
+import { BodyShape, bodyLabelR } from "./bodies/BodyShape";
+import { BodyInfoCard, bodyCardHeight } from "./bodies/BodyInfoCard";
+import { SpecialAttributeIcon } from "@/components/specialAttributes/SpecialAttributeIcon";
 
 interface BodyTooltipAPI {
   activeId: string | null;
@@ -183,68 +186,21 @@ export function StarSystemView({
             const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
             const isBodyActive = isActive && activeBodyId === body.id;
             const { color: bodyColor } = getBodyColors(body);
-            const fillId = `url(#body-${pin.slug}-${body.id})`;
-            const activeStroke = isBodyActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)";
-            const glowStyle = isBodyActive ? { filter: `drop-shadow(0 0 8px ${bodyColor})` } : undefined;
-            const labelR =
-              body.type === "fleet" ? 22 :
-                body.type === "asteroid-field" ? 32 :
-                  body.type === "station" ? 10 : 12;
-            const highlightR = labelR + 6;
+            const labelR = bodyLabelR(body.type);
 
             return (
               <g key={body.id} style={{ cursor: isActive ? "pointer" : "default", pointerEvents: "none" }}>
-                {isBodyActive && (
-                  <circle cx={pos.x} cy={pos.y} r={highlightR}
-                    fill="none" stroke={bodyColor} strokeWidth="1.5" strokeOpacity="0.6"
-                    style={{ filter: `drop-shadow(0 0 6px ${bodyColor})` }}>
-                    <animate attributeName="r" values={`${highlightR};${highlightR + 4};${highlightR}`} dur="2s" repeatCount="indefinite" />
-                    <animate attributeName="stroke-opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
-                  </circle>
-                )}
+                <BodyShape
+                  bodyId={body.id}
+                  bodyType={body.type}
+                  posX={pos.x}
+                  posY={pos.y}
+                  pinSlug={pin.slug}
+                  bodyColor={bodyColor}
+                  isBodyActive={isBodyActive}
+                  isActive={isActive}
+                />
 
-                {body.type === "station" && (
-                  <polygon
-                    points={`${pos.x},${pos.y - 10} ${pos.x + 9},${pos.y} ${pos.x},${pos.y + 10} ${pos.x - 9},${pos.y}`}
-                    fill={fillId}
-                    stroke={isBodyActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)"}
-                    strokeWidth={isBodyActive ? "2" : "1"} style={glowStyle}
-                  />
-                )}
-
-                {body.type === "ship" && (
-                  <polygon points={tri(pos.x, pos.y, 10)}
-                    fill={fillId} stroke={activeStroke}
-                    strokeWidth={isBodyActive ? "2" : "0.8"} style={glowStyle} />
-                )}
-
-                {body.type === "fleet" && (
-                  <g style={glowStyle}>
-                    {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
-                      <polygon key={i} points={triLeft(pos.x + dx, pos.y + dy, r)}
-                        fill="url(#fleetGrad)" fillOpacity={0.9}
-                        stroke={activeStroke}
-                        strokeWidth={isBodyActive ? "1.5" : "0.6"} />
-                    ))}
-                  </g>
-                )}
-
-                {body.type === "asteroid-field" && (
-                  <g style={glowStyle}>
-                    {asteroidDots(body.id).map((d, i) => (
-                      <circle key={i} cx={pos.x + d.x} cy={pos.y + d.y} r={d.r}
-                        fill={bodyColor} fillOpacity={0.55 + (i % 5) * 0.08} />
-                    ))}
-                  </g>
-                )}
-
-                {body.type !== "station" && body.type !== "ship" && body.type !== "fleet" && body.type !== "asteroid-field" && (
-                  <circle cx={pos.x} cy={pos.y} r={12}
-                    fill={fillId} stroke={activeStroke}
-                    strokeWidth={isBodyActive ? "2" : "0.5"} style={glowStyle} />
-                )}
-
-                {/* Special attribute icons */}
                 <SpecialAttributeIcon type={body.special_attribute} posX={pos.x} posY={pos.y} labelR={labelR} />
 
                 <text x={pos.x} y={body.labelPosition === "top" ? pos.y - labelR - 6 : pos.y + labelR + 18}
@@ -264,13 +220,8 @@ export function StarSystemView({
             const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
             const { color: bodyColor } = getBodyColors(body);
             const cardW = 220;
-            const cardH = 50
-              + (body.special_attribute ? 20 : 0)
-              + (body.kankaUrl ? 34 : 0);
-            const bodyR =
-              body.type === "fleet" ? 22 :
-                body.type === "asteroid-field" ? 32 :
-                  body.type === "station" ? 10 : 12;
+            const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl);
+            const bodyR = bodyLabelR(body.type);
 
             return (
               <SvgTooltip
@@ -283,24 +234,14 @@ export function StarSystemView({
                 onMouseEnter={bodyTooltip.cardEnter}
                 onMouseLeave={bodyTooltip.cardLeave}
               >
-                <div style={{ color: bodyColor, fontSize: "11px", fontWeight: 600, marginBottom: "3px" }}>
-                  {body.name}
-                </div>
-                <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", marginBottom: body.special_attribute ? "6px" : "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {body.type}{body.biome ? ` · ${body.biome}` : ""}
-                </div>
-                <SpecialAttributeCardLine type={body.special_attribute} />
-                {body.kankaUrl && (
-                  <a href={body.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
-                    display: "block", marginTop: "8px", padding: "4px 8px",
-                    background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)",
-                    borderRadius: "4px", color: "rgba(165,180,252,0.9)", fontSize: "9px",
-                    textAlign: "center", letterSpacing: "0.08em", textDecoration: "none",
-                    textTransform: "uppercase", pointerEvents: "auto",
-                  }}>
-                    View on Kanka ↗
-                  </a>
-                )}
+                <BodyInfoCard
+                  name={body.name}
+                  type={body.type}
+                  biome={body.biome}
+                  specialAttribute={body.special_attribute}
+                  kankaUrl={body.kankaUrl}
+                  bodyColor={bodyColor}
+                />
               </SvgTooltip>
             );
           })()}
@@ -334,148 +275,5 @@ export function StarSystemView({
         </>
       )}
     </g>
-  );
-}
-
-// ── Special attribute SVG icon (rendered on the map) ──
-
-function SpecialAttributeIcon({ type, posX, posY, labelR }: {
-  type: string | undefined;
-  posX: number;
-  posY: number;
-  labelR: number;
-}) {
-  if (!type) return null;
-  const dx = posX + labelR * 0.85;
-  const dy = posY - labelR * 0.85;
-
-  switch (type) {
-    case "lathanium": {
-      const s = 6;
-      return (
-        <polygon
-          points={`${dx},${dy - s} ${dx + s},${dy} ${dx},${dy + s} ${dx - s},${dy}`}
-          fill="#1D4ED8" stroke="#93C5FD" strokeWidth="2"
-          style={{ filter: "drop-shadow(0 0 6px #3B82F6)" }} />
-      );
-    }
-    case "nobility": {
-      const s = 6;
-      return (
-        <polygon
-          points={`${dx - s},${dy - s * 0.6} ${dx + s},${dy - s * 0.6} ${dx},${dy + s * 0.8}`}
-          fill="none" stroke="#FDE047" strokeWidth="2"
-          style={{ filter: "drop-shadow(0 0 6px #FDE047)" }} />
-      );
-    }
-    case "purified":
-      return (
-        <path
-          d={`M ${dx} ${dy - 5} L ${dx + 4} ${dy} L ${dx + 2} ${dy + 3} L ${dx - 2} ${dy + 3} L ${dx - 4} ${dy} Z M ${dx + 2} ${dy + 3} L ${dx + 4} ${dy + 7} M ${dx - 2} ${dy + 3} L ${dx - 4} ${dy + 7}`}
-          fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"
-          style={{ filter: "drop-shadow(0 0 6px #FFFFFF)" }} />
-      );
-    case "lightbringer": {
-      const o = 6, i = 2.4;
-      return (
-        <polygon
-          points={`${dx + o},${dy} ${dx + i},${dy + i} ${dx},${dy + o} ${dx - i},${dy + i} ${dx - o},${dy} ${dx - i},${dy - i} ${dx},${dy - o} ${dx + i},${dy - i}`}
-          fill="#FFE87A" stroke="#FFE87A" strokeWidth="2"
-          style={{ filter: "drop-shadow(0 0 6px #FFE87A)" }} />
-      );
-    }
-    case "cult":
-      return (
-        <path
-          d={`M ${dx - 6} ${dy - 6} L ${dx - 6} ${dy + 6} M ${dx + 6} ${dy - 6} L ${dx + 6} ${dy + 6} M ${dx - 6} ${dy - 6} L ${dx + 6} ${dy + 6} M ${dx + 6} ${dy - 6} L ${dx - 6} ${dy + 6}`}
-          fill="none" stroke="#B91C1C" strokeWidth="2" strokeLinecap="round"
-          style={{ filter: "drop-shadow(0 0 6px #B91C1C)" }} />
-      );
-    case "alien_int":
-      return (
-        <polygon
-          points={`${dx - 8},${dy} ${dx},${dy - 4} ${dx + 8},${dy} ${dx},${dy + 4}`}
-          fill="none" stroke="#8B5CF6" strokeWidth="2"
-          style={{ filter: "drop-shadow(0 0 6px #8B5CF6)" }} />
-      );
-    default:
-      return null;
-  }
-}
-
-// ── Special attribute description line (rendered inside tooltip card) ──
-
-function SpecialAttributeCardLine({ type }: { type: string | undefined }) {
-  if (!type) return null;
-
-  const ATTRS: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
-    lathanium: {
-      icon: <span style={{ display: "inline-block", width: "7px", height: "7px", background: "#1D4ED8", transform: "rotate(45deg)", boxShadow: "0 0 4px #3B82F6", flexShrink: 0 }} />,
-      label: "Lathanium resource available",
-      color: "#93C5FD",
-    },
-    nobility: {
-      icon: (
-        <svg width="9" height="9" viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
-          <polygon points="0,1 10,1 5,9" fill="none" stroke="#FDE047" strokeWidth="1.5" />
-        </svg>
-      ),
-      label: "Restricted to nobility only",
-      color: "#FDE047",
-    },
-    purified: {
-      icon: (
-        <svg width="9" height="12" viewBox="-6 -6 12 14" style={{ flexShrink: 0 }}>
-          <path d="M 0,-5 L 4,0 L 2,3 L -2,3 L -4,0 Z M 2,3 L 4,7 M -2,3 L -4,7"
-            fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round"
-            style={{ filter: "drop-shadow(0 0 2px #FFFFFF)" }} />
-        </svg>
-      ),
-      label: "This location was purified",
-      color: "rgba(255,255,255,0.85)",
-    },
-    lightbringer: {
-      icon: (
-        <svg width="9" height="9" viewBox="-6 -6 12 12" style={{ flexShrink: 0 }}>
-          <polygon points="5,0 1.4,1.4 0,5 -1.4,1.4 -5,0 -1.4,-1.4 0,-5 1.4,-1.4"
-            fill="#FFE87A" stroke="#FFE87A" strokeWidth="0.3"
-            style={{ filter: "drop-shadow(0 0 2px #FFE87A)" }} />
-        </svg>
-      ),
-      label: "Lightbringer presence on planet",
-      color: "#FFE87A",
-    },
-    cult: {
-      icon: (
-        <svg width="9" height="9" viewBox="-7 -7 14 14" style={{ flexShrink: 0 }}>
-          <path d="M -6,-6 L -6,6 M 6,-6 L 6,6 M -6,-6 L 6,6 M 6,-6 L -6,6"
-            fill="none" stroke="#B91C1C" strokeWidth="1.5" strokeLinecap="round"
-            style={{ filter: "drop-shadow(0 0 2px #B91C1C)" }} />
-        </svg>
-      ),
-      label: "Cultist activity detected",
-      color: "#B91C1C",
-    },
-    alien_int: {
-      icon: (
-        <svg width="12" height="7" viewBox="-9 -5 18 10" style={{ flexShrink: 0 }}>
-          <polygon points="-8,0 0,-4 8,0 0,4"
-            fill="none" stroke="#8B5CF6" strokeWidth="1"
-            style={{ filter: "drop-shadow(0 0 2px #8B5CF6)" }} />
-        </svg>
-      ),
-      label: "Alien intelligence",
-      color: "#8B5CF6",
-    },
-  };
-
-  const attr = ATTRS[type];
-  if (!attr) return null;
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-      {attr.icon}
-      <span style={{ color: attr.color, fontSize: "9px", letterSpacing: "0.05em" }}>{attr.label}</span>
-    </div>
   );
 }
