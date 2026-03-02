@@ -18,6 +18,15 @@
       ]
     }
   ],
+  "connections": [
+    {
+      "from": "ertamis",
+      "to": "callisto",
+      "curvature": -40,
+      "label": "Act II. - first chapter",
+      "color": "#6b7280"
+    }
+  ],
   "systems": [
     {
       "slug": "pelao",

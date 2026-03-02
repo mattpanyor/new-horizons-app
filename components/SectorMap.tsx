@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import type { SectorMetadata, VortexPin, SystemPin } from "@/types/sector";
+import type { SectorMetadata, VortexPin, SystemPin, ConnectionLine } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors } from "@/lib/bodyColors";
 import { toRad, annularSectorPath, arcStrokePath } from "@/lib/svgGeometry";
@@ -13,10 +13,10 @@ const FULL_W = 1200;
 const FULL_H = 800;
 
 const SECTOR_TERRITORY: Record<string, { cx: number; cy: number; arcStart: number; arcEnd: number }> = {
-  "top-right":    { cx: 80,   cy: 720, arcStart: 270, arcEnd: 360 },
-  "bottom-right": { cx: 80,   cy: 80,  arcStart: 0,   arcEnd: 90  },
-  "bottom-left":  { cx: 1120, cy: 80,  arcStart: 90,  arcEnd: 180 },
-  "top-left":     { cx: 1120, cy: 720, arcStart: 180, arcEnd: 270 },
+  "top-right": { cx: 80, cy: 720, arcStart: 270, arcEnd: 360 },
+  "bottom-right": { cx: 80, cy: 80, arcStart: 0, arcEnd: 90 },
+  "bottom-left": { cx: 1120, cy: 80, arcStart: 90, arcEnd: 180 },
+  "top-left": { cx: 1120, cy: 720, arcStart: 180, arcEnd: 270 },
 };
 
 const TERRITORY_INNER_R = 260;
@@ -63,15 +63,15 @@ const SYS_MAX_R = 250;
 
 
 const BG_STARS = [
-  { x: 80,   y: 60  }, { x: 200,  y: 35  }, { x: 380,  y: 20  }, { x: 550,  y: 55  },
-  { x: 720,  y: 30  }, { x: 900,  y: 50  }, { x: 1050, y: 25  }, { x: 1150, y: 80  },
-  { x: 30,   y: 180 }, { x: 140,  y: 250 }, { x: 310,  y: 200 }, { x: 460,  y: 170 },
-  { x: 640,  y: 210 }, { x: 820,  y: 180 }, { x: 980,  y: 220 }, { x: 1120, y: 190 },
-  { x: 50,   y: 380 }, { x: 230,  y: 420 }, { x: 430,  y: 390 }, { x: 600,  y: 440 },
-  { x: 780,  y: 400 }, { x: 960,  y: 430 }, { x: 1100, y: 370 }, { x: 70,   y: 570 },
-  { x: 270,  y: 610 }, { x: 480,  y: 580 }, { x: 700,  y: 620 }, { x: 880,  y: 590 },
-  { x: 1050, y: 640 }, { x: 1170, y: 560 }, { x: 160,  y: 740 }, { x: 380,  y: 760 },
-  { x: 600,  y: 775 }, { x: 820,  y: 750 }, { x: 1000, y: 770 },
+  { x: 80, y: 60 }, { x: 200, y: 35 }, { x: 380, y: 20 }, { x: 550, y: 55 },
+  { x: 720, y: 30 }, { x: 900, y: 50 }, { x: 1050, y: 25 }, { x: 1150, y: 80 },
+  { x: 30, y: 180 }, { x: 140, y: 250 }, { x: 310, y: 200 }, { x: 460, y: 170 },
+  { x: 640, y: 210 }, { x: 820, y: 180 }, { x: 980, y: 220 }, { x: 1120, y: 190 },
+  { x: 50, y: 380 }, { x: 230, y: 420 }, { x: 430, y: 390 }, { x: 600, y: 440 },
+  { x: 780, y: 400 }, { x: 960, y: 430 }, { x: 1100, y: 370 }, { x: 70, y: 570 },
+  { x: 270, y: 610 }, { x: 480, y: 580 }, { x: 700, y: 620 }, { x: 880, y: 590 },
+  { x: 1050, y: 640 }, { x: 1170, y: 560 }, { x: 160, y: 740 }, { x: 380, y: 760 },
+  { x: 600, y: 775 }, { x: 820, y: 750 }, { x: 1000, y: 770 },
 ];
 
 // Triangle pointing upward, centered at (cx, cy) with half-height r
@@ -84,9 +84,9 @@ const triLeft = (cx: number, cy: number, r: number) =>
 
 // Fleet formation: lead at front-left, two escorts trailing right
 const FLEET_SHIPS = [
-  { dx:  0,  dy:  0, r: 14 },
-  { dx: 20,  dy: -9, r: 10 },
-  { dx: 20,  dy:  9, r:  7 },
+  { dx: 0, dy: 0, r: 14 },
+  { dx: 20, dy: -9, r: 10 },
+  { dx: 20, dy: 9, r: 7 },
 ];
 
 // Deterministic dot cluster for asteroid fields — seed from body id
@@ -282,7 +282,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     <defs>
       {/* Fleet ships: tip (left) = gold, base (right) = blue */}
       <linearGradient id="fleetGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%"   stopColor="#FFD700" />
+        <stop offset="0%" stopColor="#FFD700" />
         <stop offset="100%" stopColor="#4169E1" />
       </linearGradient>
       {sector.systems.flatMap((pin) => {
@@ -290,21 +290,21 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
         if (!sys) return [];
         return [
           <radialGradient key={`starGlow-${pin.slug}`} id={`starGlow-${pin.slug}`}>
-            <stop offset="0%"   stopColor={sys.star.color} stopOpacity="1"   />
-            <stop offset="30%"  stopColor={sys.star.color} stopOpacity="0.8" />
-            <stop offset="60%"  stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0"   />
+            <stop offset="0%" stopColor={sys.star.color} stopOpacity="1" />
+            <stop offset="30%" stopColor={sys.star.color} stopOpacity="0.8" />
+            <stop offset="60%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0" />
           </radialGradient>,
           <radialGradient key={`starCorona-${pin.slug}`} id={`starCorona-${pin.slug}`}>
-            <stop offset="0%"   stopColor={sys.star.color} stopOpacity="0.15" />
-            <stop offset="100%" stopColor={sys.star.color} stopOpacity="0"    />
+            <stop offset="0%" stopColor={sys.star.color} stopOpacity="0.15" />
+            <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
           </radialGradient>,
           ...sys.bodies.map((b) => {
             const { color, secondaryColor } = getBodyColors(b);
             return (
               <radialGradient key={`body-${pin.slug}-${b.id}`} id={`body-${pin.slug}-${b.id}`}>
-                <stop offset="0%"   stopColor={color} stopOpacity="1"   />
-                <stop offset="70%"  stopColor={secondaryColor} stopOpacity="0.9" />
+                <stop offset="0%" stopColor={color} stopOpacity="1" />
+                <stop offset="70%" stopColor={secondaryColor} stopOpacity="0.9" />
                 <stop offset="100%" stopColor={secondaryColor} stopOpacity="0.7" />
               </radialGradient>
             );
@@ -361,12 +361,12 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
           className="absolute inset-0 w-full h-full pointer-events-none"
           style={{ userSelect: "none" }}
         >
-          {[1,2,3,4,5,6,7,8,9].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <line key={`gx-${i}`}
               x1={i * (FULL_W / 10)} y1={0} x2={i * (FULL_W / 10)} y2={FULL_H}
               stroke="rgba(99,102,241,0.045)" strokeWidth="1" />
           ))}
-          {[1,2,3,4,5,6,7,8,9].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <line key={`gy-${i}`}
               x1={0} y1={i * (FULL_H / 10)} x2={FULL_W} y2={i * (FULL_H / 10)}
               stroke="rgba(99,102,241,0.045)" strokeWidth="1" />
@@ -441,6 +441,106 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
               </g>
             );
           })()}
+
+          {/* ── Connection lines ── */}
+          {(sector.connections ?? []).map((conn: ConnectionLine, connIdx: number) => {
+            const fromSys = sector.systems.find(s => s.slug === conn.from);
+            const toSys = sector.systems.find(s => s.slug === conn.to);
+            const fromVortex = sector.vortexes?.find(v => v.slug === conn.from);
+            const toVortex = sector.vortexes?.find(v => v.slug === conn.to);
+            const fromObj = fromSys ?? fromVortex;
+            const toObj = toSys ?? toVortex;
+            if (!fromObj || !toObj) return null;
+
+            // Visual boundary radius: stop the line here instead of drawing into the system
+            const fromRadius = fromSys
+              ? (orbitDataMap.get(fromSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
+              : (fromVortex?.radius ?? 80);
+            const toRadius = toSys
+              ? (orbitDataMap.get(toSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
+              : (toVortex?.radius ?? 80);
+
+            const p0 = { x: fromObj.x, y: fromObj.y };
+            const p2 = { x: toObj.x, y: toObj.y };
+
+            // Quadratic bezier control point: midpoint + perpendicular offset
+            const mx = (p0.x + p2.x) / 2;
+            const my = (p0.y + p2.y) / 2;
+            const segDx = p2.x - p0.x, segDy = p2.y - p0.y;
+            const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
+            const curvature = conn.curvature ?? 0;
+            const perpX = segLen > 0 ? (-segDy / segLen) * curvature : 0;
+            const perpY = segLen > 0 ? (segDx / segLen) * curvature : 0;
+            const p1 = { x: mx + perpX, y: my + perpY };
+
+            // Trim start: advance p0 along tangent at t=0 (direction p0→p1)
+            const tan0x = p1.x - p0.x, tan0y = p1.y - p0.y;
+            const tan0len = Math.sqrt(tan0x * tan0x + tan0y * tan0y);
+            const p0t = tan0len > 0
+              ? { x: p0.x + (tan0x / tan0len) * fromRadius, y: p0.y + (tan0y / tan0len) * fromRadius }
+              : p0;
+
+            // Trim end: advance p2 along -tangent at t=1 (direction p2→p1)
+            const tan1x = p1.x - p2.x, tan1y = p1.y - p2.y;
+            const tan1len = Math.sqrt(tan1x * tan1x + tan1y * tan1y);
+            const p2t = tan1len > 0
+              ? { x: p2.x + (tan1x / tan1len) * toRadius, y: p2.y + (tan1y / tan1len) * toRadius }
+              : p2;
+
+            const pathD = `M ${p0t.x.toFixed(1)} ${p0t.y.toFixed(1)} Q ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${p2t.x.toFixed(1)} ${p2t.y.toFixed(1)}`;
+            const color = conn.color ?? sector.color;
+            const opacity = conn.opacity ?? 0.35;
+            const dashes = conn.dashes ?? "4 6";
+
+            // Offset path parallel to the trimmed curve, used as the textPath track.
+            // Approximate the offset bezier by shifting each control point along its local normal.
+            const perpNorm = (dx: number, dy: number) => {
+              const len = Math.sqrt(dx * dx + dy * dy);
+              return len > 0 ? { x: -dy / len, y: dx / len } : { x: 0, y: -1 };
+            };
+            const LABEL_GAP = 15;
+            const n0 = perpNorm(p1.x - p0t.x, p1.y - p0t.y);
+            const n1 = perpNorm(p2t.x - p0t.x, p2t.y - p0t.y); // tangent at t=0.5
+            const n2 = perpNorm(p2t.x - p1.x, p2t.y - p1.y);
+            const op0 = { x: p0t.x + n0.x * LABEL_GAP, y: p0t.y + n0.y * LABEL_GAP };
+            const op1 = { x: p1.x + n1.x * LABEL_GAP, y: p1.y + n1.y * LABEL_GAP };
+            const op2 = { x: p2t.x + n2.x * LABEL_GAP, y: p2t.y + n2.y * LABEL_GAP };
+            // Ensure text reads left-to-right: if offset path runs rightward swap start/end
+            const ltr = op2.x >= op0.x;
+            const labelPathD = ltr
+              ? `M ${op0.x.toFixed(1)} ${op0.y.toFixed(1)} Q ${op1.x.toFixed(1)} ${op1.y.toFixed(1)} ${op2.x.toFixed(1)} ${op2.y.toFixed(1)}`
+              : `M ${op2.x.toFixed(1)} ${op2.y.toFixed(1)} Q ${op1.x.toFixed(1)} ${op1.y.toFixed(1)} ${op0.x.toFixed(1)} ${op0.y.toFixed(1)}`;
+            const labelPathId = `conn-label-${connIdx}`;
+
+            return (
+              <g key={`conn-${connIdx}`} style={{ pointerEvents: "none" }}>
+                {conn.label && (
+                  <defs>
+                    <path id={labelPathId} d={labelPathD} />
+                  </defs>
+                )}
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={color}
+                  strokeOpacity={opacity}
+                  strokeWidth={0.8}
+                  strokeDasharray={dashes}
+                  strokeLinecap="round"
+                />
+                {conn.label && (
+                  <text
+                    fill={color} fillOpacity={Math.min(opacity + 0.25, 1)}
+                    fontSize="11" fontFamily="var(--font-cinzel), serif"
+                    textAnchor="middle">
+                    <textPath href={`#${labelPathId}`} startOffset="50%">
+                      {conn.label}
+                    </textPath>
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
           {/* ── Vortexes ── */}
           {(sector.vortexes ?? []).map((v: VortexPin) => {
@@ -557,8 +657,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
 
                       const labelR =
                         body.type === "fleet" ? 22 :
-                        body.type === "asteroid-field" ? 32 :
-                        body.type === "station" ? 10 : 12;
+                          body.type === "asteroid-field" ? 32 :
+                            body.type === "station" ? 10 : 12;
                       const highlightR = labelR + 6;
 
                       return (
@@ -692,8 +792,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
                       // Body radius determines how far card must offset to avoid overlap
                       const bodyR =
                         body.type === "fleet" ? 22 :
-                        body.type === "asteroid-field" ? 32 :
-                        body.type === "station" ? 10 : 12;
+                          body.type === "asteroid-field" ? 32 :
+                            body.type === "station" ? 10 : 12;
 
                       return (
                         <SvgTooltip
