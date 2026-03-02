@@ -20,6 +20,8 @@ export function useSvgPanZoom({
   const defaultVb: ViewBox = { x: 0, y: 0, w: width, h: height };
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const vbRef = useRef<ViewBox>(defaultVb);
   const [vb, setVb] = useState<ViewBox>(defaultVb);
   const [cursorGrab, setCursorGrab] = useState(false);
 
@@ -33,32 +35,50 @@ export function useSvgPanZoom({
 
   const zoom = width / vb.w;
 
+  /** Apply viewBox imperatively to the SVG element (no React re-render) */
+  const applyVb = useCallback((v: ViewBox) => {
+    vbRef.current = v;
+    if (svgRef.current) {
+      svgRef.current.setAttribute("viewBox", `${v.x} ${v.y} ${v.w} ${v.h}`);
+    }
+  }, []);
+
+  /** Synced setter — updates both imperative ref/DOM and React state */
+  const syncedSetVb = useCallback((next: ViewBox | ((prev: ViewBox) => ViewBox)) => {
+    const resolved = typeof next === "function" ? next(vbRef.current) : next;
+    applyVb(resolved);
+    setVb(resolved);
+  }, [applyVb]);
+
+  /** Convert screen coordinates to SVG coordinates (reads from vbRef for freshness) */
   const screenToSvg = useCallback(
     (clientX: number, clientY: number) => {
       const el = containerRef.current;
       if (!el) return { x: width / 2, y: height / 2 };
       const rect = el.getBoundingClientRect();
+      const v = vbRef.current;
       return {
-        x: vb.x + ((clientX - rect.left) / rect.width) * vb.w,
-        y: vb.y + ((clientY - rect.top) / rect.height) * vb.h,
+        x: v.x + ((clientX - rect.left) / rect.width) * v.w,
+        y: v.y + ((clientY - rect.top) / rect.height) * v.h,
       };
     },
-    [vb, width, height]
+    [width, height]
   );
 
+  /** Zoom at a point — imperative during gesture, commits React state */
   const zoomAt = useCallback((svgX: number, svgY: number, factor: number) => {
-    setVb((prev) => {
-      const newZoom = Math.min(maxZoom, Math.max(minZoom, (width / prev.w) * factor));
-      const newW = width / newZoom;
-      const newH = height / newZoom;
-      const ratio = newW / prev.w;
-      return {
-        x: svgX - (svgX - prev.x) * ratio,
-        y: svgY - (svgY - prev.y) * ratio,
-        w: newW, h: newH,
-      };
-    });
-  }, [width, height, minZoom, maxZoom]);
+    const prev = vbRef.current;
+    const newZoom = Math.min(maxZoom, Math.max(minZoom, (width / prev.w) * factor));
+    const newW = width / newZoom;
+    const newH = height / newZoom;
+    const ratio = newW / prev.w;
+    const next = {
+      x: svgX - (svgX - prev.x) * ratio,
+      y: svgY - (svgY - prev.y) * ratio,
+      w: newW, h: newH,
+    };
+    syncedSetVb(next);
+  }, [width, height, minZoom, maxZoom, syncedSetVb]);
 
   // --- Wheel zoom (RAF throttled) ---
   const handleWheel = useCallback(
@@ -74,17 +94,20 @@ export function useSvgPanZoom({
     },
     [screenToSvg, zoomAt, zoomStep]
   );
-  wheelHandlerRef.current = handleWheel;
+  useEffect(() => {
+    wheelHandlerRef.current = handleWheel;
+  });
 
-  // --- Mouse pan ---
+  // --- Mouse pan (imperative during drag, commit on mouseUp) ---
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
       didDragRef.current = false;
       setCursorGrab(true);
-      panStart.current = { x: e.clientX, y: e.clientY, vbX: vb.x, vbY: vb.y };
+      const v = vbRef.current;
+      panStart.current = { x: e.clientX, y: e.clientY, vbX: v.x, vbY: v.y };
     },
-    [vb.x, vb.y]
+    []
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -99,13 +122,14 @@ export function useSvgPanZoom({
     if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
     rafIdRef.current = requestAnimationFrame(() => {
       rafIdRef.current = null;
-      setVb((prev) => ({
+      const prev = vbRef.current;
+      applyVb({
         ...prev,
         x: pan.vbX - ((clientX - pan.x) / rect.width) * prev.w,
         y: pan.vbY - ((clientY - pan.y) / rect.height) * prev.h,
-      }));
+      });
     });
-  }, []);
+  }, [applyVb]);
 
   const handleMouseUp = useCallback(() => {
     if (rafIdRef.current !== null) {
@@ -114,24 +138,27 @@ export function useSvgPanZoom({
     }
     setCursorGrab(false);
     panStart.current = null;
+    // Commit imperative state to React
+    setVb(vbRef.current);
   }, []);
 
-  // --- Touch pan + pinch zoom ---
+  // --- Touch pan + pinch zoom (imperative during gesture, commit on touchEnd) ---
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
+      const v = vbRef.current;
       if (e.touches.length === 1) {
         const t = e.touches[0];
         didDragRef.current = false;
-        panStart.current = { x: t.clientX, y: t.clientY, vbX: vb.x, vbY: vb.y };
+        panStart.current = { x: t.clientX, y: t.clientY, vbX: v.x, vbY: v.y };
         pinchStart.current = null;
       } else if (e.touches.length === 2) {
         panStart.current = null;
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
-        pinchStart.current = { dist: Math.sqrt(dx * dx + dy * dy), vb: { ...vb } };
+        pinchStart.current = { dist: Math.sqrt(dx * dx + dy * dy), vb: { ...v } };
       }
     },
-    [vb]
+    []
   );
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -147,11 +174,12 @@ export function useSvgPanZoom({
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
         rafIdRef.current = null;
-        setVb((prev) => ({
+        const prev = vbRef.current;
+        applyVb({
           ...prev,
           x: pan.vbX - ((clientX - pan.x) / rect.width) * prev.w,
           y: pan.vbY - ((clientY - pan.y) / rect.height) * prev.h,
-        }));
+        });
       });
     } else if (e.touches.length === 2 && pinchStart.current && containerRef.current) {
       const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -171,18 +199,20 @@ export function useSvgPanZoom({
         const newW = width / newZoom;
         const newH = height / newZoom;
         const ratio = newW / pinch.vb.w;
-        setVb({
+        applyVb({
           x: svgX - (svgX - pinch.vb.x) * ratio,
           y: svgY - (svgY - pinch.vb.y) * ratio,
           w: newW, h: newH,
         });
       });
     }
-  }, [width, height, minZoom, maxZoom]);
+  }, [width, height, minZoom, maxZoom, applyVb]);
 
   const handleTouchEnd = useCallback(() => {
     panStart.current = null;
     pinchStart.current = null;
+    // Commit imperative state to React
+    setVb(vbRef.current);
   }, []);
 
   // --- Event listener setup + cleanup ---
@@ -203,22 +233,29 @@ export function useSvgPanZoom({
   }, []);
 
   const zoomIn = useCallback(
-    () => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1 + zoomStep * 2),
-    [vb, zoomAt, zoomStep]
+    () => {
+      const v = vbRef.current;
+      zoomAt(v.x + v.w / 2, v.y + v.h / 2, 1 + zoomStep * 2);
+    },
+    [zoomAt, zoomStep]
   );
   const zoomOut = useCallback(
-    () => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1 / (1 + zoomStep * 2)),
-    [vb, zoomAt, zoomStep]
+    () => {
+      const v = vbRef.current;
+      zoomAt(v.x + v.w / 2, v.y + v.h / 2, 1 / (1 + zoomStep * 2));
+    },
+    [zoomAt, zoomStep]
   );
 
   const resetView = useCallback(() => {
-    setVb({ x: 0, y: 0, w: width, h: height });
-  }, [width, height]);
+    syncedSetVb({ x: 0, y: 0, w: width, h: height });
+  }, [width, height, syncedSetVb]);
 
   return {
     containerRef,
+    svgRef,
     vb,
-    setVb,
+    setVb: syncedSetVb,
     zoom,
     cursorGrab,
     didDragRef,

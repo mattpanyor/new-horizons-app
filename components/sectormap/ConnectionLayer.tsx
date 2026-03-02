@@ -19,6 +19,7 @@ interface ConnectionLayerProps {
   connections: ConnectionLine[];
   systems: SystemPin[];
   vortexes: VortexPin[];
+  sectorSlug: string;
   sectorColor: string;
   orbitDataMap: Map<string, { orbitDistances: number[]; maxOrbit: number }>;
   activeMarkerId: string | null;
@@ -30,7 +31,7 @@ interface ConnectionLayerProps {
 }
 
 export function ConnectionLayer({
-  connections, systems, vortexes, sectorColor, orbitDataMap,
+  connections, systems, vortexes, sectorSlug, sectorColor, orbitDataMap,
   activeMarkerId, showMarker, scheduleHideMarker,
   markerCardEnter, markerCardLeave, vb,
 }: ConnectionLayerProps) {
@@ -139,7 +140,7 @@ export function ConnectionLayer({
                     <g style={{ filter: isActive ? `drop-shadow(0 0 8px ${FLEET_GRAD_TIP})` : undefined }}>
                       {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
                         <polygon key={i} points={triLeft(dx * 0.5, dy * 0.5, r * 0.5)}
-                          fill="url(#fleetGrad)" fillOpacity={0.9}
+                          fill={`url(#fleetGrad-${sectorSlug})`} fillOpacity={0.9}
                           stroke={isActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)"}
                           strokeWidth={isActive ? "1" : "0.4"} />
                       ))}

@@ -10,9 +10,10 @@ import type { StarSystemMetadata } from "@/types/starsystem";
 interface Props {
   sector: SectorMetadata;
   systemsData: Record<string, StarSystemMetadata>;
+  children?: React.ReactNode;
 }
 
-export default function SectorMapWithPresence({ sector, systemsData }: Props) {
+export default function SectorMapWithPresence({ sector, systemsData, children }: Props) {
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -32,7 +33,9 @@ export default function SectorMapWithPresence({ sector, systemsData }: Props) {
         sector={sector}
         systemsData={systemsData}
         onSystemChange={setActiveSystemSlug}
-      />
+      >
+        {children}
+      </SectorMap>
       {mounted && createPortal(<PresenceCard position={position} />, document.body)}
     </>
   );

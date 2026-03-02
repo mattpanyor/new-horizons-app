@@ -6,10 +6,11 @@
  * scaled system <g>. The tooltip state machine is owned by the parent
  * (SectorMap) via useSvgTooltipTimer and passed down as callbacks.
  */
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, memo } from "react";
 import type { SystemPin } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import type { SvgViewBox } from "@/components/SvgTooltip";
+import type { TooltipActions } from "@/hooks/useSvgTooltipTimer";
 import { SvgTooltip } from "@/components/SvgTooltip";
 import { getBodyColors } from "@/lib/bodyColors";
 import {
@@ -20,18 +21,6 @@ import { BodyShape, bodyLabelR } from "./bodies/BodyShape";
 import { BodyInfoCard, bodyCardHeight } from "./bodies/BodyInfoCard";
 import { SpecialAttributeIcon } from "@/components/specialAttributes/SpecialAttributeIcon";
 
-interface BodyTooltipAPI {
-  activeId: string | null;
-  activeIdRef: React.RefObject<string | null>;
-  cardHoveredRef: React.RefObject<boolean>;
-  show: (id: string) => void;
-  scheduleHide: () => void;
-  proximityHide: () => void;
-  hideNow: () => void;
-  cardEnter: () => void;
-  cardLeave: () => void;
-}
-
 interface StarSystemViewProps {
   pin: SystemPin;
   sys: StarSystemMetadata | undefined;
@@ -39,22 +28,22 @@ interface StarSystemViewProps {
   isActive: boolean;
   isDimmed: boolean;
   noActiveSystem: boolean;
-  hoveredSlug: string | null;
+  isHovered: boolean;
   orbitData: { orbitDistances: number[]; maxOrbit: number };
-  vb: SvgViewBox;
-  bodyTooltip: BodyTooltipAPI;
+  vb: SvgViewBox | undefined;
+  activeBodyId: string | null;
+  tooltipActions: TooltipActions;
   onFocusSystem: (pin: SystemPin) => void;
   onHoverSystem: (slug: string | null) => void;
 }
 
-export function StarSystemView({
+export const StarSystemView = memo(function StarSystemView({
   pin, sys, sectorColor, isActive, isDimmed, noActiveSystem,
-  hoveredSlug, orbitData, vb, bodyTooltip,
+  isHovered, orbitData, vb, activeBodyId, tooltipActions,
   onFocusSystem, onHoverSystem,
 }: StarSystemViewProps) {
   const { orbitDistances, maxOrbit } = orbitData;
   const labelY = pin.y + (maxOrbit + 30) * SYS_SCALE + 14;
-  const activeBodyId = bodyTooltip.activeId;
 
   // Per-system refs for proximity detection
   const bodyRafRef = useRef<number | null>(null);
@@ -93,22 +82,22 @@ export function StarSystemView({
     bodyRafRef.current = requestAnimationFrame(() => {
       bodyRafRef.current = null;
       const nearest = findNearestBody(clientX, clientY, target, sys.bodies);
-      if (nearest && nearest !== bodyTooltip.activeIdRef.current) {
-        bodyTooltip.show(nearest);
-      } else if (!nearest && !bodyTooltip.cardHoveredRef.current) {
-        bodyTooltip.proximityHide();
+      if (nearest && nearest !== tooltipActions.activeIdRef.current) {
+        tooltipActions.show(nearest);
+      } else if (!nearest && !tooltipActions.cardHoveredRef.current) {
+        tooltipActions.proximityHide();
       }
     });
-  }, [sys, findNearestBody, bodyTooltip]);
+  }, [sys, findNearestBody, tooltipActions]);
 
   const handleBodyClick = useCallback((e: React.MouseEvent<SVGGElement>) => {
     if (!sys) return;
     const nearest = findNearestBody(e.clientX, e.clientY, e.currentTarget, sys.bodies);
     if (nearest) {
       e.stopPropagation();
-      bodyTooltip.show(nearest);
+      tooltipActions.show(nearest);
     }
-  }, [sys, findNearestBody, bodyTooltip]);
+  }, [sys, findNearestBody, tooltipActions]);
 
   const handleMouseLeave = useCallback((e: React.MouseEvent<SVGGElement>) => {
     const g = e.currentTarget;
@@ -117,8 +106,8 @@ export function StarSystemView({
       const el = document.elementFromPoint(cursor.x, cursor.y);
       if (el && g.contains(el)) return;
     }
-    bodyTooltip.scheduleHide();
-  }, [bodyTooltip]);
+    tooltipActions.scheduleHide();
+  }, [tooltipActions]);
 
   return (
     <g
@@ -228,11 +217,11 @@ export function StarSystemView({
                 anchorX={pos.x} anchorY={pos.y}
                 cardW={cardW} cardH={cardH}
                 color={bodyColor} clearance={bodyR + 16}
-                viewBox={vb}
+                viewBox={vb!}
                 parentOffsetX={pin.x} parentOffsetY={pin.y}
                 scale={SYS_SCALE}
-                onMouseEnter={bodyTooltip.cardEnter}
-                onMouseLeave={bodyTooltip.cardLeave}
+                onMouseEnter={tooltipActions.cardEnter}
+                onMouseLeave={tooltipActions.cardLeave}
               >
                 <BodyInfoCard
                   name={body.name}
@@ -257,7 +246,7 @@ export function StarSystemView({
         <>
           <text
             x={pin.x} y={labelY} textAnchor="middle"
-            fill={hoveredSlug === pin.slug ? "white" : "rgba(255,255,255,0.55)"}
+            fill={isHovered ? "white" : "rgba(255,255,255,0.55)"}
             fontSize="11" fontFamily="var(--font-cinzel), serif"
             style={{ pointerEvents: "none" }}>
             {sys?.name ?? pin.slug}
@@ -276,4 +265,4 @@ export function StarSystemView({
       )}
     </g>
   );
-}
+});

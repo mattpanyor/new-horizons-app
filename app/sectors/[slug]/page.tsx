@@ -5,6 +5,8 @@ import { getStarSystemBySlug } from "@/lib/starsystems";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import SectorMapWithPresence from "@/components/SectorMapWithPresence";
+import { SectorMapNebula } from "@/components/sectormap/SectorMapNebula";
+import { SectorMapGrid } from "@/components/sectormap/SectorMapGrid";
 
 export async function generateStaticParams() {
   const slugs = getSectorSlugs();
@@ -56,7 +58,10 @@ export default async function SectorPage({
         </div>
 
         <div className="flex-1 min-h-0">
-          <SectorMapWithPresence sector={sector} systemsData={systemsData} />
+          <SectorMapWithPresence sector={sector} systemsData={systemsData}>
+            <SectorMapNebula nebulaColor={sector.nebulaColor ?? sector.color} sectorColor={sector.color} />
+            <SectorMapGrid />
+          </SectorMapWithPresence>
         </div>
       </div>
     </>

@@ -10,7 +10,7 @@ import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 import {
   FULL_W, FULL_H, SECTOR_TERRITORY, TERRITORY_INNER_R, TERRITORY_OUTER_R,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
-  SYS_SCALE, SYS_MAX_R, BG_STARS, wavyCloudPath,
+  SYS_SCALE, SYS_MAX_R, wavyCloudPath,
 } from "@/lib/sectorMapHelpers";
 import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
@@ -19,11 +19,12 @@ interface SectorMapProps {
   sector: SectorMetadata;
   systemsData?: Record<string, StarSystemMetadata>;
   onSystemChange?: (slug: string | null) => void;
+  children?: React.ReactNode;
 }
 
-export default function SectorMap({ sector, systemsData = {}, onSystemChange }: SectorMapProps) {
+export default function SectorMap({ sector, systemsData = {}, onSystemChange, children }: SectorMapProps) {
   const {
-    containerRef, vb, setVb, zoom, cursorGrab, didDragRef,
+    containerRef, svgRef, vb, setVb, zoom, cursorGrab, didDragRef,
     zoomIn, zoomOut, resetView: resetPanZoom, handlers,
   } = useSvgPanZoom({ width: FULL_W, height: FULL_H, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
 
@@ -32,8 +33,9 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
 
   // Body tooltip (in-system celestial bodies)
   const {
-    activeId: activeBodyId, activeIdRef: activeBodyIdRef, cardHoveredRef,
-    show: showBody, hideNow: hideBody, scheduleHide, proximityHide, cardEnter, cardLeave,
+    activeId: activeBodyId, actions: bodyTooltipActions,
+    activeIdRef: activeBodyIdRef,
+    hideNow: hideBody,
   } = useSvgTooltipTimer();
 
   // Marker tooltip (inter-system ships/fleets on connection lines)
@@ -47,8 +49,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
   useEffect(() => {
     onSystemChange?.(activeSystemSlug);
   }, [activeSystemSlug, onSystemChange]);
-
-  const nebulaColor = sector.nebulaColor ?? sector.color;
 
   const resetView = useCallback(() => {
     setActiveSystemSlug(null);
@@ -112,7 +112,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
 
   const gradientDefs = useMemo(() => (
     <defs>
-      <linearGradient id="fleetGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <linearGradient id={`fleetGrad-${sector.slug}`} x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stopColor={FLEET_GRAD_TIP} />
         <stop offset="100%" stopColor={FLEET_GRAD_BASE} />
       </linearGradient>
@@ -145,6 +145,16 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     </defs>
   ), [sector.systems, systemsData]);
 
+  // Precompute which system owns the active body tooltip — O(N*M) once instead of per-system
+  const activeBodySystemSlug = useMemo(() => {
+    if (!activeBodyId) return null;
+    for (const pin of sector.systems) {
+      const sys = systemsData[pin.slug];
+      if (sys?.bodies.some(b => b.id === activeBodyId)) return pin.slug;
+    }
+    return null;
+  }, [activeBodyId, sector.systems, systemsData]);
+
   const orbitDataMap = useMemo(() => {
     const map = new Map<string, { orbitDistances: number[]; maxOrbit: number }>();
     for (const pin of sector.systems) {
@@ -160,19 +170,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     return map;
   }, [sector.systems, systemsData]);
 
-  // Body tooltip API object passed to StarSystemView
-  const bodyTooltip = useMemo(() => ({
-    activeId: activeBodyId,
-    activeIdRef: activeBodyIdRef,
-    cardHoveredRef,
-    show: showBody,
-    scheduleHide,
-    proximityHide,
-    hideNow: hideBody,
-    cardEnter,
-    cardLeave,
-  }), [activeBodyId, activeBodyIdRef, cardHoveredRef, showBody, scheduleHide, proximityHide, hideBody, cardEnter, cardLeave]);
-
   return (
     <div className="relative w-full h-full">
       <div
@@ -183,43 +180,12 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
         onMouseLeave={handlers.onMouseUp}
         onDoubleClick={() => { if (!didDragRef.current) resetView(); }}
       >
-        {/* ── Layer 1: Fixed nebula background ── */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: [
-              `radial-gradient(ellipse 70% 60% at 38% 38%, ${nebulaColor}2e 0%, transparent 100%)`,
-              `radial-gradient(ellipse 55% 50% at 68% 65%, ${nebulaColor}1e 0%, transparent 100%)`,
-              `radial-gradient(ellipse 45% 40% at 18% 72%, ${sector.color}14 0%, transparent 100%)`,
-              "#030712",
-            ].join(", "),
-          }}
-        />
-
-        {/* ── Layer 2: Fixed stars + grid ── */}
-        <svg
-          viewBox={`0 0 ${FULL_W} ${FULL_H}`}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          style={{ userSelect: "none" }}
-        >
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <line key={`gx-${i}`}
-              x1={i * (FULL_W / 10)} y1={0} x2={i * (FULL_W / 10)} y2={FULL_H}
-              stroke="rgba(99,102,241,0.045)" strokeWidth="1" />
-          ))}
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <line key={`gy-${i}`}
-              x1={0} y1={i * (FULL_H / 10)} x2={FULL_W} y2={i * (FULL_H / 10)}
-              stroke="rgba(99,102,241,0.045)" strokeWidth="1" />
-          ))}
-          {BG_STARS.map((star, i) => (
-            <circle key={i} cx={star.x} cy={star.y}
-              r={i % 3 === 0 ? 1 : 0.7} fill="white" opacity={0.25 + (i % 5) * 0.07} />
-          ))}
-        </svg>
+        {/* ── Layers 1-2: Static nebula + grid (server-rendered children) ── */}
+        {children}
 
         {/* ── Layer 3: Zooming SVG ── */}
         <svg
+          ref={svgRef}
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
           className="absolute inset-0 w-full h-full"
           style={{ userSelect: "none" }}
@@ -278,6 +244,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
             connections={sector.connections ?? []}
             systems={sector.systems}
             vortexes={sector.vortexes ?? []}
+            sectorSlug={sector.slug}
             sectorColor={sector.color}
             orbitDataMap={orbitDataMap}
             activeMarkerId={activeMarkerId}
@@ -309,23 +276,28 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
           })}
 
           {/* ── Star systems ── */}
-          {sector.systems.map((pin) => (
-            <StarSystemView
-              key={pin.slug}
-              pin={pin}
-              sys={systemsData[pin.slug]}
-              sectorColor={sector.color}
-              isActive={activeSystemSlug === pin.slug}
-              isDimmed={activeSystemSlug !== null && activeSystemSlug !== pin.slug}
-              noActiveSystem={activeSystemSlug === null}
-              hoveredSlug={hoveredSlug}
-              orbitData={orbitDataMap.get(pin.slug) ?? { orbitDistances: [], maxOrbit: 40 }}
-              vb={vb}
-              bodyTooltip={bodyTooltip}
-              onFocusSystem={focusSystem}
-              onHoverSystem={setHoveredSlug}
-            />
-          ))}
+          {sector.systems.map((pin) => {
+            const sys = systemsData[pin.slug];
+            const isActive = activeSystemSlug === pin.slug;
+            return (
+              <StarSystemView
+                key={pin.slug}
+                pin={pin}
+                sys={sys}
+                sectorColor={sector.color}
+                isActive={isActive}
+                isDimmed={activeSystemSlug !== null && !isActive}
+                noActiveSystem={activeSystemSlug === null}
+                isHovered={hoveredSlug === pin.slug}
+                orbitData={orbitDataMap.get(pin.slug) ?? { orbitDistances: [], maxOrbit: 40 }}
+                vb={isActive ? vb : undefined}
+                activeBodyId={activeBodySystemSlug === pin.slug ? activeBodyId : null}
+                tooltipActions={bodyTooltipActions}
+                onFocusSystem={focusSystem}
+                onHoverSystem={setHoveredSlug}
+              />
+            );
+          })}
 
           {/* Empty state */}
           {sector.systems.length === 0 && (
