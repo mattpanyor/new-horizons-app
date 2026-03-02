@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 export function useCountdown(seconds: number, onComplete: () => void) {
   const [count, setCount] = useState(seconds);
   const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+  useEffect(() => { onCompleteRef.current = onComplete; });
 
   useEffect(() => {
     if (seconds <= 0) return;

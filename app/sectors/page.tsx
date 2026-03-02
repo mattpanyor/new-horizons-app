@@ -1,10 +1,13 @@
 import { getAllSectors } from "@/lib/sectors";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import GalacticMap from "@/components/GalacticMap";
+import { GalacticMapBackground } from "@/components/galacticmap/GalacticMapBackground";
 import PresenceCard from "@/components/PresenceCard";
 
 export default function SectorsPage() {
   const sectors = getAllSectors();
+  const coreSector = sectors.find((s) => s.slug === "core");
+  const outerSectors = sectors.filter((s) => s.slug !== "core");
 
   return (
     <>
@@ -16,7 +19,9 @@ export default function SectorsPage() {
         >
           Galactic Sectors
         </p>
-        <GalacticMap sectors={sectors} />
+        <GalacticMap sectors={sectors}>
+          <GalacticMapBackground coreSector={coreSector} outerSectors={outerSectors} />
+        </GalacticMap>
       </div>
       <PresenceCard position="Galactic Map" />
     </>

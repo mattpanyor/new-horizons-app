@@ -1,165 +1,54 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import type { SectorMetadata, VortexPin, SystemPin, ConnectionLine } from "@/types/sector";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import type { SectorMetadata, VortexPin, SystemPin } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
-import { getBodyColors, SHIP_COLORS, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
-import { ALLEGIANCES } from "@/lib/allegiances";
+import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
 import { toRad, annularSectorPath, arcStrokePath } from "@/lib/svgGeometry";
-import { SvgTooltip } from "@/components/SvgTooltip";
 import { useSvgTooltipTimer } from "@/hooks/useSvgTooltipTimer";
 import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
-
-const FULL_W = 1200;
-const FULL_H = 800;
-
-const SECTOR_TERRITORY: Record<string, { cx: number; cy: number; arcStart: number; arcEnd: number }> = {
-  "top-right": { cx: 80, cy: 720, arcStart: 270, arcEnd: 360 },
-  "bottom-right": { cx: 80, cy: 80, arcStart: 0, arcEnd: 90 },
-  "bottom-left": { cx: 1120, cy: 80, arcStart: 90, arcEnd: 180 },
-  "top-left": { cx: 1120, cy: 720, arcStart: 180, arcEnd: 270 },
-};
-
-const TERRITORY_INNER_R = 260;
-const TERRITORY_OUTER_R = 920;
-
-function wavyCloudPath(cx: number, cy: number, r: number, ratio?: [number, number]): string {
-  const [rw, rh] = ratio ?? [1, 1];
-  const maxR = Math.max(rw, rh);
-  const scaleX = rw / maxR;
-  const scaleY = rh / maxR;
-  const N = 22;
-  const pts: [number, number][] = [];
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2;
-    const wave =
-      Math.sin(3 * a) * r * 0.14 +
-      Math.sin(5 * a + 1.1) * r * 0.08 +
-      Math.sin(7 * a + 2.3) * r * 0.04;
-    const rad = r + wave;
-    pts.push([cx + rad * scaleX * Math.cos(a), cy + rad * scaleY * Math.sin(a)]);
-  }
-  const n = pts.length;
-  const mid = (i: number): [number, number] => {
-    const a = pts[i], b = pts[(i + 1) % n];
-    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  };
-  const start = mid(n - 1);
-  const parts = [`M ${start[0].toFixed(2)} ${start[1].toFixed(2)}`];
-  for (let i = 0; i < n; i++) {
-    const m = mid(i);
-    parts.push(`Q ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} ${m[0].toFixed(2)} ${m[1].toFixed(2)}`);
-  }
-  parts.push("Z");
-  return parts.join(" ");
-}
-
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 10;
-const ZOOM_STEP = 0.15;
-const FOCUS_ZOOM = 5.5; // zoom level when a system is clicked
-
-const SYS_SCALE = 0.28;
-const SYS_MAX_R = 250;
-
-
-const BG_STARS = [
-  { x: 80, y: 60 }, { x: 200, y: 35 }, { x: 380, y: 20 }, { x: 550, y: 55 },
-  { x: 720, y: 30 }, { x: 900, y: 50 }, { x: 1050, y: 25 }, { x: 1150, y: 80 },
-  { x: 30, y: 180 }, { x: 140, y: 250 }, { x: 310, y: 200 }, { x: 460, y: 170 },
-  { x: 640, y: 210 }, { x: 820, y: 180 }, { x: 980, y: 220 }, { x: 1120, y: 190 },
-  { x: 50, y: 380 }, { x: 230, y: 420 }, { x: 430, y: 390 }, { x: 600, y: 440 },
-  { x: 780, y: 400 }, { x: 960, y: 430 }, { x: 1100, y: 370 }, { x: 70, y: 570 },
-  { x: 270, y: 610 }, { x: 480, y: 580 }, { x: 700, y: 620 }, { x: 880, y: 590 },
-  { x: 1050, y: 640 }, { x: 1170, y: 560 }, { x: 160, y: 740 }, { x: 380, y: 760 },
-  { x: 600, y: 775 }, { x: 820, y: 750 }, { x: 1000, y: 770 },
-];
-
-// Triangle pointing upward, centered at (cx, cy) with half-height r
-const tri = (cx: number, cy: number, r: number) =>
-  `${cx},${cy - r} ${cx - r * 0.7},${cy + r * 0.6} ${cx + r * 0.7},${cy + r * 0.6}`;
-
-// Triangle pointing left, centered at (cx, cy) with half-width r
-const triLeft = (cx: number, cy: number, r: number) =>
-  `${cx - r},${cy} ${cx + r * 0.6},${cy - r * 0.7} ${cx + r * 0.6},${cy + r * 0.7}`;
-
-// Fleet formation: lead at front-left, two escorts trailing right
-const FLEET_SHIPS = [
-  { dx: 0, dy: 0, r: 14 },
-  { dx: 20, dy: -9, r: 10 },
-  { dx: 20, dy: 9, r: 7 },
-];
-
-// Deterministic dot cluster for asteroid fields — seed from body id
-function asteroidDots(seed: string): { x: number; y: number; r: number }[] {
-  let h = 5381;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 33) ^ seed.charCodeAt(i)) | 0;
-  const COUNT = 8;
-  return Array.from({ length: COUNT }, (_, i) => {
-    // Golden angle spiral for even base distribution
-    const angle = i * 2.399963;
-    const radius = Math.sqrt((i + 0.5) / COUNT) * 14;
-    // Seed-based jitter so each field looks unique
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const jx = ((h >>> 8) & 0xff) / 255 * 6 - 3;
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const jy = ((h >>> 8) & 0xff) / 255 * 6 - 3;
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const r = Math.round((1.5 + ((h >>> 8) & 0xf) / 15 * 2) * 1e2) / 1e2;
-    return {
-      x: Math.round((radius * Math.cos(angle) + jx) * 1e4) / 1e4,
-      y: Math.round((radius * Math.sin(angle) + jy) * 1e4) / 1e4,
-      r,
-    };
-  });
-}
-
-function getBodyPos(orbitPos: number, orbitDist: number) {
-  const rad = ((orbitPos - 90) * Math.PI) / 180;
-  const r = orbitDist * SYS_MAX_R;
-  const round = (n: number) => Math.round(n * 1e6) / 1e6;
-  return { x: round(r * Math.cos(rad)), y: round(r * Math.sin(rad)) };
-}
+import {
+  FULL_W, FULL_H, SECTOR_TERRITORY, TERRITORY_INNER_R, TERRITORY_OUTER_R,
+  MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
+  SYS_SCALE, SYS_MAX_R, wavyCloudPath,
+} from "@/lib/sectorMapHelpers";
+import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
+import { StarSystemView } from "@/components/sectormap/StarSystemView";
 
 interface SectorMapProps {
   sector: SectorMetadata;
   systemsData?: Record<string, StarSystemMetadata>;
   onSystemChange?: (slug: string | null) => void;
+  children?: React.ReactNode;
 }
 
-export default function SectorMap({ sector, systemsData = {}, onSystemChange }: SectorMapProps) {
+export default function SectorMap({ sector, systemsData = {}, onSystemChange, children }: SectorMapProps) {
   const {
-    containerRef, vb, setVb, zoom, cursorGrab, didDragRef,
+    containerRef, svgRef, vb, setVb, zoom, cursorGrab, didDragRef,
     zoomIn, zoomOut, resetView: resetPanZoom, handlers,
   } = useSvgPanZoom({ width: FULL_W, height: FULL_H, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
 
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
+
+  // Body tooltip (in-system celestial bodies)
   const {
-    activeId: activeBodyId, activeIdRef: activeBodyIdRef, cardHoveredRef,
-    show: showBody, hideNow: hideBody, scheduleHide, proximityHide, cardEnter, cardLeave,
+    activeId: activeBodyId, actions: bodyTooltipActions,
+    activeIdRef: activeBodyIdRef,
+    hideNow: hideBody,
   } = useSvgTooltipTimer();
 
+  // Marker tooltip (inter-system ships/fleets on connection lines)
   const {
-    activeId: activeMarkerId, activeIdRef: activeMarkerIdRef,
-    show: showMarker, hideNow: hideMarker, scheduleHide: scheduleHideMarker,
+    activeId: activeMarkerId,
+    show: showMarker, scheduleHide: scheduleHideMarker,
     cardEnter: markerCardEnter, cardLeave: markerCardLeave,
+    activeIdRef: activeMarkerIdRef, hideNow: hideMarker,
   } = useSvgTooltipTimer();
-
 
   useEffect(() => {
     onSystemChange?.(activeSystemSlug);
   }, [activeSystemSlug, onSystemChange]);
-
-  const bodyRafRef = useRef<number | null>(null);
-  const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
-
-  // Cleanup body proximity RAF on unmount
-  useEffect(() => {
-    return () => { if (bodyRafRef.current !== null) cancelAnimationFrame(bodyRafRef.current); };
-  }, []);
-
-  const nebulaColor = sector.nebulaColor ?? sector.color;
 
   const resetView = useCallback(() => {
     setActiveSystemSlug(null);
@@ -167,16 +56,14 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     resetPanZoom();
   }, [hideBody, resetPanZoom]);
 
-  // Focus a system: zoom the viewBox to centre on it
   const focusSystem = useCallback((pin: SystemPin) => {
     setActiveSystemSlug(pin.slug);
     hideBody();
     const w = FULL_W / FOCUS_ZOOM;
     const h = FULL_H / FOCUS_ZOOM;
     setVb({ x: pin.x - w / 2, y: pin.y - h / 2, w, h });
-  }, [hideBody]);
+  }, [hideBody, setVb]);
 
-  // Exit system view, return to sector overview
   const exitSystem = useCallback(() => {
     setActiveSystemSlug(null);
     hideBody();
@@ -192,12 +79,9 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
   }, [activeSystemSlug, exitSystem]);
 
   // Auto-select system when zoomed in close enough
-  const AUTO_SELECT_ZOOM = 3.2;
   useEffect(() => {
     const currentZoom = FULL_W / vb.w;
-
     if (currentZoom >= AUTO_SELECT_ZOOM && !activeSystemSlug) {
-      // Find the system closest to the viewport center
       const cx = vb.x + vb.w / 2;
       const cy = vb.y + vb.h / 2;
       let best: SystemPin | null = null;
@@ -208,89 +92,27 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < bestDist) { bestDist = dist; best = pin; }
       }
-      // Only activate if the system is within the visible viewport
       if (best && bestDist < Math.min(vb.w, vb.h) * 0.6) {
         setActiveSystemSlug(best.slug);
         hideBody();
       }
     } else if (currentZoom < AUTO_SELECT_ZOOM && activeSystemSlug) {
-      // Auto-deactivate when zooming back out
       setActiveSystemSlug(null);
       hideBody();
     }
   }, [vb, activeSystemSlug, sector.systems, hideBody]);
 
-  // Proximity-based hover: find nearest body to cursor within the scaled group
-  // Hit radius scales with body visual size so small bodies don't have huge hover zones
-  const bodyHitRadius = useCallback((body: StarSystemMetadata["bodies"][0]) => {
-    switch (body.type) {
-      case "fleet": return 40;
-      case "asteroid-field": return 50;
-      case "station": return 30;
-      default: return 30; // planets, moons
-    }
-  }, []);
-
-  // Shared hit-test: find nearest body to a screen point within a scaled <g>
-  const findNearestBody = useCallback((
-    clientX: number, clientY: number,
-    g: SVGGElement, bodies: StarSystemMetadata["bodies"]
-  ) => {
-    const svg = g.ownerSVGElement;
-    if (!svg) return null;
-    const ctm = g.getScreenCTM();
-    if (!ctm) return null;
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    const localPt = pt.matrixTransform(ctm.inverse());
-    let nearest: string | null = null;
-    let bestRatio = 1;
-    for (const body of bodies) {
-      const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
-      const dx = localPt.x - pos.x;
-      const dy = localPt.y - pos.y;
-      const ratio = Math.sqrt(dx * dx + dy * dy) / bodyHitRadius(body);
-      if (ratio < bestRatio) { bestRatio = ratio; nearest = body.id; }
-    }
-    return nearest;
-  }, [bodyHitRadius]);
-
-  const handleBodyProximity = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
-    if (bodyRafRef.current !== null) return;
-    const clientX = e.clientX;
-    const clientY = e.clientY;
-    lastCursorRef.current = { x: clientX, y: clientY };
-    const target = e.currentTarget;
-    bodyRafRef.current = requestAnimationFrame(() => {
-      bodyRafRef.current = null;
-      const nearest = findNearestBody(clientX, clientY, target, bodies);
-      if (nearest && nearest !== activeBodyIdRef.current) {
-        showBody(nearest);
-      } else if (!nearest && !cardHoveredRef.current) {
-        proximityHide();
-      }
-    });
-  }, [findNearestBody, showBody, proximityHide]);
-
-  const handleBodyClick = useCallback((e: React.MouseEvent<SVGGElement>, bodies: StarSystemMetadata["bodies"]) => {
-    const nearest = findNearestBody(e.clientX, e.clientY, e.currentTarget, bodies);
-    if (nearest) {
-      e.stopPropagation();
-      showBody(nearest);
-    }
-  }, [findNearestBody, showBody]);
-
   const handleSvgClick = useCallback(() => {
     if (didDragRef.current) return;
     if (activeBodyIdRef.current) hideBody();
     if (activeMarkerIdRef.current) hideMarker();
-  }, [activeBodyIdRef, hideBody, activeMarkerIdRef, hideMarker]);
+  }, [didDragRef, activeBodyIdRef, hideBody, activeMarkerIdRef, hideMarker]);
+
+  // ── Memoized data ──
 
   const gradientDefs = useMemo(() => (
     <defs>
-      {/* Fleet ships: tip (left) = gold, base (right) = blue */}
-      <linearGradient id="fleetGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <linearGradient id={`fleetGrad-${sector.slug}`} x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stopColor={FLEET_GRAD_TIP} />
         <stop offset="100%" stopColor={FLEET_GRAD_BASE} />
       </linearGradient>
@@ -323,6 +145,16 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
     </defs>
   ), [sector.systems, systemsData]);
 
+  // Precompute which system owns the active body tooltip — O(N*M) once instead of per-system
+  const activeBodySystemSlug = useMemo(() => {
+    if (!activeBodyId) return null;
+    for (const pin of sector.systems) {
+      const sys = systemsData[pin.slug];
+      if (sys?.bodies.some(b => b.id === activeBodyId)) return pin.slug;
+    }
+    return null;
+  }, [activeBodyId, sector.systems, systemsData]);
+
   const orbitDataMap = useMemo(() => {
     const map = new Map<string, { orbitDistances: number[]; maxOrbit: number }>();
     for (const pin of sector.systems) {
@@ -343,57 +175,22 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
       <div
         ref={containerRef}
         className="relative w-full h-full overflow-hidden rounded-lg border border-indigo-500/20"
-        style={{
-          cursor: cursorGrab ? "grabbing" : "grab",
-          touchAction: "none",
-        }}
+        style={{ cursor: cursorGrab ? "grabbing" : "grab", touchAction: "none" }}
         {...handlers}
         onMouseLeave={handlers.onMouseUp}
         onDoubleClick={() => { if (!didDragRef.current) resetView(); }}
       >
-        {/* ── Layer 1: Fixed nebula background (CSS, never zooms) ── */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: [
-              `radial-gradient(ellipse 70% 60% at 38% 38%, ${nebulaColor}2e 0%, transparent 100%)`,
-              `radial-gradient(ellipse 55% 50% at 68% 65%, ${nebulaColor}1e 0%, transparent 100%)`,
-              `radial-gradient(ellipse 45% 40% at 18% 72%, ${sector.color}14 0%, transparent 100%)`,
-              "#030712",
-            ].join(", "),
-          }}
-        />
-
-        {/* ── Layer 2: Fixed stars + grid (non-zooming SVG) ── */}
-        <svg
-          viewBox={`0 0 ${FULL_W} ${FULL_H}`}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          style={{ userSelect: "none" }}
-        >
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <line key={`gx-${i}`}
-              x1={i * (FULL_W / 10)} y1={0} x2={i * (FULL_W / 10)} y2={FULL_H}
-              stroke="rgba(99,102,241,0.045)" strokeWidth="1" />
-          ))}
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <line key={`gy-${i}`}
-              x1={0} y1={i * (FULL_H / 10)} x2={FULL_W} y2={i * (FULL_H / 10)}
-              stroke="rgba(99,102,241,0.045)" strokeWidth="1" />
-          ))}
-          {BG_STARS.map((star, i) => (
-            <circle key={i} cx={star.x} cy={star.y}
-              r={i % 3 === 0 ? 1 : 0.7} fill="white" opacity={0.25 + (i % 5) * 0.07} />
-          ))}
-        </svg>
+        {/* ── Layers 1-2: Static nebula + grid (server-rendered children) ── */}
+        {children}
 
         {/* ── Layer 3: Zooming SVG ── */}
         <svg
+          ref={svgRef}
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
           className="absolute inset-0 w-full h-full"
           style={{ userSelect: "none" }}
           onClick={handleSvgClick}
         >
-          {/* Gradient defs for every system */}
           {gradientDefs}
 
           {/* ── Sector territory ── */}
@@ -401,10 +198,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
             const t = SECTOR_TERRITORY[sector.slug];
             if (!t) return null;
             const { cx, cy, arcStart, arcEnd } = t;
-
-            // Arc path for the sector name label, placed just outside the outer ring.
-            // bottom-right and bottom-left sweep in a direction that would render text
-            // upside-down, so reverse the path for those sectors.
             const labelR = TERRITORY_OUTER_R + 30;
             const ls = toRad(arcStart), le = toRad(arcEnd);
             const lxs = cx + labelR * Math.cos(ls), lys = cy + labelR * Math.sin(ls);
@@ -436,13 +229,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
                   );
                 })}
                 <text
-                  fontFamily="var(--font-cinzel), serif"
-                  fontSize="32"
-                  fontWeight="600"
-                  fill={sector.color}
-                  fillOpacity={0.3}
-                  letterSpacing="14"
-                >
+                  fontFamily="var(--font-cinzel), serif" fontSize="32" fontWeight="600"
+                  fill={sector.color} fillOpacity={0.3} letterSpacing="14">
                   <textPath href={`#${labelPathId}`} startOffset="50%" textAnchor="middle">
                     {sector.name.toUpperCase()}
                   </textPath>
@@ -452,158 +240,20 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
           })()}
 
           {/* ── Connection lines ── */}
-          {(sector.connections ?? []).map((conn: ConnectionLine, connIdx: number) => {
-            const fromSys = sector.systems.find(s => s.slug === conn.from);
-            const toSys = sector.systems.find(s => s.slug === conn.to);
-            const fromVortex = sector.vortexes?.find(v => v.slug === conn.from);
-            const toVortex = sector.vortexes?.find(v => v.slug === conn.to);
-            const fromObj = fromSys ?? fromVortex;
-            const toObj = toSys ?? toVortex;
-            if (!fromObj || !toObj) return null;
-
-            // Visual boundary radius: stop the line here instead of drawing into the system
-            const fromRadius = fromSys
-              ? (orbitDataMap.get(fromSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
-              : (fromVortex?.radius ?? 80);
-            const toRadius = toSys
-              ? (orbitDataMap.get(toSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
-              : (toVortex?.radius ?? 80);
-
-            const p0 = { x: fromObj.x, y: fromObj.y };
-            const p2 = { x: toObj.x, y: toObj.y };
-
-            // Quadratic bezier control point: midpoint + perpendicular offset
-            const mx = (p0.x + p2.x) / 2;
-            const my = (p0.y + p2.y) / 2;
-            const segDx = p2.x - p0.x, segDy = p2.y - p0.y;
-            const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
-            const curvature = conn.curvature ?? 0;
-            const perpX = segLen > 0 ? (-segDy / segLen) * curvature : 0;
-            const perpY = segLen > 0 ? (segDx / segLen) * curvature : 0;
-            const p1 = { x: mx + perpX, y: my + perpY };
-
-            // Trim start: advance p0 along tangent at t=0 (direction p0→p1)
-            const tan0x = p1.x - p0.x, tan0y = p1.y - p0.y;
-            const tan0len = Math.sqrt(tan0x * tan0x + tan0y * tan0y);
-            const p0t = tan0len > 0
-              ? { x: p0.x + (tan0x / tan0len) * fromRadius, y: p0.y + (tan0y / tan0len) * fromRadius }
-              : p0;
-
-            // Trim end: advance p2 along -tangent at t=1 (direction p2→p1)
-            const tan1x = p1.x - p2.x, tan1y = p1.y - p2.y;
-            const tan1len = Math.sqrt(tan1x * tan1x + tan1y * tan1y);
-            const p2t = tan1len > 0
-              ? { x: p2.x + (tan1x / tan1len) * toRadius, y: p2.y + (tan1y / tan1len) * toRadius }
-              : p2;
-
-            const pathD = `M ${p0t.x.toFixed(1)} ${p0t.y.toFixed(1)} Q ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${p2t.x.toFixed(1)} ${p2t.y.toFixed(1)}`;
-            const color = conn.color ?? sector.color;
-            const opacity = conn.opacity ?? 0.35;
-            const dashes = conn.dashes ?? "4 6";
-
-            // Offset path parallel to the trimmed curve, used as the textPath track.
-            // Approximate the offset bezier by shifting each control point along its local normal.
-            const perpNorm = (dx: number, dy: number) => {
-              const len = Math.sqrt(dx * dx + dy * dy);
-              return len > 0 ? { x: -dy / len, y: dx / len } : { x: 0, y: -1 };
-            };
-            const LABEL_GAP = 15;
-            const n0 = perpNorm(p1.x - p0t.x, p1.y - p0t.y);
-            const n1 = perpNorm(p2t.x - p0t.x, p2t.y - p0t.y); // tangent at t=0.5
-            const n2 = perpNorm(p2t.x - p1.x, p2t.y - p1.y);
-            const op0 = { x: p0t.x + n0.x * LABEL_GAP, y: p0t.y + n0.y * LABEL_GAP };
-            const op1 = { x: p1.x + n1.x * LABEL_GAP, y: p1.y + n1.y * LABEL_GAP };
-            const op2 = { x: p2t.x + n2.x * LABEL_GAP, y: p2t.y + n2.y * LABEL_GAP };
-            // Ensure text reads left-to-right: if offset path runs rightward swap start/end
-            const ltr = op2.x >= op0.x;
-            const labelPathD = ltr
-              ? `M ${op0.x.toFixed(1)} ${op0.y.toFixed(1)} Q ${op1.x.toFixed(1)} ${op1.y.toFixed(1)} ${op2.x.toFixed(1)} ${op2.y.toFixed(1)}`
-              : `M ${op2.x.toFixed(1)} ${op2.y.toFixed(1)} Q ${op1.x.toFixed(1)} ${op1.y.toFixed(1)} ${op0.x.toFixed(1)} ${op0.y.toFixed(1)}`;
-            const labelPathId = `conn-label-${connIdx}`;
-
-            return (
-              <g key={`conn-${connIdx}`} style={{ pointerEvents: "none" }}>
-                {conn.label && (
-                  <defs>
-                    <path id={labelPathId} d={labelPathD} />
-                  </defs>
-                )}
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke={color}
-                  strokeOpacity={opacity}
-                  strokeWidth={0.8}
-                  strokeDasharray={dashes}
-                  strokeLinecap="round"
-                />
-                {conn.label && (
-                  <text
-                    fill={color} fillOpacity={Math.min(opacity + 0.25, 1)}
-                    fontSize="11" fontFamily="var(--font-cinzel), serif"
-                    textAnchor="middle">
-                    <textPath href={`#${labelPathId}`} startOffset="50%">
-                      {conn.label}
-                    </textPath>
-                  </text>
-                )}
-
-                {/* ── Marker (ship / fleet) along the line ── */}
-                {conn.marker && (() => {
-                  const marker = conn.marker;
-                  const isActive = activeMarkerId === String(connIdx);
-                  const t = Math.max(0, Math.min(1, marker.position));
-                  const mt = 1 - t;
-                  const mpx = mt * mt * p0t.x + 2 * mt * t * p1.x + t * t * p2t.x;
-                  const mpy = mt * mt * p0t.y + 2 * mt * t * p1.y + t * t * p2t.y;
-                  const tanX = 2 * mt * (p1.x - p0t.x) + 2 * t * (p2t.x - p1.x);
-                  const tanY = 2 * mt * (p1.y - p0t.y) + 2 * t * (p2t.y - p1.y);
-                  const angle = Math.atan2(tanY, tanX) * 180 / Math.PI;
-                  const rotAngle = marker.type === "ship" ? angle + 90 : angle - 180;
-                  const shipGradId = `conn-ship-${connIdx}`;
-                  const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
-                  const shipSecondary = allegiance?.color ?? SHIP_COLORS.secondaryColor;
-
-                  return (
-                    <g transform={`translate(${mpx.toFixed(1)},${mpy.toFixed(1)}) rotate(${rotAngle.toFixed(1)})`}
-                      style={{ cursor: "pointer", pointerEvents: "all" }}
-                      onClick={(e) => { e.stopPropagation(); showMarker(String(connIdx)); }}
-                      onMouseLeave={scheduleHideMarker}>
-
-                      {marker.type === "ship" && (
-                        <>
-                          <defs>
-                            <radialGradient id={shipGradId}>
-                              <stop offset="0%" stopColor={SHIP_COLORS.color} stopOpacity="1" />
-                              <stop offset="70%" stopColor={shipSecondary} stopOpacity="0.9" />
-                              <stop offset="100%" stopColor={shipSecondary} stopOpacity="0.7" />
-                            </radialGradient>
-                          </defs>
-                          <polygon points="0,-9 -6,5 6,5"
-                            fill={`url(#${shipGradId})`}
-                            stroke={isActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)"}
-                            strokeWidth={isActive ? "1.5" : "0.5"}
-                            style={{ filter: `drop-shadow(0 0 ${isActive ? 8 : 3}px ${SHIP_COLORS.color})` }} />
-                        </>
-                      )}
-
-                      {marker.type === "fleet" && (
-                        <g style={{ filter: isActive ? `drop-shadow(0 0 8px ${FLEET_GRAD_TIP})` : undefined }}>
-                          {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
-                            <polygon key={i} points={triLeft(dx * 0.5, dy * 0.5, r * 0.5)}
-                              fill="url(#fleetGrad)" fillOpacity={0.9}
-                              stroke={isActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)"}
-                              strokeWidth={isActive ? "1" : "0.4"} />
-                          ))}
-                        </g>
-                      )}
-
-                    </g>
-                  );
-                })()}
-              </g>
-            );
-          })}
+          <ConnectionLayer
+            connections={sector.connections ?? []}
+            systems={sector.systems}
+            vortexes={sector.vortexes ?? []}
+            sectorSlug={sector.slug}
+            sectorColor={sector.color}
+            orbitDataMap={orbitDataMap}
+            activeMarkerId={activeMarkerId}
+            showMarker={showMarker}
+            scheduleHideMarker={scheduleHideMarker}
+            markerCardEnter={markerCardEnter}
+            markerCardLeave={markerCardLeave}
+            vb={vb}
+          />
 
           {/* ── Vortexes ── */}
           {(sector.vortexes ?? []).map((v: VortexPin) => {
@@ -629,511 +279,25 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
           {sector.systems.map((pin) => {
             const sys = systemsData[pin.slug];
             const isActive = activeSystemSlug === pin.slug;
-            const isDimmed = activeSystemSlug !== null && !isActive;
-
-            const orbitData = orbitDataMap.get(pin.slug) ?? { orbitDistances: [], maxOrbit: 40 };
-            const orbitDistances = orbitData.orbitDistances;
-            const maxOrbit = orbitData.maxOrbit;
-            const labelY = pin.y + (maxOrbit + 30) * SYS_SCALE + 14;
-
             return (
-              <g
+              <StarSystemView
                 key={pin.slug}
-                style={{
-                  cursor: activeSystemSlug === null ? "pointer" : "default",
-                  opacity: isDimmed ? 0.2 : 1,
-                  transition: "opacity 0.3s",
-                }}
-                onClick={isActive ? (e) => e.stopPropagation() : activeSystemSlug === null ? () => focusSystem(pin) : undefined}
-                onMouseEnter={activeSystemSlug === null ? () => setHoveredSlug(pin.slug) : undefined}
-                onMouseLeave={activeSystemSlug === null ? () => setHoveredSlug(null) : undefined}
-              >
-                {/* Hit area — only when no system is focused */}
-                {activeSystemSlug === null && (
-                  <circle cx={pin.x} cy={pin.y} r={(maxOrbit + 20) * SYS_SCALE} fill="transparent" />
-                )}
-
-                {sys ? (
-                  <g
-                    transform={`translate(${pin.x}, ${pin.y}) scale(${SYS_SCALE})`}
-                    onMouseMove={isActive ? (e) => handleBodyProximity(e, sys.bodies) : undefined}
-                    onMouseLeave={isActive ? (e) => {
-                      // SVG DOM changes (tooltip appearing) fire spurious mouseleave with
-                      // null relatedTarget. Verify cursor is actually outside this <g>.
-                      const g = e.currentTarget;
-                      const cursor = lastCursorRef.current;
-                      if (cursor) {
-                        const el = document.elementFromPoint(cursor.x, cursor.y);
-                        if (el && g.contains(el)) return;
-                      }
-                      scheduleHide();
-                    } : undefined}
-                    onClick={isActive ? (e) => handleBodyClick(e, sys.bodies) : undefined}
-                  >
-                    {/* Interaction surface — captures mouse events across entire system area */}
-                    {isActive && (
-                      <rect
-                        x={-SYS_MAX_R - 40} y={-SYS_MAX_R - 40}
-                        width={(SYS_MAX_R + 40) * 2} height={(SYS_MAX_R + 40) * 2}
-                        fill="transparent"
-                        pointerEvents="all"
-                      />
-                    )}
-
-                    {/* Orbit rings */}
-                    {orbitDistances.map((dist) => (
-                      <circle key={dist} cx={0} cy={0} r={dist * SYS_MAX_R}
-                        fill="none" stroke="rgba(99,102,241,0.15)"
-                        strokeWidth="1" strokeDasharray="6 10" />
-                    ))}
-
-                    {/* Star */}
-                    <circle cx={0} cy={0} r={80} fill={`url(#starCorona-${pin.slug})`}
-                      style={{ animation: "starPulse 4s ease-in-out infinite" }} />
-                    <circle cx={0} cy={0} r={40} fill={`url(#starGlow-${pin.slug})`} />
-                    <circle cx={0} cy={0} r={22} fill={sys.star.color}
-                      style={{ filter: `drop-shadow(0 0 12px ${sys.star.color})` }} />
-                    <text x={0} y={55} textAnchor="middle"
-                      fill={sys.star.color} fontSize="15"
-                      fontFamily="var(--font-cinzel), serif" fontWeight="600">
-                      {sys.star.name}
-                    </text>
-                    {isActive && sys.star.kankaUrl && (
-                      <a href={sys.star.kankaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                        <text x={0} y={74} textAnchor="middle"
-                          fill="rgba(165,180,252,0.6)" fontSize="11"
-                          fontFamily="var(--font-cinzel), serif"
-                          style={{ cursor: "pointer" }}>
-                          ↗ Kanka
-                        </text>
-                      </a>
-                    )}
-
-                    {/* Pass 1: Body shapes, hit circles, labels — no info cards */}
-                    {sys.bodies.map((body) => {
-                      const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
-                      const isBodyActive = isActive && activeBodyId === body.id;
-                      const { color: bodyColor } = getBodyColors(body);
-                      const fillId = `url(#body-${pin.slug}-${body.id})`;
-                      const activeStroke = isBodyActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)";
-                      const glowStyle = isBodyActive ? { filter: `drop-shadow(0 0 8px ${bodyColor})` } : undefined;
-
-                      const labelR =
-                        body.type === "fleet" ? 22 :
-                          body.type === "asteroid-field" ? 32 :
-                            body.type === "station" ? 10 : 12;
-                      const highlightR = labelR + 6;
-
-                      return (
-                        <g
-                          key={body.id}
-                          style={{ cursor: isActive ? "pointer" : "default", pointerEvents: "none" }}
-                        >
-                          {/* Pulsing highlight ring around the active body */}
-                          {isBodyActive && (
-                            <circle
-                              cx={pos.x} cy={pos.y} r={highlightR}
-                              fill="none"
-                              stroke={bodyColor}
-                              strokeWidth="1.5"
-                              strokeOpacity="0.6"
-                              style={{ filter: `drop-shadow(0 0 6px ${bodyColor})` }}
-                            >
-                              <animate attributeName="r" values={`${highlightR};${highlightR + 4};${highlightR}`} dur="2s" repeatCount="indefinite" />
-                              <animate attributeName="stroke-opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
-                            </circle>
-                          )}
-
-                          {body.type === "station" && (
-                            <polygon
-                              points={`${pos.x},${pos.y - 10} ${pos.x + 9},${pos.y} ${pos.x},${pos.y + 10} ${pos.x - 9},${pos.y}`}
-                              fill={fillId}
-                              stroke={isBodyActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)"}
-                              strokeWidth={isBodyActive ? "2" : "1"}
-                              style={glowStyle}
-                            />
-                          )}
-
-                          {body.type === "ship" && (
-                            <polygon
-                              points={tri(pos.x, pos.y, 10)}
-                              fill={fillId}
-                              stroke={activeStroke}
-                              strokeWidth={isBodyActive ? "2" : "0.8"}
-                              style={glowStyle}
-                            />
-                          )}
-
-                          {body.type === "fleet" && (
-                            <g style={glowStyle}>
-                              {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
-                                <polygon
-                                  key={i}
-                                  points={triLeft(pos.x + dx, pos.y + dy, r)}
-                                  fill="url(#fleetGrad)"
-                                  fillOpacity={0.9}
-                                  stroke={activeStroke}
-                                  strokeWidth={isBodyActive ? "1.5" : "0.6"}
-                                />
-                              ))}
-                            </g>
-                          )}
-
-                          {body.type === "asteroid-field" && (
-                            <g style={glowStyle}>
-                              {asteroidDots(body.id).map((d, i) => (
-                                <circle
-                                  key={i}
-                                  cx={pos.x + d.x} cy={pos.y + d.y} r={d.r}
-                                  fill={bodyColor}
-                                  fillOpacity={0.55 + (i % 5) * 0.08}
-                                />
-                              ))}
-                            </g>
-                          )}
-
-                          {body.type !== "station" && body.type !== "ship" && body.type !== "fleet" && body.type !== "asteroid-field" && (
-                            <circle cx={pos.x} cy={pos.y} r={12}
-                              fill={fillId}
-                              stroke={activeStroke}
-                              strokeWidth={isBodyActive ? "2" : "0.5"}
-                              style={glowStyle}
-                            />
-                          )}
-
-                          {body.special_attribute === "lathanium" && (() => {
-                            const dx = pos.x + labelR * 0.85;
-                            const dy = pos.y - labelR * 0.85;
-                            const s = 6;
-                            return (
-                              <polygon
-                                points={`${dx},${dy - s} ${dx + s},${dy} ${dx},${dy + s} ${dx - s},${dy}`}
-                                fill="#1D4ED8"
-                                stroke="#93C5FD"
-                                strokeWidth="2"
-                                style={{ filter: "drop-shadow(0 0 6px #3B82F6)" }}
-                              />
-                            );
-                          })()}
-
-                          {body.special_attribute === "nobility" && (() => {
-                            const dx = pos.x + labelR * 0.85;
-                            const dy = pos.y - labelR * 0.85;
-                            const s = 6;
-                            return (
-                              <polygon
-                                points={`${dx - s},${dy - s * 0.6} ${dx + s},${dy - s * 0.6} ${dx},${dy + s * 0.8}`}
-                                fill="none"
-                                stroke="#FDE047"
-                                strokeWidth="2"
-                                style={{ filter: "drop-shadow(0 0 6px #FDE047)" }}
-                              />
-                            );
-                          })()}
-
-                          {body.special_attribute === "purified" && (() => {
-                            const dx = pos.x + labelR * 0.85;
-                            const dy = pos.y - labelR * 0.85;
-                            return (
-                              <path
-                                d={`M ${dx} ${dy - 5} L ${dx + 4} ${dy} L ${dx + 2} ${dy + 3} L ${dx - 2} ${dy + 3} L ${dx - 4} ${dy} Z M ${dx + 2} ${dy + 3} L ${dx + 4} ${dy + 7} M ${dx - 2} ${dy + 3} L ${dx - 4} ${dy + 7}`}
-                                fill="none"
-                                stroke="white"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                style={{ filter: "drop-shadow(0 0 6px #FFFFFF)" }}
-                              />
-                            );
-                          })()}
-
-                          {body.special_attribute === "lightbringer" && (() => {
-                            const dx = pos.x + labelR * 0.85;
-                            const dy = pos.y - labelR * 0.85;
-                            const o = 6; const i = 2.4;
-                            return (
-                              <polygon
-                                points={`${dx + o},${dy} ${dx + i},${dy + i} ${dx},${dy + o} ${dx - i},${dy + i} ${dx - o},${dy} ${dx - i},${dy - i} ${dx},${dy - o} ${dx + i},${dy - i}`}
-                                fill="#FFE87A"
-                                stroke="#FFE87A"
-                                strokeWidth="2"
-                                style={{ filter: "drop-shadow(0 0 6px #FFE87A)" }}
-                              />
-                            );
-                          })()}
-
-                          {body.special_attribute === "cult" && (() => {
-                            const dx = pos.x + labelR * 0.85;
-                            const dy = pos.y - labelR * 0.85;
-                            return (
-                              <path
-                                d={`M ${dx - 6} ${dy - 6} L ${dx - 6} ${dy + 6} M ${dx + 6} ${dy - 6} L ${dx + 6} ${dy + 6} M ${dx - 6} ${dy - 6} L ${dx + 6} ${dy + 6} M ${dx + 6} ${dy - 6} L ${dx - 6} ${dy + 6}`}
-                                fill="none"
-                                stroke="#B91C1C"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                style={{ filter: "drop-shadow(0 0 6px #B91C1C)" }}
-                              />
-                            );
-                          })()}
-
-                          {body.special_attribute === "alien_int" && (() => {
-                            const dx = pos.x + labelR * 0.85;
-                            const dy = pos.y - labelR * 0.85;
-                            return (
-                              <polygon
-                                points={`${dx-8},${dy} ${dx},${dy-4} ${dx+8},${dy} ${dx},${dy+4}`}
-                                fill="none"
-                                stroke="#8B5CF6"
-                                strokeWidth="2"
-                                style={{ filter: "drop-shadow(0 0 6px #8B5CF6)" }}
-                              />
-                            );
-                          })()}
-
-                          <text x={pos.x} y={body.labelPosition === "top" ? pos.y - labelR - 6 : pos.y + labelR + 18} textAnchor="middle"
-                            fill={isBodyActive ? "white" : "rgba(255,255,255,0.6)"} fontSize="14"
-                            fontFamily="var(--font-cinzel), serif">
-                            {body.name}
-                          </text>
-                        </g>
-                      );
-                    })}
-
-                    {/* Pass 2: Active body info card — rendered above all bodies so it can't block siblings' hit areas */}
-                    {isActive && activeBodyId && (() => {
-                      const body = sys.bodies.find(b => b.id === activeBodyId);
-                      if (!body) return null;
-                      const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
-                      const { color: bodyColor } = getBodyColors(body);
-                      const cardW = 220;
-                      const cardH = 50
-                        + (body.special_attribute ? 20 : 0)
-                        + (body.kankaUrl ? 34 : 0);
-
-                      // Body radius determines how far card must offset to avoid overlap
-                      const bodyR =
-                        body.type === "fleet" ? 22 :
-                          body.type === "asteroid-field" ? 32 :
-                            body.type === "station" ? 10 : 12;
-
-                      return (
-                        <SvgTooltip
-                          anchorX={pos.x}
-                          anchorY={pos.y}
-                          cardW={cardW}
-                          cardH={cardH}
-                          color={bodyColor}
-                          clearance={bodyR + 16}
-                          viewBox={vb}
-                          parentOffsetX={pin.x}
-                          parentOffsetY={pin.y}
-                          scale={SYS_SCALE}
-                          onMouseEnter={cardEnter}
-                          onMouseLeave={cardLeave}
-                        >
-                          <div style={{ color: bodyColor, fontSize: "11px", fontWeight: 600, marginBottom: "3px" }}>
-                            {body.name}
-                          </div>
-                          <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", marginBottom: body.special_attribute ? "6px" : "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                            {body.type}{body.biome ? ` · ${body.biome}` : ""}
-                          </div>
-                          {body.special_attribute === "lathanium" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <span style={{ display: "inline-block", width: "7px", height: "7px", background: "#1D4ED8", transform: "rotate(45deg)", boxShadow: "0 0 4px #3B82F6", flexShrink: 0 }} />
-                              <span style={{ color: "#93C5FD", fontSize: "9px", letterSpacing: "0.05em" }}>Lathanium resource available</span>
-                            </div>
-                          )}
-                          {body.special_attribute === "nobility" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <svg width="9" height="9" viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
-                                <polygon points="0,1 10,1 5,9" fill="none" stroke="#FDE047" strokeWidth="1.5" />
-                              </svg>
-                              <span style={{ color: "#FDE047", fontSize: "9px", letterSpacing: "0.05em" }}>Restricted to nobility only</span>
-                            </div>
-                          )}
-                          {body.special_attribute === "purified" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <svg width="9" height="12" viewBox="-6 -6 12 14" style={{ flexShrink: 0 }}>
-                                <path d="M 0,-5 L 4,0 L 2,3 L -2,3 L -4,0 Z M 2,3 L 4,7 M -2,3 L -4,7"
-                                  fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round"
-                                  style={{ filter: "drop-shadow(0 0 2px #FFFFFF)" }} />
-                              </svg>
-                              <span style={{ color: "rgba(255,255,255,0.85)", fontSize: "9px", letterSpacing: "0.05em" }}>This location was purified</span>
-                            </div>
-                          )}
-                          {body.special_attribute === "lightbringer" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <svg width="9" height="9" viewBox="-6 -6 12 12" style={{ flexShrink: 0 }}>
-                                <polygon points="5,0 1.4,1.4 0,5 -1.4,1.4 -5,0 -1.4,-1.4 0,-5 1.4,-1.4"
-                                  fill="#FFE87A" stroke="#FFE87A" strokeWidth="0.3"
-                                  style={{ filter: "drop-shadow(0 0 2px #FFE87A)" }} />
-                              </svg>
-                              <span style={{ color: "#FFE87A", fontSize: "9px", letterSpacing: "0.05em" }}>Lightbringer presence on planet</span>
-                            </div>
-                          )}
-                          {body.special_attribute === "cult" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <svg width="9" height="9" viewBox="-7 -7 14 14" style={{ flexShrink: 0 }}>
-                                <path d="M -6,-6 L -6,6 M 6,-6 L 6,6 M -6,-6 L 6,6 M 6,-6 L -6,6"
-                                  fill="none" stroke="#B91C1C" strokeWidth="1.5" strokeLinecap="round"
-                                  style={{ filter: "drop-shadow(0 0 2px #B91C1C)" }} />
-                              </svg>
-                              <span style={{ color: "#B91C1C", fontSize: "9px", letterSpacing: "0.05em" }}>Cultist activity detected</span>
-                            </div>
-                          )}
-                          {body.special_attribute === "alien_int" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <svg width="12" height="7" viewBox="-9 -5 18 10" style={{ flexShrink: 0 }}>
-                                <polygon points="-8,0 0,-4 8,0 0,4"
-                                  fill="none" stroke="#8B5CF6" strokeWidth="1"
-                                  style={{ filter: "drop-shadow(0 0 2px #8B5CF6)" }} />
-                              </svg>
-                              <span style={{ color: "#8B5CF6", fontSize: "9px", letterSpacing: "0.05em" }}>Alien intelligence</span>
-                            </div>
-                          )}
-                          {body.kankaUrl && (
-                            <a href={body.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
-                              display: "block",
-                              marginTop: "8px",
-                              padding: "4px 8px",
-                              background: "rgba(99,102,241,0.15)",
-                              border: "1px solid rgba(99,102,241,0.3)",
-                              borderRadius: "4px",
-                              color: "rgba(165,180,252,0.9)",
-                              fontSize: "9px",
-                              textAlign: "center",
-                              letterSpacing: "0.08em",
-                              textDecoration: "none",
-                              textTransform: "uppercase",
-                              pointerEvents: "auto",
-                            }}>
-                              View on Kanka ↗
-                            </a>
-                          )}
-                        </SvgTooltip>
-                      );
-                    })()}
-                  </g>
-                ) : (
-                  <circle cx={pin.x} cy={pin.y} r={8}
-                    fill={sector.color}
-                    style={{ filter: `drop-shadow(0 0 8px ${sector.color})` }}
-                  />
-                )}
-
-                {/* System name label — hidden while system is active (replaced by star name inside) */}
-                {!isActive && (
-                  <>
-                    <text
-                      x={pin.x} y={labelY} textAnchor="middle"
-                      fill={hoveredSlug === pin.slug ? "white" : "rgba(255,255,255,0.55)"}
-                      fontSize="11" fontFamily="var(--font-cinzel), serif"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {sys?.name ?? pin.slug}
-                    </text>
-                    {sys?.kankaUrl && (
-                      <a href={sys.kankaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                        <text x={pin.x} y={labelY + 16} textAnchor="middle"
-                          fill="rgba(165,180,252,0.5)" fontSize="9"
-                          fontFamily="var(--font-cinzel), serif"
-                          style={{ cursor: "pointer" }}>
-                          ↗ Kanka
-                        </text>
-                      </a>
-                    )}
-                  </>
-                )}
-              </g>
+                pin={pin}
+                sys={sys}
+                sectorColor={sector.color}
+                isActive={isActive}
+                isDimmed={activeSystemSlug !== null && !isActive}
+                noActiveSystem={activeSystemSlug === null}
+                isHovered={hoveredSlug === pin.slug}
+                orbitData={orbitDataMap.get(pin.slug) ?? { orbitDistances: [], maxOrbit: 40 }}
+                vb={isActive ? vb : undefined}
+                activeBodyId={activeBodySystemSlug === pin.slug ? activeBodyId : null}
+                tooltipActions={bodyTooltipActions}
+                onFocusSystem={focusSystem}
+                onHoverSystem={setHoveredSlug}
+              />
             );
           })}
-
-          {/* ── Connection marker cards — top layer so they render above systems ── */}
-          {activeMarkerId !== null && (() => {
-            const connIdx = parseInt(activeMarkerId);
-            const conn = sector.connections?.[connIdx];
-            const marker = conn?.marker;
-            if (!conn || !marker) return null;
-
-            const fromSys = sector.systems.find(s => s.slug === conn.from) ?? sector.vortexes?.find(v => v.slug === conn.from);
-            const toSys = sector.systems.find(s => s.slug === conn.to) ?? sector.vortexes?.find(v => v.slug === conn.to);
-            if (!fromSys || !toSys) return null;
-
-            const p0 = { x: fromSys.x, y: fromSys.y };
-            const p2 = { x: toSys.x, y: toSys.y };
-            const mx = (p0.x + p2.x) / 2, my = (p0.y + p2.y) / 2;
-            const segDx = p2.x - p0.x, segDy = p2.y - p0.y;
-            const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
-            const curvature = conn.curvature ?? 0;
-            const p1 = { x: mx + (segLen > 0 ? (-segDy / segLen) * curvature : 0), y: my + (segLen > 0 ? (segDx / segLen) * curvature : 0) };
-
-            const fromSysSys = sector.systems.find(s => s.slug === conn.from);
-            const toSysSys = sector.systems.find(s => s.slug === conn.to);
-            const fromRadius = fromSysSys ? (orbitDataMap.get(fromSysSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8 : ((sector.vortexes?.find(v => v.slug === conn.from)?.radius) ?? 80);
-            const toRadius = toSysSys ? (orbitDataMap.get(toSysSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8 : ((sector.vortexes?.find(v => v.slug === conn.to)?.radius) ?? 80);
-
-            const tan0x = p1.x - p0.x, tan0y = p1.y - p0.y, tan0len = Math.sqrt(tan0x * tan0x + tan0y * tan0y);
-            const p0t = tan0len > 0 ? { x: p0.x + (tan0x / tan0len) * fromRadius, y: p0.y + (tan0y / tan0len) * fromRadius } : p0;
-            const tan1x = p1.x - p2.x, tan1y = p1.y - p2.y, tan1len = Math.sqrt(tan1x * tan1x + tan1y * tan1y);
-            const p2t = tan1len > 0 ? { x: p2.x + (tan1x / tan1len) * toRadius, y: p2.y + (tan1y / tan1len) * toRadius } : p2;
-
-            const t = Math.max(0, Math.min(1, marker.position));
-            const mt = 1 - t;
-            const mpx = mt * mt * p0t.x + 2 * mt * t * p1.x + t * t * p2t.x;
-            const mpy = mt * mt * p0t.y + 2 * mt * t * p1.y + t * t * p2t.y;
-
-            const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
-            const cardAccent = allegiance?.color ?? SHIP_COLORS.color;
-            const cardW = 220;
-            const cardH = 50 + (marker.kankaUrl ? 34 : 0);
-
-            return (
-              <g transform={`translate(${mpx.toFixed(1)},${mpy.toFixed(1)}) scale(${SYS_SCALE * 2})`}>
-                <SvgTooltip
-                  anchorX={0} anchorY={0}
-                  cardW={cardW} cardH={cardH}
-                  color={cardAccent} clearance={42}
-                  viewBox={vb}
-                  parentOffsetX={mpx} parentOffsetY={mpy}
-                  scale={SYS_SCALE * 2}
-                  onMouseEnter={markerCardEnter} onMouseLeave={markerCardLeave}>
-                  <div style={{ display: "flex", alignItems: "stretch", gap: "6px", marginBottom: "5px" }}>
-                    <div style={{ flex: "0 0 70%" }}>
-                      <div style={{ color: cardAccent, fontSize: "11px", fontWeight: 600, marginBottom: "3px" }}>
-                        {marker.name}
-                      </div>
-                      <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        {marker.type}
-                        {allegiance && (
-                          <>
-                            <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-                            <span style={{ color: allegiance.color }}>{allegiance.name}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {allegiance && (
-                      <div style={{ flex: "0 0 30%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <img src={allegiance.logo} alt={allegiance.name}
-                          style={{ width: "28px", height: "28px", objectFit: "contain" }} />
-                      </div>
-                    )}
-                  </div>
-                  {marker.kankaUrl && (
-                    <a href={marker.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
-                      display: "block", marginTop: "8px", padding: "4px 8px",
-                      background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)",
-                      borderRadius: "4px", color: "rgba(165,180,252,0.9)", fontSize: "9px",
-                      textAlign: "center", letterSpacing: "0.08em", textDecoration: "none",
-                      textTransform: "uppercase", pointerEvents: "auto",
-                    }}>
-                      View on Kanka ↗
-                    </a>
-                  )}
-                </SvgTooltip>
-              </g>
-            );
-          })()}
 
           {/* Empty state */}
           {sector.systems.length === 0 && (
@@ -1156,8 +320,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
       </div>
 
       {/* ── Controls ── */}
-
-      {/* Back to sector — shown while a system is focused */}
       {activeSystemSlug && (
         <button
           onClick={exitSystem}
@@ -1169,7 +331,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange }: 
         </button>
       )}
 
-      {/* Zoom controls */}
       <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
         <button onClick={zoomIn} aria-label="Zoom in"
           className="w-8 h-8 rounded scifi-card flex items-center justify-center text-white/70 hover:text-white text-lg leading-none transition-colors">

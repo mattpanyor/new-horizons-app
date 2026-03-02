@@ -1,4 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+
+/** Stable object bundling callbacks + refs — safe for React.memo */
+export interface TooltipActions {
+  readonly show: (id: string) => void;
+  readonly scheduleHide: () => void;
+  readonly proximityHide: () => void;
+  readonly hideNow: () => void;
+  readonly cardEnter: () => void;
+  readonly cardLeave: () => void;
+  readonly activeIdRef: React.RefObject<string | null>;
+  readonly cardHoveredRef: React.RefObject<boolean>;
+}
 
 interface UseSvgTooltipTimerOptions {
   /** Delay before hiding after cursor leaves (ms). Default: 450 */
@@ -85,8 +97,37 @@ export function useSvgTooltipTimer(options?: UseSvgTooltipTimerOptions) {
     };
   }, []);
 
+  // Refs that delegate to the latest callback — structurally stable
+  const showRef = useRef(show);
+  const scheduleHideRef = useRef(scheduleHide);
+  const proximityHideRef = useRef(proximityHide);
+  const hideNowRef = useRef(hideNow);
+  const cardEnterRef = useRef(cardEnter);
+  const cardLeaveRef = useRef(cardLeave);
+  useEffect(() => {
+    showRef.current = show;
+    scheduleHideRef.current = scheduleHide;
+    proximityHideRef.current = proximityHide;
+    hideNowRef.current = hideNow;
+    cardEnterRef.current = cardEnter;
+    cardLeaveRef.current = cardLeave;
+  });
+
+  // Stable actions object — identity never changes, safe for React.memo children
+  const actions: TooltipActions = useMemo(() => ({
+    show: (id: string) => showRef.current(id),
+    scheduleHide: () => scheduleHideRef.current(),
+    proximityHide: () => proximityHideRef.current(),
+    hideNow: () => hideNowRef.current(),
+    cardEnter: () => cardEnterRef.current(),
+    cardLeave: () => cardLeaveRef.current(),
+    activeIdRef, cardHoveredRef,
+  }), []);
+
   return {
     activeId,
+    actions,
+    // Keep flat exports for backward compat (marker tooltip in SectorMap)
     activeIdRef,
     cardHoveredRef,
     show,
