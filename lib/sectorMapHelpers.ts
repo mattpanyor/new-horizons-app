@@ -51,6 +51,48 @@ export const tri = (cx: number, cy: number, r: number) =>
 export const triLeft = (cx: number, cy: number, r: number) =>
   `${cx - r},${cy} ${cx + r * 0.6},${cy - r * 0.7} ${cx + r * 0.6},${cy + r * 0.7}`;
 
+/** Radius of faction territory blobs around each system, in canvas units */
+export const TERRITORY_RADIUS = 120;
+
+
+/** Seeded wavy territory blob — shape is deterministic from the system's canvas coordinate */
+export function seededWavyTerritoryPath(cx: number, cy: number, r: number, seedX: number, seedY: number): string {
+  let h = 5381;
+  const seedStr = `${Math.round(seedX)}_${Math.round(seedY)}`;
+  for (let i = 0; i < seedStr.length; i++) h = (Math.imul(h, 33) ^ seedStr.charCodeAt(i)) | 0;
+  const next = (): number => {
+    h = (Math.imul(h, 1664525) + 1013904223) | 0;
+    return ((h >>> 8) & 0xffff) / 0xffff;
+  };
+  const phase1 = next() * Math.PI * 2;
+  const phase2 = next() * Math.PI * 2;
+  const phase3 = next() * Math.PI * 2;
+  const N = 24;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const wave =
+      Math.sin(3 * a + phase1) * r * 0.14 +
+      Math.sin(5 * a + phase2) * r * 0.08 +
+      Math.sin(7 * a + phase3) * r * 0.04;
+    const rad = r + wave;
+    pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
+  }
+  const n = pts.length;
+  const mid = (i: number): [number, number] => {
+    const a = pts[i], b = pts[(i + 1) % n];
+    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  };
+  const start = mid(n - 1);
+  const parts = [`M ${start[0].toFixed(2)} ${start[1].toFixed(2)}`];
+  for (let i = 0; i < n; i++) {
+    const m = mid(i);
+    parts.push(`Q ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} ${m[0].toFixed(2)} ${m[1].toFixed(2)}`);
+  }
+  parts.push("Z");
+  return parts.join(" ");
+}
+
 /** Wavy nebula cloud path for vortex rendering */
 export function wavyCloudPath(cx: number, cy: number, r: number, ratio?: [number, number]): string {
   const [rw, rh] = ratio ?? [1, 1];

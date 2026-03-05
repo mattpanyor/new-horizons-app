@@ -71,17 +71,21 @@
     {
       "slug": "pelao",
       "x": 800,
-      "y": 280
+      "y": 280,
+      "allegiance": "fairfield"
     },
     {
       "slug": "belliar",
       "x": 190,
-      "y": -70
+      "y": -70,
+      "allegiance": "ashford"
     },
     {
       "slug": "ertamis",
       "x": 250,
-      "y": 380
+      "y": 380,
+      "allegiance": "feyrose",
+      "territoryRadius": 165
     },
     {
       "slug": "pernat",
@@ -91,7 +95,9 @@
     {
       "slug": "callisto",
       "x": 500,
-      "y": 150
+      "y": 150,
+      "allegiance": "feyrose",
+      "territoryRadius": 155
     }
   ]
 }

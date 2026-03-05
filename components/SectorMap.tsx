@@ -10,8 +10,9 @@ import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 import {
   FULL_W, FULL_H, SECTOR_TERRITORY, TERRITORY_INNER_R, TERRITORY_OUTER_R,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
-  SYS_SCALE, SYS_MAX_R, wavyCloudPath,
+  SYS_SCALE, SYS_MAX_R, wavyCloudPath, TERRITORY_RADIUS, seededWavyTerritoryPath,
 } from "@/lib/sectorMapHelpers";
+import { ALLEGIANCES } from "@/lib/allegiances";
 import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
 
@@ -198,11 +199,11 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
             const t = SECTOR_TERRITORY[sector.slug];
             if (!t) return null;
             const { cx, cy, arcStart, arcEnd } = t;
-            const labelR = TERRITORY_OUTER_R + 30;
+            const needsReverse = sector.slug === "denerum-sector" || sector.slug === "castell-sector";
+            const labelR = TERRITORY_OUTER_R + (needsReverse ? 62 : 30);
             const ls = toRad(arcStart), le = toRad(arcEnd);
             const lxs = cx + labelR * Math.cos(ls), lys = cy + labelR * Math.sin(ls);
             const lxe = cx + labelR * Math.cos(le), lye = cy + labelR * Math.sin(le);
-            const needsReverse = sector.slug === "denerum-sector" || sector.slug === "castell-sector";
             const labelPathD = needsReverse
               ? `M ${lxe} ${lye} A ${labelR} ${labelR} 0 0 0 ${lxs} ${lys}`
               : `M ${lxs} ${lys} A ${labelR} ${labelR} 0 0 1 ${lxe} ${lye}`;
@@ -214,7 +215,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
                   <path id={labelPathId} d={labelPathD} />
                 </defs>
                 <path d={annularSectorPath(cx, cy, TERRITORY_INNER_R, TERRITORY_OUTER_R, arcStart, arcEnd)}
-                  fill={sector.color} fillOpacity={0.07} />
+                  fill={sector.color} fillOpacity={0.03} />
                 <path d={arcStrokePath(cx, cy, TERRITORY_OUTER_R, arcStart, arcEnd)}
                   fill="none" stroke={sector.color} strokeOpacity={0.25} strokeWidth={1.5} />
                 <path d={arcStrokePath(cx, cy, TERRITORY_INNER_R, arcStart, arcEnd)}
@@ -235,6 +236,42 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
                     {sector.name.toUpperCase()}
                   </textPath>
                 </text>
+              </g>
+            );
+          })()}
+
+          {/* ── System allegiance territories ── */}
+          {(() => {
+            const allegianceSystems = sector.systems.filter(p => p.allegiance);
+            if (!allegianceSystems.length) return null;
+            const t = SECTOR_TERRITORY[sector.slug];
+            const clipId = `sys-territory-clip-${sector.slug}`;
+            return (
+              <g style={{ pointerEvents: "none" }}>
+                {t && (
+                  <defs>
+                    <clipPath id={clipId}>
+                      <path d={annularSectorPath(t.cx, t.cy, TERRITORY_INNER_R, TERRITORY_OUTER_R, t.arcStart, t.arcEnd)} />
+                    </clipPath>
+                  </defs>
+                )}
+                <g clipPath={t ? `url(#${clipId})` : undefined}>
+                  {allegianceSystems.map(pin => {
+                    const allegiance = ALLEGIANCES[pin.allegiance!];
+                    if (!allegiance) return null;
+                    return (
+                      <path
+                        key={pin.slug}
+                        d={seededWavyTerritoryPath(pin.x, pin.y, pin.territoryRadius ?? TERRITORY_RADIUS, pin.x, pin.y)}
+                        fill={allegiance.color}
+                        fillOpacity={0.04}
+                        stroke={allegiance.color}
+                        strokeOpacity={0.1}
+                        strokeWidth={1}
+                      />
+                    );
+                  })}
+                </g>
               </g>
             );
           })()}

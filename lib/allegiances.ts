@@ -20,4 +20,19 @@ export const ALLEGIANCES: Record<string, Allegiance> = {
     color: "#EC4899",
     logo: "/factions/feyrose_logo.png",
   },
+  imperial: {
+    name: "Imperial",
+    color: "#EC4899",
+    logo: "/factions/feyrose_logo.png",
+  },
+  lenard: {
+    name: "House Lenard (L.I.I.X)",
+    color: "#000000",
+    logo: "/factions/feyrose_logo.png"
+  },
+  cultists: {
+    name: "Cultists",
+    color: "#000000",
+    logo: "/factions/feyrose_logo.png"
+  }
 };

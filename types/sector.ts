@@ -2,6 +2,8 @@ export interface SystemPin {
   slug: string;
   x: number;  // canvas coordinate 0–1200
   y: number;  // canvas coordinate 0–800
+  allegiance?: string;       // key into ALLEGIANCES registry
+  territoryRadius?: number;  // overrides TERRITORY_RADIUS default (120)
 }
 
 export interface VortexPin {
