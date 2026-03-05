@@ -4,16 +4,17 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import type { SectorMetadata, VortexPin, SystemPin } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
-import { toRad, annularSectorPath, arcStrokePath } from "@/lib/svgGeometry";
+
 import { useSvgTooltipTimer } from "@/hooks/useSvgTooltipTimer";
 import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 import {
-  FULL_W, FULL_H, SECTOR_TERRITORY, TERRITORY_INNER_R, TERRITORY_OUTER_R,
+  FULL_W, FULL_H,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
-  SYS_SCALE, SYS_MAX_R, wavyCloudPath, TERRITORY_RADIUS, seededWavyTerritoryPath,
+  SYS_MAX_R, wavyCloudPath,
 } from "@/lib/sectorMapHelpers";
-import { ALLEGIANCES } from "@/lib/allegiances";
+import { SectorArcLayer } from "@/components/sectormap/SectorArcLayer";
 import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
+import { TerritoryLayer } from "@/components/sectormap/TerritoryLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
 
 interface SectorMapProps {
@@ -144,7 +145,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
         ];
       })}
     </defs>
-  ), [sector.systems, systemsData]);
+  ), [sector.slug, sector.systems, systemsData]);
 
   // Precompute which system owns the active body tooltip — O(N*M) once instead of per-system
   const activeBodySystemSlug = useMemo(() => {
@@ -195,86 +196,10 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
           {gradientDefs}
 
           {/* ── Sector territory ── */}
-          {(() => {
-            const t = SECTOR_TERRITORY[sector.slug];
-            if (!t) return null;
-            const { cx, cy, arcStart, arcEnd } = t;
-            const needsReverse = sector.slug === "denerum-sector" || sector.slug === "castell-sector";
-            const labelR = TERRITORY_OUTER_R + (needsReverse ? 62 : 30);
-            const ls = toRad(arcStart), le = toRad(arcEnd);
-            const lxs = cx + labelR * Math.cos(ls), lys = cy + labelR * Math.sin(ls);
-            const lxe = cx + labelR * Math.cos(le), lye = cy + labelR * Math.sin(le);
-            const labelPathD = needsReverse
-              ? `M ${lxe} ${lye} A ${labelR} ${labelR} 0 0 0 ${lxs} ${lys}`
-              : `M ${lxs} ${lys} A ${labelR} ${labelR} 0 0 1 ${lxe} ${lye}`;
-            const labelPathId = `sector-label-${sector.slug}`;
-
-            return (
-              <g style={{ pointerEvents: "none" }}>
-                <defs>
-                  <path id={labelPathId} d={labelPathD} />
-                </defs>
-                <path d={annularSectorPath(cx, cy, TERRITORY_INNER_R, TERRITORY_OUTER_R, arcStart, arcEnd)}
-                  fill={sector.color} fillOpacity={0.03} />
-                <path d={arcStrokePath(cx, cy, TERRITORY_OUTER_R, arcStart, arcEnd)}
-                  fill="none" stroke={sector.color} strokeOpacity={0.25} strokeWidth={1.5} />
-                <path d={arcStrokePath(cx, cy, TERRITORY_INNER_R, arcStart, arcEnd)}
-                  fill="none" stroke={sector.color} strokeOpacity={0.2} strokeWidth={1} strokeDasharray="4 8" />
-                {[arcStart, arcEnd].map((deg) => {
-                  const r = toRad(deg);
-                  return (
-                    <line key={deg}
-                      x1={cx + TERRITORY_INNER_R * Math.cos(r)} y1={cy + TERRITORY_INNER_R * Math.sin(r)}
-                      x2={cx + TERRITORY_OUTER_R * Math.cos(r)} y2={cy + TERRITORY_OUTER_R * Math.sin(r)}
-                      stroke={sector.color} strokeOpacity={0.2} strokeWidth={1} strokeDasharray="6 10" />
-                  );
-                })}
-                <text
-                  fontFamily="var(--font-cinzel), serif" fontSize="32" fontWeight="600"
-                  fill={sector.color} fillOpacity={0.3} letterSpacing="14">
-                  <textPath href={`#${labelPathId}`} startOffset="50%" textAnchor="middle">
-                    {sector.name.toUpperCase()}
-                  </textPath>
-                </text>
-              </g>
-            );
-          })()}
+          <SectorArcLayer sectorSlug={sector.slug} sectorName={sector.name} sectorColor={sector.color} />
 
           {/* ── System allegiance territories ── */}
-          {(() => {
-            const allegianceSystems = sector.systems.filter(p => p.allegiance);
-            if (!allegianceSystems.length) return null;
-            const t = SECTOR_TERRITORY[sector.slug];
-            const clipId = `sys-territory-clip-${sector.slug}`;
-            return (
-              <g style={{ pointerEvents: "none" }}>
-                {t && (
-                  <defs>
-                    <clipPath id={clipId}>
-                      <path d={annularSectorPath(t.cx, t.cy, TERRITORY_INNER_R, TERRITORY_OUTER_R, t.arcStart, t.arcEnd)} />
-                    </clipPath>
-                  </defs>
-                )}
-                <g clipPath={t ? `url(#${clipId})` : undefined}>
-                  {allegianceSystems.map(pin => {
-                    const allegiance = ALLEGIANCES[pin.allegiance!];
-                    if (!allegiance) return null;
-                    return (
-                      <path
-                        key={pin.slug}
-                        d={seededWavyTerritoryPath(pin.x, pin.y, pin.territoryRadius ?? TERRITORY_RADIUS, pin.x, pin.y)}
-                        fill={allegiance.color}
-                        fillOpacity={0.04}
-                        stroke={allegiance.color}
-                        strokeOpacity={0.1}
-                        strokeWidth={1}
-                      />
-                    );
-                  })}
-                </g>
-              </g>
-            );
-          })()}
+          <TerritoryLayer systems={sector.systems} sectorSlug={sector.slug} />
 
           {/* ── Connection lines ── */}
           <ConnectionLayer
@@ -300,7 +225,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
             const ry = r * (rh / Math.max(rw, rh));
             return (
               <g key={v.slug} style={{ pointerEvents: "none" }}>
-                <path d={wavyCloudPath(v.x, v.y, r, v.ratio)}
+                <path d={wavyCloudPath(v.x, v.y, r, { ratio: v.ratio })}
                   fill={color} fillOpacity={0.12}
                   stroke={color} strokeOpacity={0.35} strokeWidth={1.5} />
                 <text x={v.x} y={v.y + ry + 18} textAnchor="middle"

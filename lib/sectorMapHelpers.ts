@@ -12,6 +12,8 @@ export const SECTOR_TERRITORY: Record<string, { cx: number; cy: number; arcStart
 
 export const TERRITORY_INNER_R = 260;
 export const TERRITORY_OUTER_R = 920;
+export const LABEL_PAD = 30;
+export const LABEL_PAD_REVERSED = 62; // larger offset for inner-curve text baseline
 
 export const MIN_ZOOM = 0.4;
 export const MAX_ZOOM = 10;
@@ -54,91 +56,47 @@ export const triLeft = (cx: number, cy: number, r: number) =>
 /** Radius of faction territory blobs around each system, in canvas units */
 export const TERRITORY_RADIUS = 120;
 
-
-/** Seeded wavy territory blob — shape is deterministic from the system's canvas coordinate */
-export function seededWavyTerritoryPath(cx: number, cy: number, r: number, seedX: number, seedY: number): string {
+/** Deterministic PRNG: djb2 hash → LCG, yields 0–1 floats */
+function rng(seed: string) {
   let h = 5381;
-  const seedStr = `${Math.round(seedX)}_${Math.round(seedY)}`;
-  for (let i = 0; i < seedStr.length; i++) h = (Math.imul(h, 33) ^ seedStr.charCodeAt(i)) | 0;
-  const next = (): number => {
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    return ((h >>> 8) & 0xffff) / 0xffff;
-  };
-  const phase1 = next() * Math.PI * 2;
-  const phase2 = next() * Math.PI * 2;
-  const phase3 = next() * Math.PI * 2;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 33) ^ seed.charCodeAt(i)) | 0;
+  return () => { h = (Math.imul(h, 1664525) + 1013904223) | 0; return ((h >>> 8) & 0xffff) / 0xffff; };
+}
+
+const TAU = Math.PI * 2;
+const f = (n: number) => n.toFixed(2);
+
+/** Smooth wavy blob — 3-harmonic sine perturbation + quadratic Bézier midpoint closure.
+ *  `seed` makes the shape deterministic; `ratio` stretches it elliptically. */
+export function wavyCloudPath(cx: number, cy: number, r: number, { seed, ratio }: { seed?: string; ratio?: [number, number] } = {}): string {
+  const next = seed ? rng(seed) : null;
+  const p1 = next ? next() * TAU : 0, p2 = next ? next() * TAU : 1.1, p3 = next ? next() * TAU : 2.3;
+  const sx = ratio ? ratio[0] / Math.max(...ratio) : 1;
+  const sy = ratio ? ratio[1] / Math.max(...ratio) : 1;
   const N = 24;
   const pts: [number, number][] = [];
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2;
-    const wave =
-      Math.sin(3 * a + phase1) * r * 0.14 +
-      Math.sin(5 * a + phase2) * r * 0.08 +
-      Math.sin(7 * a + phase3) * r * 0.04;
-    const rad = r + wave;
-    pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
+    const a = (i / N) * TAU;
+    const d = r + Math.sin(3 * a + p1) * r * 0.14 + Math.sin(5 * a + p2) * r * 0.08 + Math.sin(7 * a + p3) * r * 0.04;
+    pts.push([cx + d * sx * Math.cos(a), cy + d * sy * Math.sin(a)]);
   }
-  const n = pts.length;
-  const mid = (i: number): [number, number] => {
-    const a = pts[i], b = pts[(i + 1) % n];
-    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  };
-  const start = mid(n - 1);
-  const parts = [`M ${start[0].toFixed(2)} ${start[1].toFixed(2)}`];
-  for (let i = 0; i < n; i++) {
-    const m = mid(i);
-    parts.push(`Q ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} ${m[0].toFixed(2)} ${m[1].toFixed(2)}`);
-  }
-  parts.push("Z");
-  return parts.join(" ");
-}
-
-/** Wavy nebula cloud path for vortex rendering */
-export function wavyCloudPath(cx: number, cy: number, r: number, ratio?: [number, number]): string {
-  const [rw, rh] = ratio ?? [1, 1];
-  const maxR = Math.max(rw, rh);
-  const scaleX = rw / maxR;
-  const scaleY = rh / maxR;
-  const N = 22;
-  const pts: [number, number][] = [];
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2;
-    const wave =
-      Math.sin(3 * a) * r * 0.14 +
-      Math.sin(5 * a + 1.1) * r * 0.08 +
-      Math.sin(7 * a + 2.3) * r * 0.04;
-    const rad = r + wave;
-    pts.push([cx + rad * scaleX * Math.cos(a), cy + rad * scaleY * Math.sin(a)]);
-  }
-  const n = pts.length;
-  const mid = (i: number): [number, number] => {
-    const a = pts[i], b = pts[(i + 1) % n];
-    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  };
-  const start = mid(n - 1);
-  const parts = [`M ${start[0].toFixed(2)} ${start[1].toFixed(2)}`];
-  for (let i = 0; i < n; i++) {
-    const m = mid(i);
-    parts.push(`Q ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} ${m[0].toFixed(2)} ${m[1].toFixed(2)}`);
-  }
-  parts.push("Z");
-  return parts.join(" ");
+  const mid = (i: number): [number, number] => [(pts[i][0] + pts[(i + 1) % N][0]) / 2, (pts[i][1] + pts[(i + 1) % N][1]) / 2];
+  const [mx, my] = mid(N - 1);
+  const parts = [`M ${f(mx)} ${f(my)}`];
+  for (let i = 0; i < N; i++) { const [px, py] = pts[i], [nx, ny] = mid(i); parts.push(`Q ${f(px)} ${f(py)} ${f(nx)} ${f(ny)}`); }
+  return parts.join(" ") + " Z";
 }
 
 /** Deterministic dot cluster for asteroid fields — seed from body id */
 export function asteroidDots(seed: string): { x: number; y: number; r: number }[] {
-  let h = 5381;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 33) ^ seed.charCodeAt(i)) | 0;
+  const next = rng(seed);
   const COUNT = 8;
   return Array.from({ length: COUNT }, (_, i) => {
     const angle = i * 2.399963;
     const radius = Math.sqrt((i + 0.5) / COUNT) * 14;
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const jx = ((h >>> 8) & 0xff) / 255 * 6 - 3;
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const jy = ((h >>> 8) & 0xff) / 255 * 6 - 3;
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const r = Math.round((1.5 + ((h >>> 8) & 0xf) / 15 * 2) * 1e2) / 1e2;
+    const jx = next() * 6 - 3;
+    const jy = next() * 6 - 3;
+    const r = Math.round((1.5 + next() * 2) * 1e2) / 1e2;
     return {
       x: Math.round((radius * Math.cos(angle) + jx) * 1e4) / 1e4,
       y: Math.round((radius * Math.sin(angle) + jy) * 1e4) / 1e4,

@@ -30,6 +30,18 @@ interface ConnectionLayerProps {
   vb: SvgViewBox;
 }
 
+/** Compute the trim radius for a connection endpoint (system orbit edge or vortex edge) */
+function endpointRadius(
+  slug: string,
+  systems: SystemPin[],
+  vortexes: VortexPin[],
+  orbitDataMap: Map<string, { orbitDistances: number[]; maxOrbit: number }>,
+): number {
+  const sys = systems.find(s => s.slug === slug);
+  if (sys) return (orbitDataMap.get(sys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8;
+  return vortexes.find(v => v.slug === slug)?.radius ?? 80;
+}
+
 export function ConnectionLayer({
   connections, systems, vortexes, sectorSlug, sectorColor, orbitDataMap,
   activeMarkerId, showMarker, scheduleHideMarker,
@@ -38,20 +50,12 @@ export function ConnectionLayer({
   return (
     <>
       {connections.map((conn, connIdx) => {
-        const fromSys = systems.find(s => s.slug === conn.from);
-        const toSys = systems.find(s => s.slug === conn.to);
-        const fromVortex = vortexes.find(v => v.slug === conn.from);
-        const toVortex = vortexes.find(v => v.slug === conn.to);
-        const fromObj = fromSys ?? fromVortex;
-        const toObj = toSys ?? toVortex;
+        const fromObj = systems.find(s => s.slug === conn.from) ?? vortexes.find(v => v.slug === conn.from);
+        const toObj = systems.find(s => s.slug === conn.to) ?? vortexes.find(v => v.slug === conn.to);
         if (!fromObj || !toObj) return null;
 
-        const fromRadius = fromSys
-          ? (orbitDataMap.get(fromSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
-          : (fromVortex?.radius ?? 80);
-        const toRadius = toSys
-          ? (orbitDataMap.get(toSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
-          : (toVortex?.radius ?? 80);
+        const fromRadius = endpointRadius(conn.from, systems, vortexes, orbitDataMap);
+        const toRadius = endpointRadius(conn.to, systems, vortexes, orbitDataMap);
 
         const { p0t, p1, p2t } = computeConnectionCurve(
           fromObj, toObj, conn.curvature ?? 0, fromRadius, toRadius,
@@ -164,14 +168,8 @@ export function ConnectionLayer({
         const toObj = systems.find(s => s.slug === conn.to) ?? vortexes.find(v => v.slug === conn.to);
         if (!fromObj || !toObj) return null;
 
-        const fromSys = systems.find(s => s.slug === conn.from);
-        const toSys = systems.find(s => s.slug === conn.to);
-        const fromRadius = fromSys
-          ? (orbitDataMap.get(fromSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
-          : (vortexes.find(v => v.slug === conn.from)?.radius ?? 80);
-        const toRadius = toSys
-          ? (orbitDataMap.get(toSys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8
-          : (vortexes.find(v => v.slug === conn.to)?.radius ?? 80);
+        const fromRadius = endpointRadius(conn.from, systems, vortexes, orbitDataMap);
+        const toRadius = endpointRadius(conn.to, systems, vortexes, orbitDataMap);
 
         const { p0t, p1, p2t } = computeConnectionCurve(
           fromObj, toObj, conn.curvature ?? 0, fromRadius, toRadius,

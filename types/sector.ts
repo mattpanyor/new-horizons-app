@@ -1,8 +1,10 @@
+import type { AllegianceKey } from "@/lib/allegiances";
+
 export interface SystemPin {
   slug: string;
   x: number;  // canvas coordinate 0–1200
   y: number;  // canvas coordinate 0–800
-  allegiance?: string;       // key into ALLEGIANCES registry
+  allegiance?: AllegianceKey;       // key into ALLEGIANCES registry
   territoryRadius?: number;  // overrides TERRITORY_RADIUS default (120)
 }
 
@@ -21,7 +23,7 @@ export interface ConnectionMarker {
   position: number;  // 0–1 along the visible (trimmed) line
   // Inline card data
   name: string;
-  allegiance?: string; // key into ALLEGIANCES registry
+  allegiance?: AllegianceKey; // key into ALLEGIANCES registry
   kankaUrl?: string;
 }
 

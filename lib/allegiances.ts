@@ -4,7 +4,7 @@ export interface Allegiance {
   logo: string; // path relative to /public, e.g. "/factions/ashford_logo.png"
 }
 
-export const ALLEGIANCES: Record<string, Allegiance> = {
+export const ALLEGIANCES = {
   ashford: {
     name: "House Ashford",
     color: "#4A7FBF",
@@ -20,19 +20,24 @@ export const ALLEGIANCES: Record<string, Allegiance> = {
     color: "#EC4899",
     logo: "/factions/feyrose_logo.png",
   },
+  /** TODO: placeholder — needs proper color + logo */
   imperial: {
     name: "Imperial",
     color: "#EC4899",
     logo: "/factions/feyrose_logo.png",
   },
+  /** TODO: placeholder — needs proper color + logo */
   lenard: {
     name: "House Lenard (L.I.I.X)",
     color: "#000000",
     logo: "/factions/feyrose_logo.png"
   },
+  /** TODO: placeholder — needs proper color + logo */
   cultists: {
     name: "Cultists",
     color: "#000000",
     logo: "/factions/feyrose_logo.png"
   }
-};
+} as const satisfies Record<string, Allegiance>;
+
+export type AllegianceKey = keyof typeof ALLEGIANCES;
