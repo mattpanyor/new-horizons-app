@@ -31,6 +31,7 @@ export function useSvgPanZoom({
   const rafIdRef = useRef<number | null>(null);
   const wheelRafRef = useRef<number | null>(null);
   const pinchRafRef = useRef<number | null>(null);
+  const animRafRef = useRef<number | null>(null);
   const wheelHandlerRef = useRef<(e: WheelEvent) => void>(() => {});
 
   const zoom = width / vb.w;
@@ -80,10 +81,52 @@ export function useSvgPanZoom({
     syncedSetVb(next);
   }, [width, height, minZoom, maxZoom, syncedSetVb]);
 
+  // --- Animated viewbox transition ---
+  const isAnimatingRef = useRef(false);
+
+  const cancelAnimation = useCallback(() => {
+    const id = animRafRef.current;
+    if (id !== null) {
+      cancelAnimationFrame(id);
+      animRafRef.current = null;
+      isAnimatingRef.current = false;
+    }
+  }, []);
+
+  const animateToVb = useCallback((target: ViewBox, durationMs = 500) => {
+    cancelAnimation();
+    isAnimatingRef.current = true;
+    const start = { ...vbRef.current };
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const elapsed = now - t0;
+      const raw = Math.min(elapsed / durationMs, 1);
+      // ease-in-out cubic
+      const t = raw < 0.5 ? 4 * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 3) / 2;
+      const lerp = (a: number, b: number) => a + (b - a) * t;
+      const current: ViewBox = {
+        x: lerp(start.x, target.x),
+        y: lerp(start.y, target.y),
+        w: lerp(start.w, target.w),
+        h: lerp(start.h, target.h),
+      };
+      if (raw < 1) {
+        applyVb(current);
+        animRafRef.current = requestAnimationFrame(step);
+      } else {
+        animRafRef.current = null;
+        isAnimatingRef.current = false;
+        syncedSetVb(target);
+      }
+    };
+    animRafRef.current = requestAnimationFrame(step);
+  }, [applyVb, syncedSetVb, cancelAnimation]);
+
   // --- Wheel zoom (RAF throttled) ---
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       e.preventDefault();
+      cancelAnimation();
       const pt = screenToSvg(e.clientX, e.clientY);
       const factor = e.deltaY < 0 ? 1 + zoomStep : 1 / (1 + zoomStep);
       if (wheelRafRef.current !== null) cancelAnimationFrame(wheelRafRef.current);
@@ -92,7 +135,7 @@ export function useSvgPanZoom({
         zoomAt(pt.x, pt.y, factor);
       });
     },
-    [screenToSvg, zoomAt, zoomStep]
+    [screenToSvg, zoomAt, zoomStep, cancelAnimation]
   );
   useEffect(() => {
     wheelHandlerRef.current = handleWheel;
@@ -102,12 +145,13 @@ export function useSvgPanZoom({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
+      cancelAnimation();
       didDragRef.current = false;
       setCursorGrab(true);
       const v = vbRef.current;
       panStart.current = { x: e.clientX, y: e.clientY, vbX: v.x, vbY: v.y };
     },
-    []
+    [cancelAnimation]
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -145,6 +189,7 @@ export function useSvgPanZoom({
   // --- Touch pan + pinch zoom (imperative during gesture, commit on touchEnd) ---
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
+      cancelAnimation();
       const v = vbRef.current;
       if (e.touches.length === 1) {
         const t = e.touches[0];
@@ -158,7 +203,7 @@ export function useSvgPanZoom({
         pinchStart.current = { dist: Math.sqrt(dx * dx + dy * dy), vb: { ...v } };
       }
     },
-    []
+    [cancelAnimation]
   );
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -229,6 +274,7 @@ export function useSvgPanZoom({
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
       if (wheelRafRef.current !== null) cancelAnimationFrame(wheelRafRef.current);
       if (pinchRafRef.current !== null) cancelAnimationFrame(pinchRafRef.current);
+      if (animRafRef.current !== null) cancelAnimationFrame(animRafRef.current);
     };
   }, []);
 
@@ -262,6 +308,8 @@ export function useSvgPanZoom({
     zoomIn,
     zoomOut,
     resetView,
+    animateToVb,
+    isAnimatingRef,
     handlers: {
       onMouseDown: handleMouseDown,
       onMouseMove: handleMouseMove,

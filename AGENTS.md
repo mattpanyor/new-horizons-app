@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **new-horizons-app** (196 symbols, 328 relationships, 7 execution flows).
+This project is indexed by GitNexus as **new-horizons-app** (221 symbols, 386 relationships, 11 execution flows).
 
 ## Always Start Here
 

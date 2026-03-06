@@ -26,8 +26,8 @@ interface SectorMapProps {
 
 export default function SectorMap({ sector, systemsData = {}, onSystemChange, children }: SectorMapProps) {
   const {
-    containerRef, svgRef, vb, setVb, zoom, cursorGrab, didDragRef,
-    zoomIn, zoomOut, resetView: resetPanZoom, handlers,
+    containerRef, svgRef, vb, zoom, cursorGrab, didDragRef,
+    zoomIn, zoomOut, resetView: resetPanZoom, animateToVb, isAnimatingRef, handlers,
   } = useSvgPanZoom({ width: FULL_W, height: FULL_H, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
 
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
@@ -82,10 +82,16 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
   }, [svgRef, sector.systems, systemsData]);
 
   const resetView = useCallback(() => {
+    const wasActive = activeSystemSlug !== null;
     setActiveSystemSlug(null);
+    setHoveredSlug(wasActive ? null : systemUnderCursor());
     hideBody();
-    resetPanZoom();
-  }, [hideBody, resetPanZoom]);
+    if (wasActive) {
+      animateToVb({ x: 0, y: 0, w: FULL_W, h: FULL_H }, 500);
+    } else {
+      resetPanZoom();
+    }
+  }, [activeSystemSlug, hideBody, resetPanZoom, animateToVb, systemUnderCursor]);
 
   const focusSystem = useCallback((pin: SystemPin) => {
     setActiveSystemSlug(pin.slug);
@@ -93,15 +99,15 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     hideBody();
     const w = FULL_W / FOCUS_ZOOM;
     const h = FULL_H / FOCUS_ZOOM;
-    setVb({ x: pin.x - w / 2, y: pin.y - h / 2, w, h });
-  }, [hideBody, setVb]);
+    animateToVb({ x: pin.x - w / 2, y: pin.y - h / 2, w, h }, 500);
+  }, [hideBody, animateToVb]);
 
   const exitSystem = useCallback(() => {
     setActiveSystemSlug(null);
     setHoveredSlug(systemUnderCursor());
     hideBody();
-    resetPanZoom();
-  }, [hideBody, resetPanZoom, systemUnderCursor]);
+    animateToVb({ x: 0, y: 0, w: FULL_W, h: FULL_H }, 500);
+  }, [hideBody, animateToVb, systemUnderCursor]);
 
   // Escape key exits system zoom
   useEffect(() => {
@@ -111,8 +117,9 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     return () => window.removeEventListener("keydown", onKey);
   }, [activeSystemSlug, exitSystem]);
 
-  // Auto-select system when zoomed in close enough
+  // Auto-select system when zoomed in close enough (skip during animation)
   useEffect(() => {
+    if (isAnimatingRef.current) return;
     const currentZoom = FULL_W / vb.w;
     if (currentZoom >= AUTO_SELECT_ZOOM && !activeSystemSlug) {
       const cx = vb.x + vb.w / 2;
@@ -135,7 +142,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
       setHoveredSlug(systemUnderCursor());
       hideBody();
     }
-  }, [vb, activeSystemSlug, sector.systems, hideBody, systemUnderCursor]);
+  }, [vb, activeSystemSlug, sector.systems, hideBody, systemUnderCursor, isAnimatingRef]);
 
   const handleSvgClick = useCallback(() => {
     if (didDragRef.current) return;

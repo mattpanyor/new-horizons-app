@@ -45,7 +45,6 @@ export const StarSystemView = memo(function StarSystemView({
 }: StarSystemViewProps) {
   const { orbitDistances, maxOrbit } = orbitData;
   const labelY = pin.y + (maxOrbit + 30) * SYS_SCALE + 14;
-  const highlighted = isHovered;
 
   // Per-system refs for proximity detection
   const bodyRafRef = useRef<number | null>(null);
@@ -147,8 +146,8 @@ export const StarSystemView = memo(function StarSystemView({
           {orbitDistances.map((dist) => (
             <circle key={dist} cx={0} cy={0} r={dist * SYS_MAX_R}
               fill="none"
-              stroke={highlighted ? "rgba(148,151,255,0.38)" : "rgba(99,102,241,0.15)"}
-              strokeWidth={highlighted ? 1.5 : 1}
+              stroke={isHovered ? "rgba(148,151,255,0.38)" : "rgba(99,102,241,0.15)"}
+              strokeWidth={isHovered ? 1.5 : 1}
               strokeDasharray="6 10"
               style={{ transition: "stroke 0.25s, stroke-width 0.25s" }} />
           ))}
@@ -160,11 +159,11 @@ export const StarSystemView = memo(function StarSystemView({
           {/* Hover halo ring */}
           <circle cx={0} cy={0} r={65} fill="none"
             stroke={sys.star.color} strokeWidth={12}
-            strokeOpacity={highlighted ? 0.18 : 0}
+            strokeOpacity={isHovered ? 0.18 : 0}
             style={{ transition: "stroke-opacity 0.25s" }} />
           <circle cx={0} cy={0} r={22} fill={sys.star.color}
             style={{
-              filter: highlighted
+              filter: isHovered
                 ? `drop-shadow(0 0 22px ${sys.star.color}) drop-shadow(0 0 8px white)`
                 : `drop-shadow(0 0 12px ${sys.star.color})`,
               transition: "filter 0.25s",
