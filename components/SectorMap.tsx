@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { SectorMetadata, VortexPin, SystemPin } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
@@ -10,7 +10,7 @@ import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 import {
   FULL_W, FULL_H,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
-  SYS_MAX_R, wavyCloudPath,
+  SYS_MAX_R, SYS_SCALE, wavyCloudPath,
 } from "@/lib/sectorMapHelpers";
 import { SectorArcLayer } from "@/components/sectormap/SectorArcLayer";
 import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
@@ -32,6 +32,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
+  const cursorClientRef = useRef<{ x: number; y: number } | null>(null);
 
   // Body tooltip (in-system celestial bodies)
   const {
@@ -52,6 +53,34 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     onSystemChange?.(activeSystemSlug);
   }, [activeSystemSlug, onSystemChange]);
 
+  const handleSvgMouseMove = useCallback((e: React.MouseEvent) => {
+    cursorClientRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  /** Find which system pin the cursor is over (in SVG space), or null. */
+  const systemUnderCursor = useCallback(() => {
+    const svg = svgRef.current;
+    const cursor = cursorClientRef.current;
+    if (!svg || !cursor) return null;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = cursor.x;
+    pt.y = cursor.y;
+    const svgPt = pt.matrixTransform(ctm.inverse());
+    for (const pin of sector.systems) {
+      const sys = systemsData[pin.slug];
+      const maxOrbit = sys
+        ? Math.max(...sys.bodies.map(b => b.orbitDistance), 0.3) * SYS_MAX_R
+        : 40;
+      const hitR = (maxOrbit + 50) * SYS_SCALE;
+      const dx = svgPt.x - pin.x;
+      const dy = svgPt.y - pin.y;
+      if (dx * dx + dy * dy <= hitR * hitR) return pin.slug;
+    }
+    return null;
+  }, [svgRef, sector.systems, systemsData]);
+
   const resetView = useCallback(() => {
     setActiveSystemSlug(null);
     hideBody();
@@ -69,10 +98,10 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
   const exitSystem = useCallback(() => {
     setActiveSystemSlug(null);
-    setHoveredSlug(null);
+    setHoveredSlug(systemUnderCursor());
     hideBody();
     resetPanZoom();
-  }, [hideBody, resetPanZoom]);
+  }, [hideBody, resetPanZoom, systemUnderCursor]);
 
   // Escape key exits system zoom
   useEffect(() => {
@@ -98,14 +127,15 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
       }
       if (best && bestDist < Math.min(vb.w, vb.h) * 0.6) {
         setActiveSystemSlug(best.slug);
+        setHoveredSlug(null);
         hideBody();
       }
     } else if (currentZoom < AUTO_SELECT_ZOOM && activeSystemSlug) {
       setActiveSystemSlug(null);
-      setHoveredSlug(null);
+      setHoveredSlug(systemUnderCursor());
       hideBody();
     }
-  }, [vb, activeSystemSlug, sector.systems, hideBody]);
+  }, [vb, activeSystemSlug, sector.systems, hideBody, systemUnderCursor]);
 
   const handleSvgClick = useCallback(() => {
     if (didDragRef.current) return;
@@ -195,6 +225,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
           className="absolute inset-0 w-full h-full"
           style={{ userSelect: "none" }}
           onClick={handleSvgClick}
+          onMouseMove={handleSvgMouseMove}
         >
           {gradientDefs}
 

@@ -45,7 +45,7 @@ export const StarSystemView = memo(function StarSystemView({
 }: StarSystemViewProps) {
   const { orbitDistances, maxOrbit } = orbitData;
   const labelY = pin.y + (maxOrbit + 30) * SYS_SCALE + 14;
-  const highlighted = isHovered || isActive;
+  const highlighted = isHovered;
 
   // Per-system refs for proximity detection
   const bodyRafRef = useRef<number | null>(null);
