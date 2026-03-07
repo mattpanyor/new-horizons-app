@@ -42,3 +42,4 @@ next-env.d.ts
 .gitnexus
 
 .history
+.claude/settings.local.json
