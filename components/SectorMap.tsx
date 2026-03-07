@@ -16,6 +16,7 @@ import { SectorArcLayer } from "@/components/sectormap/SectorArcLayer";
 import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
 import { TerritoryLayer } from "@/components/sectormap/TerritoryLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
+import { SearchOverlay } from "@/components/sectormap/SearchOverlay";
 
 interface SectorMapProps {
   sector: SectorMetadata;
@@ -108,6 +109,21 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     hideBody();
     animateToVb({ x: 0, y: 0, w: FULL_W, h: FULL_H }, 500);
   }, [hideBody, animateToVb, systemUnderCursor]);
+
+  const focusBodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const focusBody = useCallback((pin: SystemPin, bodyId: string) => {
+    if (focusBodyTimerRef.current) clearTimeout(focusBodyTimerRef.current);
+    focusSystem(pin);
+    focusBodyTimerRef.current = setTimeout(() => {
+      focusBodyTimerRef.current = null;
+      bodyTooltipActions.show(bodyId);
+    }, 550);
+  }, [focusSystem, bodyTooltipActions]);
+
+  useEffect(() => {
+    return () => { if (focusBodyTimerRef.current) clearTimeout(focusBodyTimerRef.current); };
+  }, []);
 
   // Escape key exits system zoom
   useEffect(() => {
@@ -335,7 +351,16 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
         </button>
       )}
 
-      <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
+      <div className="absolute top-3 right-3 z-20">
+        <SearchOverlay
+          sector={sector}
+          systemsData={systemsData}
+          onSelectSystem={focusSystem}
+          onSelectBody={focusBody}
+        />
+      </div>
+
+      <div className="absolute top-14 right-3 flex flex-col gap-1.5 z-10">
         <button onClick={zoomIn} aria-label="Zoom in"
           className="w-8 h-8 rounded scifi-card flex items-center justify-center text-white/70 hover:text-white text-lg leading-none transition-colors">
           +
