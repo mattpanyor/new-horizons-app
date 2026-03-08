@@ -19,7 +19,7 @@ interface SectorMapProps {
   systemsData?: Record<string, StarSystemMetadata>;
   onSystemChange?: (slug: string | null) => void;
   children?: React.ReactNode;
-  staticSvgLayers?: React.ReactNode;
+  staticSvgLayers: React.ReactNode;
 }
 
 export default function SectorMap({ sector, systemsData = {}, onSystemChange, children, staticSvgLayers }: SectorMapProps) {
