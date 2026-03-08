@@ -29,6 +29,7 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${geistSans.variable} ${cinzel.variable} antialiased`}
+        suppressHydrationWarning
       >
         {children}
       </body>
