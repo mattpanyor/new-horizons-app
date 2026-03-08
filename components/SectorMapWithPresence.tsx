@@ -11,9 +11,10 @@ interface Props {
   sector: SectorMetadata;
   systemsData: Record<string, StarSystemMetadata>;
   children?: React.ReactNode;
+  staticSvgLayers: React.ReactNode;
 }
 
-export default function SectorMapWithPresence({ sector, systemsData, children }: Props) {
+export default function SectorMapWithPresence({ sector, systemsData, children, staticSvgLayers }: Props) {
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -33,6 +34,7 @@ export default function SectorMapWithPresence({ sector, systemsData, children }:
         sector={sector}
         systemsData={systemsData}
         onSystemChange={setActiveSystemSlug}
+        staticSvgLayers={staticSvgLayers}
       >
         {children}
       </SectorMap>

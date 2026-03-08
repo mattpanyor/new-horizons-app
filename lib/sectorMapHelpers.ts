@@ -1,3 +1,5 @@
+import type { SystemPin, VortexPin } from "@/types/sector";
+
 // ── Sector Map constants & pure geometry helpers ──
 
 export const FULL_W = 1200;
@@ -181,4 +183,16 @@ export function bezierTangent(p0t: { x: number; y: number }, p1: { x: number; y:
     x: 2 * mt * (p1.x - p0t.x) + 2 * t * (p2t.x - p1.x),
     y: 2 * mt * (p1.y - p0t.y) + 2 * t * (p2t.y - p1.y),
   };
+}
+
+/** Compute the trim radius for a connection endpoint (system orbit edge or vortex edge) */
+export function endpointRadius(
+  slug: string,
+  systems: SystemPin[],
+  vortexes: VortexPin[],
+  orbitDataMap: Map<string, { maxOrbit: number }>,
+): number {
+  const sys = systems.find(s => s.slug === slug);
+  if (sys) return (orbitDataMap.get(sys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8;
+  return vortexes.find(v => v.slug === slug)?.radius ?? 80;
 }

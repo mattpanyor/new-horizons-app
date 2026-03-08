@@ -1,20 +1,16 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import type { SectorMetadata, VortexPin, SystemPin } from "@/types/sector";
+import type { SectorMetadata, SystemPin } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
-import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
-
 import { useSvgTooltipTimer } from "@/hooks/useSvgTooltipTimer";
 import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 import {
   FULL_W, FULL_H,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
-  SYS_MAX_R, SYS_SCALE, wavyCloudPath,
+  SYS_MAX_R, SYS_SCALE,
 } from "@/lib/sectorMapHelpers";
-import { SectorArcLayer } from "@/components/sectormap/SectorArcLayer";
-import { ConnectionLayer } from "@/components/sectormap/ConnectionLayer";
-import { TerritoryLayer } from "@/components/sectormap/TerritoryLayer";
+import { ConnectionMarkerLayer } from "@/components/sectormap/ConnectionMarkerLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
 import { SearchOverlay } from "@/components/sectormap/SearchOverlay";
 
@@ -23,9 +19,10 @@ interface SectorMapProps {
   systemsData?: Record<string, StarSystemMetadata>;
   onSystemChange?: (slug: string | null) => void;
   children?: React.ReactNode;
+  staticSvgLayers: React.ReactNode;
 }
 
-export default function SectorMap({ sector, systemsData = {}, onSystemChange, children }: SectorMapProps) {
+export default function SectorMap({ sector, systemsData = {}, onSystemChange, children, staticSvgLayers }: SectorMapProps) {
   const {
     containerRef, svgRef, vb, zoom, cursorGrab, didDragRef,
     zoomIn, zoomOut, resetView: resetPanZoom, animateToVb, isAnimatingRef, handlers,
@@ -168,41 +165,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
   // ── Memoized data ──
 
-  const gradientDefs = useMemo(() => (
-    <defs>
-      <linearGradient id={`fleetGrad-${sector.slug}`} x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stopColor={FLEET_GRAD_TIP} />
-        <stop offset="100%" stopColor={FLEET_GRAD_BASE} />
-      </linearGradient>
-      {sector.systems.flatMap((pin) => {
-        const sys = systemsData[pin.slug];
-        if (!sys) return [];
-        return [
-          <radialGradient key={`starGlow-${pin.slug}`} id={`starGlow-${pin.slug}`}>
-            <stop offset="0%" stopColor={sys.star.color} stopOpacity="1" />
-            <stop offset="30%" stopColor={sys.star.color} stopOpacity="0.8" />
-            <stop offset="60%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0" />
-          </radialGradient>,
-          <radialGradient key={`starCorona-${pin.slug}`} id={`starCorona-${pin.slug}`}>
-            <stop offset="0%" stopColor={sys.star.color} stopOpacity="0.15" />
-            <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
-          </radialGradient>,
-          ...sys.bodies.map((b) => {
-            const { color, secondaryColor } = getBodyColors(b);
-            return (
-              <radialGradient key={`body-${pin.slug}-${b.id}`} id={`body-${pin.slug}-${b.id}`}>
-                <stop offset="0%" stopColor={color} stopOpacity="1" />
-                <stop offset="70%" stopColor={secondaryColor} stopOpacity="0.9" />
-                <stop offset="100%" stopColor={secondaryColor} stopOpacity="0.7" />
-              </radialGradient>
-            );
-          }),
-        ];
-      })}
-    </defs>
-  ), [sector.slug, sector.systems, systemsData]);
-
   // Precompute which system owns the active body tooltip — O(N*M) once instead of per-system
   const activeBodySystemSlug = useMemo(() => {
     if (!activeBodyId) return null;
@@ -250,21 +212,15 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >
-          {gradientDefs}
-
-          {/* ── Sector territory ── */}
-          <SectorArcLayer sectorSlug={sector.slug} sectorName={sector.name} sectorColor={sector.color} />
-
-          {/* ── System allegiance territories ── */}
-          <TerritoryLayer systems={sector.systems} sectorSlug={sector.slug} />
+          {/* ── Static SVG layers (server-rendered: gradients, territories, vortexes) ── */}
+          {staticSvgLayers}
 
           {/* ── Connection lines ── */}
-          <ConnectionLayer
+          <ConnectionMarkerLayer
             connections={sector.connections ?? []}
             systems={sector.systems}
             vortexes={sector.vortexes ?? []}
             sectorSlug={sector.slug}
-            sectorColor={sector.color}
             orbitDataMap={orbitDataMap}
             activeMarkerId={activeMarkerId}
             showMarker={showMarker}
@@ -273,26 +229,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
             markerCardLeave={markerCardLeave}
             vb={vb}
           />
-
-          {/* ── Vortexes ── */}
-          {(sector.vortexes ?? []).map((v: VortexPin) => {
-            const color = v.color ?? sector.color;
-            const r = v.radius ?? 80;
-            const [rw, rh] = v.ratio ?? [1, 1];
-            const ry = r * (rh / Math.max(rw, rh));
-            return (
-              <g key={v.slug} style={{ pointerEvents: "none" }}>
-                <path d={wavyCloudPath(v.x, v.y, r, { ratio: v.ratio })}
-                  fill={color} fillOpacity={0.12}
-                  stroke={color} strokeOpacity={0.35} strokeWidth={1.5} />
-                <text x={v.x} y={v.y + ry + 18} textAnchor="middle"
-                  fill={color} fillOpacity={0.75} fontSize="11"
-                  fontFamily="var(--font-cinzel), serif">
-                  {v.name}
-                </text>
-              </g>
-            );
-          })}
 
           {/* ── Star systems ── */}
           {sector.systems.map((pin) => {
