@@ -33,12 +33,9 @@ export default function ShipBayModal({
     <div
       ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={(e) => {
-        if (e.target === backdropRef.current) onClose();
-      }}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      {/* Backdrop — click to close */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div
