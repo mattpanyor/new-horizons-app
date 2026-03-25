@@ -117,22 +117,30 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
   const rotation = 90 - progress * 75;
   // "Spin inward" — slight perspective tilt via rotateY
   const tilt = progress * 8;
+  const flatTilt = progress * 50; // rotateX to look from above
   // Size: 25vw (vertical) -> 70vw (horizontal, bigger for readability)
-  const widthVw = 25 + progress * 45;
-  // Layer separation starts after rotation is mostly done
-  const splitPhase = Math.max(0, (progress - 0.5) / 0.5);
-  const layerGap = splitPhase * 110; // px between each layer
+  const widthVw = 25 + progress * 20;
+  // Fixed Z gap between layers — always there, just not visible from front
+  const LAYER_Z_GAP = 200; // px between each deck in Z-space
 
   return (
     <>
       <div
         ref={containerRef}
-        className="flex items-center justify-center overflow-hidden"
+        className="flex items-center justify-center"
         style={{
           height: "calc(100dvh - 4rem)",
           touchAction: "none",
         }}
       >
+        {/* Ship background image — top right */}
+        <img
+          src="/ship/graviton_ship.png"
+          alt=""
+          className="absolute top-16 right-0 w-[50%] opacity-15 pointer-events-none select-none"
+          style={{ maskImage: "linear-gradient(to bottom, black 40%, transparent)", WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent)" }}
+        />
+
         {/* Ship title */}
         <div
           className="absolute top-20 left-0 right-0 text-center z-10 pointer-events-none"
@@ -179,15 +187,15 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
         {/* Layer labels */}
         <div
           className="absolute left-6 top-0 bottom-0 flex flex-col justify-center z-10 pointer-events-none"
-          style={{ gap: `${Math.max(24, layerGap * 0.8)}px` }}
+          style={{ gap: "28px" }}
         >
           {ship.layers.map((layer) => (
             <div
               key={layer.id}
               className="flex items-center gap-2"
               style={{
-                opacity: splitPhase * 0.8,
-                transform: `translateX(${(1 - splitPhase) * -30}px)`,
+                opacity: Math.max(0, (progress - 0.5) * 2),
+                transform: `translateX(${(1 - Math.max(0, (progress - 0.5) * 2)) * -30}px)`,
               }}
             >
               <div
@@ -212,14 +220,29 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
           style={{
             width: `${widthVw}vw`,
             maxWidth: "900px",
-            transform: `rotate(${rotation}deg) perspective(1200px) rotateY(${tilt}deg)`,
+            transform: `rotate(${rotation}deg)`,
+            perspective: "1200px",
           }}
         >
-          <div className="relative">
+          <div
+            className="relative"
+            style={{
+              transformStyle: "preserve-3d",
+              transform: `rotateX(${flatTilt}deg) rotateY(${tilt}deg)`,
+            }}
+          >
             {ship.layers.map((layer, i) => {
-              // Center the spread: offset each layer from the middle
-              const centerIndex = (totalLayers - 1) / 2;
-              const offset = (i - centerIndex) * layerGap;
+              // Each deck at its own Z depth, centered around middle.
+              // At progress=0 (front view) they overlap.
+              // As rotateX increases, the Z gap is revealed.
+              // Progressively increase gap for layers further from camera
+              // so perspective compression doesn't make them look bunched up.
+              const zPositions = [200, 80, -80, -250];
+              const z = zPositions[i] ?? -i * LAYER_Z_GAP;
+              // Compensate perspective size distortion so all layers
+              // appear at their true size regardless of Z position.
+              const perspDist = 1200;
+              const scale = perspDist / (perspDist + z);
 
               return (
                 <div
@@ -229,9 +252,11 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
                     top: i === 0 ? undefined : 0,
                     left: i === 0 ? undefined : 0,
                     right: i === 0 ? undefined : 0,
-                    transform: `translateY(${offset}px)`,
+                    transform: `translateZ(${z}px)`,
                   }}
                 >
+                  {/* Scale on inner div so it's outside the 3D/perspective context */}
+                  <div style={{ transform: `scale(${scale})` }}>
                   <ShipSvgLayer
                     layer={layer}
                     layerIndex={i}
@@ -240,6 +265,7 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
                     hoveredBay={hoveredBay}
                     onBayHover={setHoveredBay}
                   />
+                  </div>
                 </div>
               );
             })}

@@ -3,11 +3,6 @@ export interface ShipBay {
   name: string;
   description: string;
   image: string;
-  /** Normalized position (0-1) relative to layer SVG */
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 }
 
 export interface ShipLayer {

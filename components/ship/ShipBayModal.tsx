@@ -42,7 +42,7 @@ export default function ShipBayModal({
 
       {/* Modal */}
       <div
-        className="relative max-w-lg w-full overflow-hidden rounded-lg animate-in"
+        className="relative max-w-2xl w-full overflow-hidden rounded-lg"
         style={{
           background: "rgba(10, 10, 30, 0.95)",
           border: `1px solid ${layerColor}55`,
@@ -56,24 +56,6 @@ export default function ShipBayModal({
             background: `linear-gradient(90deg, transparent, ${layerColor}, transparent)`,
           }}
         />
-
-        {/* Image area */}
-        <div
-          className="w-full h-48 flex items-center justify-center relative overflow-hidden"
-          style={{
-            background: `radial-gradient(ellipse at center, ${layerColor}15, transparent 70%)`,
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-10"
-            style={{
-              backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 20px, ${layerColor}30 20px, ${layerColor}30 21px)`,
-            }}
-          />
-          <div className="text-white/20 text-sm tracking-widest uppercase select-none">
-            [ Image Placeholder ]
-          </div>
-        </div>
 
         {/* Content */}
         <div className="p-6 space-y-3">
@@ -108,13 +90,22 @@ export default function ShipBayModal({
           </p>
         </div>
 
-        {/* Bottom accent */}
+        {/* Accent line above image */}
         <div
           className="h-[1px] w-full"
           style={{
             background: `linear-gradient(90deg, transparent, ${layerColor}30, transparent)`,
           }}
         />
+
+        {/* Image — full width, natural aspect ratio */}
+        {bay.image && (
+          <img
+            src={bay.image}
+            alt={bay.name}
+            className="w-full h-auto block"
+          />
+        )}
 
         {/* Close button */}
         <button
