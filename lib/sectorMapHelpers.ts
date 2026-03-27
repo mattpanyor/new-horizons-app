@@ -59,7 +59,7 @@ export const triLeft = (cx: number, cy: number, r: number) =>
 export const TERRITORY_RADIUS = 120;
 
 /** Deterministic PRNG: djb2 hash → LCG, yields 0–1 floats */
-function rng(seed: string) {
+export function rng(seed: string) {
   let h = 5381;
   for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 33) ^ seed.charCodeAt(i)) | 0;
   return () => { h = (Math.imul(h, 1664525) + 1013904223) | 0; return ((h >>> 8) & 0xffff) / 0xffff; };
@@ -183,6 +183,26 @@ export function bezierTangent(p0t: { x: number; y: number }, p1: { x: number; y:
     x: 2 * mt * (p1.x - p0t.x) + 2 * t * (p2t.x - p1.x),
     y: 2 * mt * (p1.y - p0t.y) + 2 * t * (p2t.y - p1.y),
   };
+}
+
+/**
+ * Test whether canvas point (px, py) lies within the annular sector territory for the given
+ * sector slug. The boundary is a quarter-disc ring: inner radius TERRITORY_INNER_R, outer radius
+ * TERRITORY_OUTER_R, swept from arcStart to arcEnd degrees (standard math angles, x-right y-down).
+ * Returns true for unknown slugs so the hook is permissive on unregistered sectors.
+ */
+export function isInSectorTerritory(px: number, py: number, slug: string): boolean {
+  const territory = SECTOR_TERRITORY[slug];
+  if (!territory) return true; // unknown sector — allow everywhere
+  const { cx, cy, arcStart, arcEnd } = territory;
+  const dx = px - cx;
+  const dy = py - cy;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < TERRITORY_INNER_R || dist > TERRITORY_OUTER_R) return false;
+  const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+  const arcSpan = arcEnd - arcStart;
+  const swept = (angle - arcStart + 360) % 360;
+  return swept <= arcSpan;
 }
 
 /** Compute the trim radius for a connection endpoint (system orbit edge or vortex edge) */
