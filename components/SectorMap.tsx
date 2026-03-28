@@ -9,12 +9,14 @@ import {
   FULL_W, FULL_H,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
   SYS_MAX_R, SYS_SCALE,
+  isInSectorTerritory,
 } from "@/lib/sectorMapHelpers";
 import { ConnectionMarkerLayer } from "@/components/sectormap/ConnectionMarkerLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
 import { SearchOverlay } from "@/components/sectormap/SearchOverlay";
 import { usePlanningMode } from "@/hooks/usePlanningMode";
-import { PlanningLayer, PlanningTotalBox } from "@/components/sectormap/PlanningLayer";
+import { PlanningLayer } from "@/components/sectormap/PlanningLayer";
+import { PlanningTotalBox } from "@/components/sectormap/PlanningTotalBox";
 import { PlanningToggle } from "@/components/sectormap/PlanningToggle";
 import { PLANNING_COLOR } from "@/lib/planningMode";
 
@@ -35,7 +37,15 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     zoomIn, zoomOut, resetView: resetPanZoom, animateToVb, isAnimatingRef, handlers,
   } = useSvgPanZoom({ width: FULL_W, height: FULL_H, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
 
-  const planning = usePlanningMode({ svgRef, zoom });
+  const isValidPlanningPoint = useCallback(
+    (x: number, y: number) => isInSectorTerritory(x, y, sector.slug),
+    [sector.slug],
+  );
+
+  const planning = usePlanningMode({ svgRef, zoom, isValidPoint: isValidPlanningPoint });
+  // Destructure stable primitives for use in effects (satisfies react-hooks/exhaustive-deps).
+  // planning.toggle is stable (useCallback []), planning.active is a primitive boolean.
+  const { active: planningActive, toggle: planningToggle } = planning;
 
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
@@ -87,9 +97,9 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
       if (planning.handlers.onTouchMove(e)) return;
       handlers.onTouchMove(e);
     },
-    onTouchEnd: (e: React.TouchEvent) => {
-      if (planning.handlers.onTouchEnd()) return;
-      handlers.onTouchEnd();
+    onTouchEnd: () => {
+      planning.handlers.onTouchEnd();
+      handlers.onTouchEnd(); // always run — viewbox commit is a no-op if no pan occurred
     },
   }), [planning.handlers, handlers]);
 
@@ -160,13 +170,22 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     return () => { if (focusBodyTimerRef.current) clearTimeout(focusBodyTimerRef.current); };
   }, []);
 
-  // Escape key exits system zoom
+  // Escape key — single handler with priority: planning mode first, then system zoom.
+  // Consolidated to prevent both actions firing when both states are active simultaneously
+  // (user can activate planning mode while already zoomed into a system).
   useEffect(() => {
-    if (!activeSystemSlug) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") exitSystem(); };
+    if (!planningActive && !activeSystemSlug) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (planningActive) {
+        planningToggle();
+      } else if (activeSystemSlug) {
+        exitSystem();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeSystemSlug, exitSystem]);
+  }, [planningActive, planningToggle, activeSystemSlug, exitSystem]);
 
   // Auto-select system when zoomed in close enough (skip during animation)
   useEffect(() => {
@@ -228,6 +247,15 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     }
     return map;
   }, [sector.systems, systemsData]);
+
+  // Viewport-clamped position for the OOB tooltip.
+  // Always-present container (visibility toggled) is required for reliable screen reader
+  // announcements — conditionally mounting role="alert" with content already set is not
+  // reliably announced on all browser/SR combinations (especially Safari + VoiceOver).
+  const oobTooltipPos = planning.outOfBoundsPos ? {
+    left: Math.min(planning.outOfBoundsPos.x + 14, window.innerWidth - 204),
+    top: Math.min(planning.outOfBoundsPos.y + 14, window.innerHeight - 40),
+  } : null;
 
   return (
     <div className="relative w-full h-full">
@@ -326,8 +354,38 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
       {/* ── Planning total box ── */}
       {planning.active && (
-        <PlanningTotalBox waypoints={planning.waypoints} />
+        <PlanningTotalBox waypoints={planning.waypoints} onExit={planning.toggle} />
       )}
+
+      {/* ── Out-of-bounds warning tooltip ── */}
+      {/* Always present in the DOM so role="alert" is a registered live region before content
+          is injected — conditionally mounting causes silent failures on Safari + VoiceOver. */}
+      <div
+        role="alert"
+        aria-atomic="true"
+        className="pointer-events-none select-none"
+        style={{
+          position: "fixed",
+          left: oobTooltipPos?.left ?? -9999,
+          top: oobTooltipPos?.top ?? -9999,
+          visibility: oobTooltipPos ? "visible" : "hidden",
+          background: "rgba(0,0,0,0.82)",
+          backdropFilter: "blur(8px)",
+          border: "1px solid #fbbf2460",
+          color: "#fbbf24",
+          fontSize: 11,
+          fontFamily: "var(--font-cinzel), serif",
+          fontWeight: 600,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          padding: "6px 14px",
+          borderRadius: 6,
+          boxShadow: "0 0 12px #fbbf2420",
+          zIndex: 50,
+        }}
+      >
+        {oobTooltipPos ? "Outside sector bounds" : ""}
+      </div>
 
       {/* ── Controls ── */}
       {activeSystemSlug && (

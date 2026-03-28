@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, type RefObject } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect, type RefObject } from "react";
 import { MAX_WAYPOINTS, WAYPOINT_HIT_R, type Waypoint } from "@/lib/planningMode";
 
 interface UsePlanningModeOptions {
@@ -6,16 +6,48 @@ interface UsePlanningModeOptions {
   svgRef: RefObject<SVGSVGElement | null>;
   /** Current zoom level — scales hit radius so tapping feels consistent */
   zoom: number;
+  /**
+   * Returns true when (x, y) is a valid placement point within the sector territory.
+   * Used to reject out-of-bounds clicks/taps with a tooltip warning.
+   * Should be stable (useCallback) — it is a dep of the mouse/touch handlers.
+   */
+  isValidPoint: (x: number, y: number) => boolean;
 }
 
 /** Time window (ms) after a touch event during which synthetic mouse events are ignored */
 const TOUCH_MOUSE_GUARD = 500;
 
-export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
+/** How long the out-of-bounds warning tooltip stays visible (ms) */
+const OOB_WARN_MS = 1500;
+
+export function usePlanningMode({ svgRef, zoom, isValidPoint }: UsePlanningModeOptions) {
+  const isOutOfBounds = useCallback((x: number, y: number) =>
+    !isValidPoint(x, y),
+  [isValidPoint]);
   const [active, setActive] = useState(false);
+  const activeRef = useRef(false); // mirrors active for synchronous reads inside toggle()
+  // Update after render (not during render) to satisfy the react-hooks/refs lint rule.
+  // Safe for toggle(): user events always run after effects have flushed.
+  useEffect(() => { activeRef.current = active; });
+
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const waypointsRef = useRef<Waypoint[]>(waypoints);
   waypointsRef.current = waypoints;
+
+  /** Client-space position of the last rejected OOB click/tap, or null when no warning is showing */
+  const [outOfBoundsPos, setOutOfBoundsPos] = useState<{ x: number; y: number } | null>(null);
+  const oobTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear the OOB timer on unmount to avoid setState on an unmounted component
+  useEffect(() => {
+    return () => { if (oobTimerRef.current) clearTimeout(oobTimerRef.current); };
+  }, []);
+
+  const showOobWarning = useCallback((clientX: number, clientY: number) => {
+    if (oobTimerRef.current) clearTimeout(oobTimerRef.current);
+    setOutOfBoundsPos({ x: clientX, y: clientY });
+    oobTimerRef.current = setTimeout(() => setOutOfBoundsPos(null), OOB_WARN_MS);
+  }, []);
 
   /** Convert client (screen) coordinates to SVG coordinates using the browser's CTM */
   const clientToSvg = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -37,14 +69,25 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
 
   // Touch state — pending placement deferred to touchEnd, and guard against synthetic mouse events
   const pendingPlaceRef = useRef<{ x: number; y: number } | null>(null);
+  /** Client-space anchor for a deferred OOB tap — set in touchStart, fired in touchEnd */
+  const pendingOobClientRef = useRef<{ x: number; y: number } | null>(null);
   const lastTouchTimeRef = useRef(0);
 
   const toggle = useCallback(() => {
-    setActive(prev => {
-      if (prev) setWaypoints([]); // clear on deactivate
-      return !prev;
-    });
-  }, []);
+    if (activeRef.current) {
+      // Deactivating — clear all interaction state synchronously before the render.
+      // Do NOT mutate refs inside a setState updater: React Strict Mode double-invokes updaters.
+      setWaypoints([]);
+      draggingRef.current = null;
+      dragStartRef.current = null;
+      didDragRef.current = false;
+      pendingPlaceRef.current = null;
+      pendingOobClientRef.current = null;
+      if (oobTimerRef.current) clearTimeout(oobTimerRef.current);
+      setOutOfBoundsPos(null);
+    }
+    setActive(prev => !prev);
+  }, []); // intentionally stable (empty deps) — reads activeRef.current at call time
 
   /** Find which waypoint index is at the given SVG coords, or -1 */
   const hitTest = useCallback(
@@ -72,10 +115,16 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       const wps = waypointsRef.current;
       const idx = hitTest(svg.x, svg.y, wps);
       if (idx >= 0) {
+        // Dragging an existing waypoint — always allowed (waypoint is already in bounds)
         draggingRef.current = idx;
         dragStartRef.current = { x: e.clientX, y: e.clientY };
         didDragRef.current = false;
         return true;
+      }
+      // New placement — reject with warning if outside the sector canvas
+      if (isOutOfBounds(svg.x, svg.y)) {
+        showOobWarning(e.clientX, e.clientY);
+        return true; // consume the event so pan-zoom doesn't also fire
       }
       if (wps.length < MAX_WAYPOINTS) {
         setWaypoints(prev => [...prev, { x: svg.x, y: svg.y }]);
@@ -83,7 +132,7 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       }
       return false;
     },
-    [active, clientToSvg, hitTest]
+    [active, clientToSvg, hitTest, showOobWarning, isOutOfBounds]
   );
 
   const handleMouseMove = useCallback(
@@ -128,9 +177,10 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       if (!active) return false;
       lastTouchTimeRef.current = Date.now();
 
-      // Second finger arrived → cancel any pending placement (it's a pinch)
+      // Second finger arrived → cancel any pending placement/OOB (it's a pinch)
       if (e.touches.length > 1) {
         pendingPlaceRef.current = null;
+        pendingOobClientRef.current = null;
         return false; // let pan/zoom handle the pinch
       }
 
@@ -146,10 +196,22 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
         dragStartRef.current = { x: t.clientX, y: t.clientY };
         didDragRef.current = false;
         pendingPlaceRef.current = null;
+        pendingOobClientRef.current = null;
         return true;
       }
+
+      // OOB check deferred to touchEnd — we cannot know intent at touchStart (may be a pan/pinch).
+      // IMPORTANT: return false here so pan/zoom's handleTouchStart also runs and sets panStart.
+      // Returning true would block pan/zoom, making the map unresponsive to panning from OOB areas.
+      if (isOutOfBounds(svg.x, svg.y)) {
+        pendingOobClientRef.current = { x: t.clientX, y: t.clientY };
+        dragStartRef.current = { x: t.clientX, y: t.clientY };
+        didDragRef.current = false;
+        return false; // let pan/zoom also track — OOB warning fires at touchEnd if still a clean tap
+      }
+
       if (wps.length < MAX_WAYPOINTS) {
-        // Defer placement — record position, place on touchEnd if no drag/pinch
+        // Defer placement — store raw coords so placement is confirmed at touchEnd.
         pendingPlaceRef.current = { x: svg.x, y: svg.y };
         dragStartRef.current = { x: t.clientX, y: t.clientY };
         didDragRef.current = false;
@@ -157,7 +219,7 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       }
       return false;
     },
-    [active, clientToSvg, hitTest]
+    [active, clientToSvg, hitTest, isOutOfBounds]
   );
 
   const handleTouchMove = useCallback(
@@ -175,10 +237,11 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       const dy = t.clientY - (dragStartRef.current?.y ?? 0);
       if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
         didDragRef.current = true;
-        pendingPlaceRef.current = null; // moved too far — it's a pan, not a tap
+        pendingPlaceRef.current = null;    // moved too far — it's a pan, not a tap
+        pendingOobClientRef.current = null; // likewise cancel any pending OOB warning
       }
 
-      // Dragging an existing waypoint
+      // Dragging an existing waypoint — clamp silently to boundary
       if (draggingRef.current !== null) {
         const svg = clientToSvg(t.clientX, t.clientY);
         if (!svg) return false;
@@ -213,7 +276,20 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       return true;
     }
 
+    // OOB tap — was a clean single-finger tap in out-of-bounds territory
+    // pendingOobClientRef is set by handleTouchStart when isOutOfBounds was true,
+    // and cleared by handleTouchMove if the gesture became a pan.
+    const oobAnchor = pendingOobClientRef.current;
+    if (oobAnchor && !didDragRef.current) {
+      showOobWarning(oobAnchor.x, oobAnchor.y);
+      pendingOobClientRef.current = null;
+      dragStartRef.current = null;
+      didDragRef.current = false;
+      return true;
+    }
+
     // Place deferred waypoint (was a clean tap, no pinch/pan)
+    // pendingPlaceRef only holds in-bounds coords — OOB positions go through pendingOobClientRef.
     const pending = pendingPlaceRef.current;
     if (pending && !didDragRef.current) {
       setWaypoints(prev =>
@@ -225,11 +301,10 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
       return true;
     }
 
-    pendingPlaceRef.current = null;
     dragStartRef.current = null;
     didDragRef.current = false;
     return false;
-  }, []);
+  }, [showOobWarning]);
 
   const handlers = useMemo(() => ({
     onMouseDown: handleMouseDown,
@@ -245,5 +320,7 @@ export function usePlanningMode({ svgRef, zoom }: UsePlanningModeOptions) {
     toggle,
     waypoints,
     handlers,
+    /** Client-space position of the last rejected out-of-bounds tap, shown for OOB_WARN_MS then cleared */
+    outOfBoundsPos,
   };
 }

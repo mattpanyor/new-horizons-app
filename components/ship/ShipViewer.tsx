@@ -221,14 +221,14 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
             width: `${widthVw}vw`,
             maxWidth: "900px",
             transform: `rotate(${rotation}deg)`,
-            perspective: "1200px",
+            transformStyle: "preserve-3d",
           }}
         >
           <div
             className="relative"
             style={{
               transformStyle: "preserve-3d",
-              transform: `rotateX(${flatTilt}deg) rotateY(${tilt}deg)`,
+              transform: `perspective(1200px) rotateX(${flatTilt}deg) rotateY(${tilt}deg)`,
             }}
           >
             {ship.layers.map((layer, i) => {
