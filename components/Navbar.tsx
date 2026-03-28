@@ -1,15 +1,15 @@
-import Link from "next/link";
 
 interface Props {
   username: string;
   character?: string;
   role?: string;
   group: string;
+  location?: string;
 }
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
-export default function Navbar({ username, character, role, group }: Props) {
+export default function Navbar({ username, character, role, group, location }: Props) {
   const displayName = character ?? username;
 
   return (
@@ -43,15 +43,16 @@ export default function Navbar({ username, character, role, group }: Props) {
         </span>
       </div>
 
-      {/* Right — nav */}
+      {/* Right — location */}
       <div className="flex justify-end">
-        <Link
-          href="/sectors"
-          className="text-[11px] tracking-[0.35em] uppercase text-white/40 hover:text-white/80 transition-colors whitespace-nowrap"
-          style={cinzel}
-        >
-          Galactic Map
-        </Link>
+        {location && (
+          <span
+            className="text-[11px] tracking-[0.35em] uppercase text-white/40 whitespace-nowrap"
+            style={cinzel}
+          >
+            {location}
+          </span>
+        )}
       </div>
 
     </header>

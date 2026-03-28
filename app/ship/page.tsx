@@ -24,6 +24,7 @@ export default async function ShipPage() {
         character={"character" in user ? user.character : undefined}
         role={"role" in user ? user.role : undefined}
         group={user.group}
+        location="Ship"
       />
       <StarSystemBackground />
       <NavIcon href="/sectors" label="Galaxy">
