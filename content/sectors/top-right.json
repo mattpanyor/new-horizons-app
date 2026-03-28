@@ -9,10 +9,10 @@
     {
       "slug": "cadrian-vortex",
       "name": "Cadrian Vortex",
-      "x": 500,
-      "y": 550,
+      "x": 550,
+      "y": 570,
       "color": "#A78BFA",
-      "radius": 120,
+      "radius": 170,
       "ratio": [
         5,
         3
@@ -55,8 +55,8 @@
     },
     {
       "slug": "callisto",
-      "x": 500,
-      "y": 150,
+      "x": 540,
+      "y": 100,
       "allegiance": "feyrose",
       "territoryRadius": 155
     }

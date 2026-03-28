@@ -20,10 +20,10 @@ export const LABEL_PAD_REVERSED = 62; // larger offset for inner-curve text base
 export const MIN_ZOOM = 0.4;
 export const MAX_ZOOM = 10;
 export const ZOOM_STEP = 0.15;
-export const FOCUS_ZOOM = 5.5;
+export const FOCUS_ZOOM = 5.8;
 export const AUTO_SELECT_ZOOM = 3.2;
 
-export const SYS_SCALE = 0.28;
+export const SYS_SCALE = 0.25;
 export const SYS_MAX_R = 250;
 
 export const BG_STARS = [
