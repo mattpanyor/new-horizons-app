@@ -20,23 +20,35 @@ export const ALLEGIANCES = {
     color: "#EC4899",
     logo: "/factions/feyrose_logo.png",
   },
-  /** TODO: placeholder — needs proper color + logo */
   imperial: {
     name: "Imperial",
     color: "#EC4899",
     logo: "/factions/feyrose_logo.png",
   },
-  /** TODO: placeholder — needs proper color + logo */
   lenard: {
-    name: "House Lenard (L.I.I.X)",
-    color: "#000000",
-    logo: "/factions/feyrose_logo.png"
+    name: "House Lenard",
+    color: "#4169E1",
+    logo: "/factions/lenard_logo.png",
   },
-  /** TODO: placeholder — needs proper color + logo */
+  liix: {
+    name: "Lenard Institute of Interspecies and Xenosciences",
+    color: "#F59E0B",
+    logo: "/factions/liix_logo.jpeg",
+  },
   cultists: {
-    name: "Cultists",
-    color: "#000000",
-    logo: "/factions/feyrose_logo.png"
+    name: "Crimson Dusk",
+    color: "#B91C1C",
+    logo: "/factions/cultist_logo.png",
+  },
+  exploratorium: {
+    name: "Exploratorium",
+    color: "#1E3A5F",
+    logo: "/factions/exploratorium_logo.png",
+  },
+  inquisitorium: {
+    name: "Inquisitorium",
+    color: "#FFD700",
+    logo: "/factions/inquisitorium_logo.png",
   }
 } as const satisfies Record<string, Allegiance>;
 

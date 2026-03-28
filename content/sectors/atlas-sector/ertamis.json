@@ -38,7 +38,8 @@
       "orbitPosition": 65,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893940"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893940",
+      "allegiance": "exploratorium"
     }
   ]
 }

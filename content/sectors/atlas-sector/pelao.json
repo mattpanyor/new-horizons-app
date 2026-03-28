@@ -16,7 +16,8 @@
       "orbitPosition": 75,
       "orbitDistance": 0.55,
       "labelPosition": "top",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899789"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899789",
+      "allegiance": "fairfield"
     },
     {
       "id": "bertan-2",
@@ -26,7 +27,8 @@
       "orbitPosition": 315,
       "orbitDistance": 0.55,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899796"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899796",
+      "allegiance": "fairfield"
     },
     {
       "id": "bertan-3",
@@ -36,7 +38,8 @@
       "orbitPosition": 210,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899809"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899809",
+      "allegiance": "fairfield"
     },
     {
       "id": "bertan-1",
@@ -46,7 +49,8 @@
       "orbitPosition": 135,
       "orbitDistance": 0.35,
       "labelPosition": "top",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899795"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899795",
+      "allegiance": "fairfield"
     },
     {
       "id": "first-light",
@@ -54,7 +58,19 @@
       "type": "station",
       "orbitPosition": 155,
       "orbitDistance": 0.4,
-      "labelPosition": "bottom"
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073489",
+      "allegiance": "fairfield"
+    },
+    {
+      "id": "arch-of-laurel",
+      "name": "Arch of Laurel",
+      "type": "ship",
+      "orbitPosition": 230,
+      "orbitDistance": 0.7,
+      "labelPosition": "top",
+      "allegiance": "fairfield",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8944998"
     }
   ]
 }

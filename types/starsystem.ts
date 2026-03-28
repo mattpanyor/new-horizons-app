@@ -28,6 +28,7 @@ export interface CelestialBody {
   orbitDistance: number; // 0-1 normalized distance from star
   labelPosition?: "top" | "bottom"; // default "bottom"
   special_attribute?: "lathanium" | "nobility" | "purified" | "lightbringer" | "cult" | "alien_int";
+  allegiance?: import("@/lib/allegiances").AllegianceKey;
   kankaUrl?: string;
   image?: string;
   published?: boolean;

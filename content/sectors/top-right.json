@@ -26,19 +26,6 @@
       "curvature": -140,
       "label": "Act II. - first chapter",
       "color": "#8e8cff"
-    },
-    {
-      "from": "callisto",
-      "to": "pelao",
-      "color": "#6b7280",
-      "curvature": -50,
-      "marker": {
-        "type": "ship",
-        "position": 0.95,
-        "name": "Arch of Laurel",
-        "allegiance": "fairfield",
-        "kankaUrl": "https://app.kanka.io/w/96303/entities/8944998"
-      }
     }
   ],
   "systems": [

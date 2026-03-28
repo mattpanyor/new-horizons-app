@@ -19,6 +19,7 @@ import {
 import { getBodyPos, bodyHitRadius } from "@/lib/sectorMapHelpers";
 import { BodyShape, bodyLabelR } from "./bodies/BodyShape";
 import { BodyInfoCard, bodyCardHeight } from "./bodies/BodyInfoCard";
+import { ALLEGIANCES } from "@/lib/allegiances";
 import { SpecialAttributeIcon } from "@/components/specialAttributes/SpecialAttributeIcon";
 
 interface StarSystemViewProps {
@@ -224,7 +225,7 @@ export const StarSystemView = memo(function StarSystemView({
             const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
             const { color: bodyColor } = getBodyColors(body);
             const cardW = 220;
-            const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl);
+            const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl, body.allegiance);
             const bodyR = bodyLabelR(body.type);
 
             return (
@@ -245,6 +246,7 @@ export const StarSystemView = memo(function StarSystemView({
                   specialAttribute={body.special_attribute}
                   kankaUrl={body.kankaUrl}
                   bodyColor={bodyColor}
+                  allegiance={body.allegiance ? ALLEGIANCES[body.allegiance] : undefined}
                 />
               </SvgTooltip>
             );

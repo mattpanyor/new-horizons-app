@@ -17,7 +17,8 @@
       "orbitPosition": 40,
       "orbitDistance": 0.6,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8909208"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8909208",
+      "allegiance": "ashford"
     },
     {
       "id": "leo-2",
@@ -27,7 +28,8 @@
       "orbitPosition": 210,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915786"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915786",
+      "allegiance": "ashford"
     },
     {
       "id": "leo-3",
@@ -37,15 +39,18 @@
       "orbitPosition": 300,
       "orbitDistance": 0.85,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915788"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915788",
+      "allegiance": "ashford"
     },
     {
       "id": "reliquary",
-      "name": "The Reliquary",
+      "name": "Vena Station",
       "type": "station",
       "orbitPosition": 10,
       "orbitDistance": 0.4,
-      "labelPosition": "bottom"
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073445",
+      "allegiance": "ashford"
     },
     {
       "id": "vanguard-wolf",
@@ -54,7 +59,8 @@
       "orbitPosition": 90,
       "orbitDistance": 0.3,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8945009"
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8945009",
+      "allegiance": "ashford"
     }
   ]
 }
