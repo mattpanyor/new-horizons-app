@@ -15,53 +15,91 @@ export default function SectorsPage() {
       <StarSystemBackground />
       <NavIcon href="/ship" label="Ship">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-          {/* Hexagonal schematic frame */}
-          <polygon points="48,4 84,26 84,70 48,92 12,70 12,26" strokeWidth="0.5" strokeOpacity="0.15" />
-          <polygon points="48,12 76,30 76,66 48,84 20,66 20,30" strokeWidth="0.4" strokeOpacity="0.1" />
-          {/* Crosshair lines */}
-          <line x1="48" y1="14" x2="48" y2="82" strokeWidth="0.3" strokeOpacity="0.1" />
-          <line x1="18" y1="48" x2="78" y2="48" strokeWidth="0.3" strokeOpacity="0.1" />
-          {/* Ship side profile — nose right, engines left */}
+          {/* Sun + concentric orbit rings — top right */}
+          <circle cx="74" cy="20" r="5" fill="currentColor" fillOpacity="0.35" stroke="none" />
+          <circle cx="74" cy="20" r="2.5" fill="currentColor" fillOpacity="0.6" stroke="none" />
+          <circle cx="74" cy="20" r="12" strokeWidth="0.5" strokeOpacity="0.25" strokeDasharray="1.5 3" />
+          <circle cx="74" cy="20" r="22" strokeWidth="0.45" strokeOpacity="0.18" strokeDasharray="1.5 4" />
+          <circle cx="74" cy="20" r="34" strokeWidth="0.4" strokeOpacity="0.12" strokeDasharray="1.5 5" />
+          {/* Ley lines — flowing from right, curving around the nose */}
+          {/* Lines arriving from ahead, deflecting upward around hull */}
+          <path d="M92 48 Q78 48, 66 44 Q62 42, 56 36" strokeWidth="0.7" strokeOpacity="0.3" fill="none" />
+          <path d="M94 46 Q80 46, 68 40 Q62 36, 56 28" strokeWidth="0.5" strokeOpacity="0.2" fill="none" />
+          <path d="M90 48 Q76 47, 66 44 Q62 42, 58 38" strokeWidth="0.6" strokeOpacity="0.25" fill="none" />
+          <path d="M96 44 Q82 44, 70 36 Q64 30, 58 22" strokeWidth="0.4" strokeOpacity="0.15" fill="none" />
+          {/* Lines arriving from ahead, deflecting downward around hull */}
+          <path d="M92 48 Q78 48, 66 52 Q62 54, 56 60" strokeWidth="0.7" strokeOpacity="0.3" fill="none" />
+          <path d="M94 50 Q80 50, 68 56 Q62 60, 56 68" strokeWidth="0.5" strokeOpacity="0.2" fill="none" />
+          <path d="M90 48 Q76 49, 66 52 Q62 54, 58 58" strokeWidth="0.6" strokeOpacity="0.25" fill="none" />
+          <path d="M96 52 Q82 52, 70 60 Q64 66, 58 74" strokeWidth="0.4" strokeOpacity="0.15" fill="none" />
+          {/* Ship — top-down view, nose pointing right, symmetrical */}
+          <g transform="translate(38,48) scale(0.7) translate(-48,-48)">
+          {/* Main hull — central spine, wide at rear tapering to sharp nose */}
           <path
-            d="M16 48
-             L22 44 L32 42 L44 40 L58 38 L68 36
-             Q76 34, 82 38
-             L84 42
-             Q85 46, 82 48"
-            strokeWidth="1" strokeOpacity="0.7"
+            d="M10 43
+             L22 40
+             L40 39
+             L58 40
+             L72 44
+             C80 44, 84 46, 84 48
+             C84 50, 80 52, 72 52
+             L58 56
+             L40 57
+             L22 56
+             L10 53
+             Z"
+            strokeWidth="1.1" strokeOpacity="0.7" fill="currentColor" fillOpacity="0.06"
+          />
+          {/* Centre spine ridge */}
+          <line x1="10" y1="48" x2="82" y2="48" strokeWidth="0.9" strokeOpacity="0.6" />
+          {/* Upper wing — curved triangle swept back */}
+          <path
+            d="M40 39
+             C36 42, 22 30, 18 26
+             C20 28, 22 36, 24 39"
+            strokeWidth="0.9" strokeOpacity="0.6" fill="currentColor" fillOpacity="0.05"
+          />
+          {/* Lower wing — curved triangle swept back, mirror */}
+          <path
+            d="M40 57
+             C36 54, 22 66, 18 70
+             C20 68, 22 60, 24 57"
+            strokeWidth="0.9" strokeOpacity="0.6" fill="currentColor" fillOpacity="0.05"
+          />
+          {/* Engine block — cylindrical rear, top-down shows as wide bar */}
+          <path d="M10 40 Q6 42, 6 48 Q6 54, 10 56" strokeWidth="1" strokeOpacity="0.55" fill="currentColor" fillOpacity="0.08" />
+          {/* Engine exhaust */}
+          <line x1="6" y1="43" x2="-4" y2="43" strokeWidth="0.7" strokeOpacity="0.5" />
+          <line x1="5" y1="48" x2="-6" y2="48" strokeWidth="0.8" strokeOpacity="0.55" />
+          <line x1="6" y1="53" x2="-4" y2="53" strokeWidth="0.7" strokeOpacity="0.5" />
+          {/* Cockpit canopy — teardrop shape near nose, top-down */}
+          <path
+            d="M70 45
+             Q72 44, 76 44
+             Q79 44, 80 48
+             Q79 52, 76 52
+             Q72 52, 70 51
+             Z"
+            strokeWidth="0.6" strokeOpacity="0.5" fill="currentColor" fillOpacity="0.1"
+          />
+          {/* Canopy frame lines */}
+          <line x1="73" y1="44.5" x2="72" y2="51.5" strokeWidth="0.35" strokeOpacity="0.3" />
+          <line x1="76" y1="44" x2="76" y2="52" strokeWidth="0.35" strokeOpacity="0.25" />
+          {/* Canopy glint */}
+          <ellipse cx="77" cy="47" rx="1.2" ry="0.8" fill="currentColor" fillOpacity="0.25" stroke="none" />
+          {/* Hull panel lines */}
+          <line x1="36" y1="38" x2="36" y2="58" strokeWidth="0.3" strokeOpacity="0.12" />
+          <line x1="52" y1="38" x2="52" y2="58" strokeWidth="0.3" strokeOpacity="0.1" />
+          </g>
+          {/* Planet horizon — wide arc at bottom */}
+          <path
+            d="M-10 96 Q48 72, 106 96"
+            strokeWidth="1" strokeOpacity="0.3" fill="currentColor" fillOpacity="0.04"
           />
           <path
-            d="M82 48
-             Q85 50, 84 54
-             L82 58
-             Q76 62, 68 60
-             L58 58 L44 56 L32 54 L22 52
-             L16 48Z"
-            strokeWidth="1" strokeOpacity="0.7" fill="currentColor" fillOpacity="0.04"
+            d="M-10 96 Q48 78, 106 96"
+            strokeWidth="0.5" strokeOpacity="0.15" fill="none"
           />
-          {/* Upper fin / command tower */}
-          <path d="M52 40 L56 28 Q58 24, 62 26 L60 36" strokeWidth="0.8" strokeOpacity="0.6" />
-          <path d="M56 28 L58 30" strokeWidth="0.4" strokeOpacity="0.3" />
-          {/* Lower fin */}
-          <path d="M50 56 L54 66 Q56 70, 52 70 L48 60" strokeWidth="0.8" strokeOpacity="0.5" />
-          {/* Engine block */}
-          <rect x="12" y="44" width="8" height="8" rx="1" strokeWidth="0.6" strokeOpacity="0.5" fill="currentColor" fillOpacity="0.06" />
-          <line x1="12" y1="46" x2="8" y2="45" strokeWidth="0.5" strokeOpacity="0.3" />
-          <line x1="12" y1="48" x2="6" y2="48" strokeWidth="0.5" strokeOpacity="0.3" />
-          <line x1="12" y1="50" x2="8" y2="51" strokeWidth="0.5" strokeOpacity="0.3" />
-          {/* Cockpit window */}
-          <ellipse cx="78" cy="44" rx="3" ry="2" strokeWidth="0.6" strokeOpacity="0.5" fill="currentColor" fillOpacity="0.12" />
-          {/* Hull details */}
-          <line x1="30" y1="43" x2="30" y2="53" strokeWidth="0.3" strokeOpacity="0.2" />
-          <line x1="42" y1="41" x2="42" y2="55" strokeWidth="0.3" strokeOpacity="0.2" />
-          <line x1="56" y1="39" x2="56" y2="57" strokeWidth="0.3" strokeOpacity="0.2" />
-          <circle cx="36" cy="48" r="1.5" strokeWidth="0.4" strokeOpacity="0.2" />
-          <circle cx="50" cy="48" r="1.5" strokeWidth="0.4" strokeOpacity="0.2" />
-          {/* Corner tick marks */}
-          <path d="M22 16 L22 20 M22 16 L26 16" strokeWidth="0.4" strokeOpacity="0.25" />
-          <path d="M74 16 L74 20 M74 16 L70 16" strokeWidth="0.4" strokeOpacity="0.25" />
-          <path d="M22 80 L22 76 M22 80 L26 80" strokeWidth="0.4" strokeOpacity="0.25" />
-          <path d="M74 80 L74 76 M74 80 L70 80" strokeWidth="0.4" strokeOpacity="0.25" />
         </svg>
       </NavIcon>
       <div className="h-[calc(100dvh-4rem)] flex flex-col items-center justify-center gap-5 px-4">
