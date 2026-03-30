@@ -94,5 +94,17 @@ export async function GET() {
     results.step4_members = { error: String(err) };
   }
 
+  // Step 5: Outbound IP (what Kanka's Cloudflare sees)
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+    if (ipRes.ok) {
+      const ipData = await ipRes.json();
+      results.step5_outbound_ip = ipData.ip;
+      results.step5_vercel_region = process.env.VERCEL_REGION ?? "unknown";
+    }
+  } catch (err) {
+    results.step5_outbound_ip = { error: String(err) };
+  }
+
   return NextResponse.json(results, { status: 200 });
 }
