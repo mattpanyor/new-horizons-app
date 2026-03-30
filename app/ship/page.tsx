@@ -25,6 +25,7 @@ export default async function ShipPage() {
         role={user.role ?? undefined}
         group={user.group}
         location="Ship"
+        accessLevel={user.accessLevel}
       />
       <StarSystemBackground />
       <NavIcon href="/sectors" label="Galaxy">

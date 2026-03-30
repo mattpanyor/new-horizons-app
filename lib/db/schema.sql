@@ -4,5 +4,6 @@ CREATE TABLE IF NOT EXISTS users (
   password   VARCHAR(255) NOT NULL,
   "group"    VARCHAR(100) NOT NULL,
   role       VARCHAR(100),
-  character  VARCHAR(100)
+  character  VARCHAR(100),
+  access_level INTEGER NOT NULL DEFAULT 0
 );
