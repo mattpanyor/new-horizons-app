@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import users from "@/data/users.json";
+import { authenticateUser } from "@/lib/db/users";
 
 export async function POST(req: NextRequest) {
   const { username, password } = await req.json();
 
-  const user = users.find(
-    (u) => u.username === username && u.password === password
-  );
+  const user = await authenticateUser(username, password);
 
   if (!user) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -16,7 +14,7 @@ export async function POST(req: NextRequest) {
   res.cookies.set("nh_user", username, {
     httpOnly: false, // readable client-side for presence tracking
     path: "/",
-    maxAge: 60 * 60, // 1 hour
+    maxAge: 60 * 60 * 5, // 5 hours
     sameSite: "lax",
   });
   return res;

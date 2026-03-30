@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import users from "@/data/users.json";
+import { getUserByUsername } from "@/lib/db/users";
 import Navbar from "@/components/Navbar";
 
 export default async function SectorsLayout({ children }: { children: React.ReactNode }) {
@@ -9,15 +9,15 @@ export default async function SectorsLayout({ children }: { children: React.Reac
 
   if (!username) redirect("/login");
 
-  const user = users.find((u) => u.username === username);
+  const user = await getUserByUsername(username);
   if (!user) redirect("/login");
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar
         username={user.username}
-        character={"character" in user ? user.character : undefined}
-        role={"role" in user ? user.role : undefined}
+        character={user.character ?? undefined}
+        role={user.role ?? undefined}
         group={user.group}
         location="Galactic Map"
       />
