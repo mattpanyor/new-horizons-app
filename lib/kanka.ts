@@ -1,8 +1,9 @@
-import type { KankaLocation, KankaPaginatedResponse } from "@/types/kanka";
+import type { KankaLocation, KankaMember, KankaPaginatedResponse } from "@/types/kanka";
 
 const KANKA_BASE = "https://api.kanka.io/1.0";
 
 let cachedMap: Map<string, string> | null = null;
+let cachedMembers: Map<number, string> | null = null;
 
 /**
  * Fetch all Kanka location entities for the campaign and return a
@@ -56,4 +57,46 @@ export async function getKankaLocationMap(): Promise<Map<string, string>> {
 
   cachedMap = map;
   return cachedMap;
+}
+
+/**
+ * Fetch campaign members and return a id → display name map.
+ * Cached in-memory for the server lifetime.
+ */
+export async function getKankaMemberMap(): Promise<Map<number, string>> {
+  if (cachedMembers) return cachedMembers;
+
+  const token = process.env.KANKA_API;
+  const campaignId = process.env.KANKA_CAMPAIGN_ID;
+
+  if (!token || !campaignId) {
+    cachedMembers = new Map();
+    return cachedMembers;
+  }
+
+  const res = await fetch(
+    `${KANKA_BASE}/campaigns/${campaignId}/users`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (!res.ok) {
+    console.warn(`[kanka] Failed to fetch campaign members: ${res.status}`);
+    cachedMembers = new Map();
+    return cachedMembers;
+  }
+
+  const json: { data: KankaMember[] } = await res.json();
+  const map = new Map<number, string>();
+  for (const member of json.data) {
+    map.set(member.id, member.name);
+  }
+
+  cachedMembers = map;
+  return cachedMembers;
 }

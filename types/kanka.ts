@@ -7,6 +7,12 @@ export interface KankaLocation {
   is_private: boolean;
 }
 
+export interface KankaMember {
+  id: number;
+  name: string;
+  avatar: string;
+}
+
 export interface KankaPaginatedResponse<T> {
   data: T[];
   links: {
