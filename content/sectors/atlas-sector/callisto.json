@@ -1,6 +1,7 @@
 {
   "name": "Callisto System",
   "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8893889",
   "star": {
     "name": "Callisto",
     "type": "White Dwarf",
@@ -17,7 +18,8 @@
       "orbitDistance": 1,
       "labelPosition": "bottom",
       "special_attribute": "lathanium",
-      "allegiance": "feyrose"
+      "allegiance": "feyrose",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893899"
     },
     {
       "id": "fulcrum",
@@ -26,7 +28,8 @@
       "orbitPosition": 200,
       "orbitDistance": 0.5,
       "labelPosition": "bottom",
-      "allegiance": "feyrose"
+      "allegiance": "feyrose",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893933"
     },
     {
       "id": "eterna",
@@ -36,7 +39,8 @@
       "orbitPosition": 190,
       "orbitDistance": 0.4,
       "labelPosition": "top",
-      "allegiance": "feyrose"
+      "allegiance": "feyrose",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899890"
     },
     {
       "id": "altara",
@@ -47,7 +51,8 @@
       "orbitDistance": 0.8,
       "labelPosition": "bottom",
       "special_attribute": "nobility",
-      "allegiance": "feyrose"
+      "allegiance": "feyrose",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893898"
     },
     {
       "id": "imperial-glory",
@@ -56,7 +61,8 @@
       "orbitPosition": 250,
       "orbitDistance": 0.6,
       "labelPosition": "bottom",
-      "allegiance": "exploratorium"
+      "allegiance": "exploratorium",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893941"
     }
   ]
 }

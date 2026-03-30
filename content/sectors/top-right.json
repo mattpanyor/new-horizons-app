@@ -56,7 +56,8 @@
         "type": "ship",
         "name": "Vanguard Wolf",
         "position": 0.2,
-        "allegiance": "ashford"
+        "allegiance": "ashford",
+        "kankaUrl": "https://app.kanka.io/w/96303/entities/8945009"
       }
     },
     {
@@ -68,7 +69,8 @@
         "type": "ship",
         "name": "Arch of Laurel",
         "position": 0.1,
-        "allegiance": "fairfield"
+        "allegiance": "fairfield",
+        "kankaUrl": "https://app.kanka.io/w/96303/entities/8944998"
       }
     },
     {
@@ -80,7 +82,8 @@
         "type": "ship",
         "name": "Ray of Purity",
         "position": 0.1,
-        "allegiance": "inquisitorium"
+        "allegiance": "inquisitorium",
+        "kankaUrl": "https://app.kanka.io/w/96303/entities/9081341"
       }
     }
   ],

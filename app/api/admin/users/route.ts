@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { username, password, group, role, character, accessLevel, kankaId } = await req.json();
+  const { username, password, group, role, character, accessLevel } = await req.json();
 
   if (!username || !password || !group) {
     return NextResponse.json({ error: "Missing required fields (username, password, group)" }, { status: 400 });
@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
       role: role || null,
       character: character || null,
       accessLevel: finalAccessLevel,
-      kankaId: kankaId ?? null,
     });
     return NextResponse.json(user);
   } catch {
@@ -58,7 +57,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, username, group, role, character, accessLevel, kankaId } = body;
+  const { id, username, group, role, character, accessLevel } = body;
 
   if (!id || !username || !group) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -85,7 +84,6 @@ export async function PUT(req: NextRequest) {
     role: role || null,
     character: character || null,
     accessLevel: finalAccessLevel,
-    kankaId: kankaId ?? null,
   });
 
   if (!updated) {

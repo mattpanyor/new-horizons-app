@@ -1,6 +1,7 @@
 {
   "name": "Belliar system",
   "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8894786",
   "star": {
     "name": "Belliar",
     "type": "Red Supergiant",
@@ -16,7 +17,8 @@
       "orbitPosition": 40,
       "orbitDistance": 0.6,
       "labelPosition": "bottom",
-      "allegiance": "ashford"
+      "allegiance": "ashford",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8909208"
     },
     {
       "id": "leo-2",
@@ -26,7 +28,8 @@
       "orbitPosition": 210,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "allegiance": "ashford"
+      "allegiance": "ashford",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915786"
     },
     {
       "id": "leo-3",
@@ -36,7 +39,8 @@
       "orbitPosition": 300,
       "orbitDistance": 0.85,
       "labelPosition": "bottom",
-      "allegiance": "ashford"
+      "allegiance": "ashford",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915788"
     },
     {
       "id": "reliquary",
@@ -45,7 +49,8 @@
       "orbitPosition": 10,
       "orbitDistance": 0.4,
       "labelPosition": "bottom",
-      "allegiance": "ashford"
+      "allegiance": "ashford",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073445"
     }
   ]
 }

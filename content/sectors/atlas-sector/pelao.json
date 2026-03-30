@@ -1,6 +1,7 @@
 {
   "name": "Pelao System",
   "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8893960",
   "star": {
     "name": "Pelao",
     "type": "Yellow Dwarf",
@@ -15,7 +16,8 @@
       "orbitPosition": 75,
       "orbitDistance": 0.55,
       "labelPosition": "top",
-      "allegiance": "fairfield"
+      "allegiance": "fairfield",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899795"
     },
     {
       "id": "bertan-2",
@@ -25,7 +27,8 @@
       "orbitPosition": 315,
       "orbitDistance": 0.55,
       "labelPosition": "bottom",
-      "allegiance": "fairfield"
+      "allegiance": "fairfield",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899796"
     },
     {
       "id": "bertan-3",
@@ -35,7 +38,8 @@
       "orbitPosition": 210,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "allegiance": "fairfield"
+      "allegiance": "fairfield",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899809"
     },
     {
       "id": "bertan-1",
@@ -45,7 +49,8 @@
       "orbitPosition": 135,
       "orbitDistance": 0.35,
       "labelPosition": "top",
-      "allegiance": "fairfield"
+      "allegiance": "fairfield",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899789"
     },
     {
       "id": "first-light",
@@ -54,7 +59,8 @@
       "orbitPosition": 155,
       "orbitDistance": 0.4,
       "labelPosition": "bottom",
-      "allegiance": "fairfield"
+      "allegiance": "fairfield",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073489"
     }
   ]
 }

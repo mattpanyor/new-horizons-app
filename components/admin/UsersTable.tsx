@@ -9,12 +9,11 @@ interface User {
   role: string | null;
   character: string | null;
   accessLevel: number;
-  kankaId: number | null;
 }
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
-export default function UsersTable({ initialUsers, canEditAccessLevel, kankaNames }: { initialUsers: User[]; canEditAccessLevel: boolean; kankaNames: Record<number, string> }) {
+export default function UsersTable({ initialUsers, canEditAccessLevel }: { initialUsers: User[]; canEditAccessLevel: boolean }) {
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<User | null>(null);
@@ -22,7 +21,7 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [addingUser, setAddingUser] = useState(false);
-  const [addForm, setAddForm] = useState({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0, kankaId: "" });
+  const [addForm, setAddForm] = useState({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0 });
   const [error, setError] = useState<string | null>(null);
 
   function startEdit(user: User) {
@@ -102,7 +101,7 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
 
   function startAdd() {
     setAddingUser(true);
-    setAddForm({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0, kankaId: "" });
+    setAddForm({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0 });
     setEditingId(null);
     setConfirmDeleteId(null);
     setResetPasswordUser(null);
@@ -119,7 +118,7 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...addForm, kankaId: addForm.kankaId ? parseInt(addForm.kankaId) : null }),
+      body: JSON.stringify(addForm),
     });
 
     if (!res.ok) {
@@ -134,8 +133,8 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
   }
 
   const columns = canEditAccessLevel
-    ? ["Username", "Group", "Role", "Character", "Kanka ID", "Kanka User", "Access Level", ""]
-    : ["Username", "Group", "Role", "Character", "Kanka ID", "Kanka User", ""];
+    ? ["Username", "Group", "Role", "Character", "Access Level", ""]
+    : ["Username", "Group", "Role", "Character", ""];
 
   return (
     <div className="w-full max-w-6xl mx-auto">
@@ -193,22 +192,6 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
                         onChange={(e) => setEditForm({ ...editForm, character: e.target.value || null })}
                       />
                     </td>
-                    <td className="px-4 py-2">
-                      <input
-                        type="number"
-                        className="w-20 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-white/40"
-                        value={editForm.kankaId ?? ""}
-                        onChange={(e) => setEditForm({ ...editForm, kankaId: e.target.value ? parseInt(e.target.value) : null })}
-                        placeholder="—"
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-sm">
-                      {editForm.kankaId != null ? (
-                        kankaNames[editForm.kankaId]
-                          ? <span className="text-green-400">{kankaNames[editForm.kankaId]}</span>
-                          : <span className="text-red-400">Not found</span>
-                      ) : <span className="text-white/30">—</span>}
-                    </td>
                     {canEditAccessLevel && (
                       <td className="px-4 py-2">
                         <input
@@ -249,14 +232,6 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
                     <td className="px-4 py-3 text-white/80">{user.group}</td>
                     <td className="px-4 py-3 text-white/60">{user.role ?? "—"}</td>
                     <td className="px-4 py-3 text-white/60">{user.character ?? "—"}</td>
-                    <td className="px-4 py-3 text-white/60">{user.kankaId ?? "—"}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {user.kankaId != null ? (
-                        kankaNames[user.kankaId]
-                          ? <span className="text-green-400">{kankaNames[user.kankaId]}</span>
-                          : <span className="text-red-400">Not found</span>
-                      ) : <span className="text-white/30">—</span>}
-                    </td>
                     {canEditAccessLevel && (
                       <td className="px-4 py-3 text-white/60">{user.accessLevel}</td>
                     )}
@@ -371,13 +346,6 @@ export default function UsersTable({ initialUsers, canEditAccessLevel, kankaName
                 placeholder="Character (optional)"
                 value={addForm.character}
                 onChange={(e) => setAddForm({ ...addForm, character: e.target.value })}
-              />
-              <input
-                type="number"
-                className="w-full bg-white/10 border border-white/20 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-white/40"
-                placeholder="Kanka ID (optional)"
-                value={addForm.kankaId}
-                onChange={(e) => setAddForm({ ...addForm, kankaId: e.target.value })}
               />
               {canEditAccessLevel && (
                 <div className="flex items-center gap-3">

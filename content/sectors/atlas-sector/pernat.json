@@ -1,6 +1,7 @@
 {
   "name": "Pernat System",
   "published": true,
+  "kankaUrl": "https://app.kanka.io/w/96303/entities/8641988",
   "star": {
     "name": "Pernat",
     "type": "Blue Main Sequence",
@@ -16,7 +17,8 @@
       "orbitPosition": 130,
       "orbitDistance": 0.7,
       "labelPosition": "top",
-      "special_attribute": "cult"
+      "special_attribute": "cult",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8641989"
     },
     {
       "id": "aegis",
@@ -25,7 +27,8 @@
       "orbitPosition": 150,
       "orbitDistance": 0.6,
       "labelPosition": "bottom",
-      "allegiance": "exploratorium"
+      "allegiance": "exploratorium",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073491"
     },
     {
       "id": "menlar-2",
@@ -34,7 +37,8 @@
       "biome": "gas-giant",
       "orbitPosition": 20,
       "orbitDistance": 0.55,
-      "labelPosition": "top"
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8894030"
     },
     {
       "id": "menlar-3",
@@ -43,7 +47,8 @@
       "biome": "ash",
       "orbitPosition": 35,
       "orbitDistance": 0.6,
-      "labelPosition": "bottom"
+      "labelPosition": "bottom",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8894032"
     },
     {
       "id": "tetras",
@@ -51,7 +56,8 @@
       "type": "station",
       "orbitPosition": 280,
       "orbitDistance": 0.3,
-      "labelPosition": "top"
+      "labelPosition": "top",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/8894034"
     }
   ]
 }
