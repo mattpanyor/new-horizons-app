@@ -1,33 +1,17 @@
 /**
- * Renders interactive ship/fleet markers along connection lines,
- * plus their info card tooltips.
- *
- * Static connection paths + labels are rendered server-side in SectorMapSvgLayer.
- * This component only handles the interactive marker layer.
+ * Renders free-floating markers (not attached to connection lines)
+ * on the sector map, with optional territory blobs and info card tooltips.
  */
-import type { ConnectionLine, SystemPin, VortexPin, MapMarker } from "@/types/sector";
+import type { MapMarker } from "@/types/sector";
 import type { SvgViewBox } from "@/components/SvgTooltip";
 import { SvgTooltip } from "@/components/SvgTooltip";
 import { ALLEGIANCES } from "@/lib/allegiances";
-import { SHIP_COLORS, FLEET_GRAD_TIP, MARKER_COLORS } from "@/lib/bodyColors";
-import {
-  SYS_SCALE, FLEET_SHIPS, triLeft,
-  computeConnectionCurve, bezierAt, bezierTangent, endpointRadius,
-} from "@/lib/sectorMapHelpers";
+import { MARKER_COLORS, SHIP_COLORS } from "@/lib/bodyColors";
+import { SYS_SCALE, FLEET_SHIPS, triLeft, wavyCloudPath } from "@/lib/sectorMapHelpers";
 
-function findEndpoint(slug: string, systems: SystemPin[], vortexes: VortexPin[], markers: MapMarker[]): { x: number; y: number } | undefined {
-  return systems.find(s => s.slug === slug)
-    ?? vortexes.find(v => v.slug === slug)
-    ?? markers.find(m => m.slug === slug && m.x != null && m.y != null) as { x: number; y: number } | undefined;
-}
-
-interface ConnectionMarkerLayerProps {
-  connections: ConnectionLine[];
-  systems: SystemPin[];
-  vortexes: VortexPin[];
+interface FreeMarkerLayerProps {
   markers: MapMarker[];
   sectorSlug: string;
-  orbitDataMap: Map<string, { orbitDistances: number[]; maxOrbit: number }>;
   activeMarkerId: string | null;
   showMarker: (id: string) => void;
   scheduleHideMarker: () => void;
@@ -36,68 +20,70 @@ interface ConnectionMarkerLayerProps {
   vb: SvgViewBox;
 }
 
-export function ConnectionMarkerLayer({
-  connections, systems, vortexes, markers, sectorSlug, orbitDataMap,
+export function FreeMarkerLayer({
+  markers, sectorSlug,
   activeMarkerId, showMarker, scheduleHideMarker,
   markerCardEnter, markerCardLeave, vb,
-}: ConnectionMarkerLayerProps) {
+}: FreeMarkerLayerProps) {
   return (
     <>
-      {/* ── Markers (ship / fleet / anomaly / poi) along connection lines ── */}
-      {connections.map((conn, connIdx) => {
-        if (!conn.marker) return null;
-
-        const fromObj = findEndpoint(conn.from, systems, vortexes, markers);
-        const toObj = findEndpoint(conn.to, systems, vortexes, markers);
-        if (!fromObj || !toObj) return null;
-
-        const fromRadius = endpointRadius(conn.from, systems, vortexes, orbitDataMap, markers);
-        const toRadius = endpointRadius(conn.to, systems, vortexes, orbitDataMap, markers);
-
-        const { p0t, p1, p2t } = computeConnectionCurve(
-          fromObj, toObj, conn.curvature ?? 0, fromRadius, toRadius,
-        );
-
-        const marker = conn.marker;
-        const isActive = activeMarkerId === String(connIdx);
-        const t = Math.max(0, Math.min(1, marker.position ?? 0.5));
-        const mp = bezierAt(p0t, p1, p2t, t);
-        const tan = bezierTangent(p0t, p1, p2t, t);
-        const angle = Math.atan2(tan.y, tan.x) * 180 / Math.PI;
-        const rotAngle = marker.type === "ship" ? angle + 90 : angle - 180;
-        const markerGradId = `conn-marker-${connIdx}`;
-        const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
+      {/* ── Territory blobs ── */}
+      {markers.map((marker, idx) => {
+        if (!marker.territoryRadius || marker.x == null || marker.y == null) return null;
         const colors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
+        return (
+          <path
+            key={`free-territory-${idx}`}
+            d={wavyCloudPath(marker.x, marker.y, marker.territoryRadius, { seed: `free_${idx}_${marker.x}_${marker.y}` })}
+            fill={colors.color}
+            fillOpacity={0.04}
+            stroke={colors.color}
+            strokeOpacity={0.1}
+            strokeWidth={1}
+            style={{ pointerEvents: "none" }}
+          />
+        );
+      })}
+
+      {/* ── Marker icons ── */}
+      {markers.map((marker, idx) => {
+        if (marker.x == null || marker.y == null) return null;
+
+        const id = `free-${idx}`;
+        const isActive = activeMarkerId === id;
+        const angle = marker.angle ?? 0;
+        const colors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
+        const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
         const markerColor = allegiance?.color ?? colors.color;
-        const shipSecondary = allegiance?.color ?? SHIP_COLORS.secondaryColor;
+        const gradId = `free-marker-grad-${sectorSlug}-${idx}`;
 
         return (
-          <g key={`marker-${connIdx}`}
-            transform={`translate(${mp.x.toFixed(1)},${mp.y.toFixed(1)}) rotate(${rotAngle.toFixed(1)})`}
+          <g key={id}
+            transform={`translate(${marker.x.toFixed(1)},${marker.y.toFixed(1)}) rotate(${angle.toFixed(1)})`}
             style={{ cursor: "pointer", pointerEvents: "all" }}
-            onClick={(e) => { e.stopPropagation(); showMarker(String(connIdx)); }}
-            onMouseEnter={() => showMarker(String(connIdx))}
+            onClick={(e) => { e.stopPropagation(); showMarker(id); }}
+            onMouseEnter={() => showMarker(id)}
             onMouseLeave={scheduleHideMarker}>
 
             {marker.type === "ship" && (
               <>
                 <defs>
-                  <radialGradient id={markerGradId}>
-                    <stop offset="0%" stopColor={SHIP_COLORS.color} stopOpacity="1" />
-                    <stop offset="70%" stopColor={shipSecondary} stopOpacity="0.9" />
-                    <stop offset="100%" stopColor={shipSecondary} stopOpacity="0.7" />
+                  <radialGradient id={gradId}>
+                    <stop offset="0%" stopColor={colors.color} stopOpacity="1" />
+                    <stop offset="70%" stopColor={allegiance?.color ?? colors.secondaryColor} stopOpacity="0.9" />
+                    <stop offset="100%" stopColor={allegiance?.color ?? colors.secondaryColor} stopOpacity="0.7" />
                   </radialGradient>
                 </defs>
                 <polygon points="0,-9 -6,5 6,5"
-                  fill={`url(#${markerGradId})`}
+                  fill={`url(#${gradId})`}
                   stroke={isActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)"}
                   strokeWidth={isActive ? "1.5" : "0.5"}
-                  style={{ filter: `drop-shadow(0 0 ${isActive ? 8 : 3}px ${SHIP_COLORS.color})` }} />
+                  style={{ filter: `drop-shadow(0 0 ${isActive ? 8 : 3}px ${colors.color})` }} />
               </>
             )}
 
             {marker.type === "fleet" && (
-              <g style={{ filter: isActive ? `drop-shadow(0 0 8px ${FLEET_GRAD_TIP})` : undefined }}>
+              <g style={{ filter: isActive ? `drop-shadow(0 0 8px ${colors.color})` : undefined }}>
                 {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
                   <polygon key={i} points={triLeft(dx * 0.5, dy * 0.5, r * 0.5)}
                     fill={`url(#fleetGrad-${sectorSlug})`} fillOpacity={0.9}
@@ -110,16 +96,19 @@ export function ConnectionMarkerLayer({
             {marker.type === "anomaly" && (
               <>
                 <defs>
-                  <radialGradient id={markerGradId}>
+                  <radialGradient id={gradId}>
                     <stop offset="0%" stopColor={markerColor} stopOpacity="0.8" />
                     <stop offset="60%" stopColor={markerColor} stopOpacity="0.3" />
                     <stop offset="100%" stopColor={markerColor} stopOpacity="0" />
                   </radialGradient>
                 </defs>
-                <circle r="12" fill={`url(#${markerGradId})`}
+                {/* Outer glow */}
+                <circle r="12" fill={`url(#${gradId})`}
                   style={{ filter: `drop-shadow(0 0 ${isActive ? 10 : 4}px ${markerColor})` }} />
+                {/* Inner pulsing core */}
                 <circle r="4" fill={markerColor} fillOpacity={isActive ? 0.9 : 0.6}
                   stroke={markerColor} strokeOpacity={0.4} strokeWidth="0.5" />
+                {/* Orbiting ring */}
                 <ellipse rx="8" ry="3" fill="none"
                   stroke={markerColor} strokeOpacity={isActive ? 0.6 : 0.3}
                   strokeWidth="0.6" strokeDasharray="2 3"
@@ -130,17 +119,20 @@ export function ConnectionMarkerLayer({
             {marker.type === "poi" && (
               <>
                 <defs>
-                  <radialGradient id={markerGradId}>
+                  <radialGradient id={gradId}>
                     <stop offset="0%" stopColor={markerColor} stopOpacity="0.6" />
                     <stop offset="100%" stopColor={markerColor} stopOpacity="0" />
                   </radialGradient>
                 </defs>
-                <circle r="10" fill={`url(#${markerGradId})`}
+                {/* Outer glow */}
+                <circle r="10" fill={`url(#${gradId})`}
                   style={{ filter: `drop-shadow(0 0 ${isActive ? 8 : 3}px ${markerColor})` }} />
+                {/* Diamond marker */}
                 <polygon points="0,-7 5,0 0,7 -5,0"
                   fill={markerColor} fillOpacity={isActive ? 0.8 : 0.5}
                   stroke={isActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)"}
                   strokeWidth={isActive ? "1" : "0.5"} />
+                {/* Center dot */}
                 <circle r="1.5" fill="white" fillOpacity={isActive ? 0.8 : 0.5} />
               </>
             )}
@@ -148,41 +140,33 @@ export function ConnectionMarkerLayer({
         );
       })}
 
-      {/* ── Connection marker info card — top layer ── */}
-      {activeMarkerId !== null && !activeMarkerId.startsWith("free-") && (() => {
-        const connIdx = parseInt(activeMarkerId);
-        const conn = connections[connIdx];
-        const marker = conn?.marker;
-        if (!conn || !marker) return null;
+      {/* ── Free marker info cards ── */}
+      {activeMarkerId?.startsWith("free-") && (() => {
+        const idx = parseInt(activeMarkerId.replace("free-", ""));
+        const marker = markers[idx];
+        if (!marker || marker.x == null || marker.y == null) return null;
 
-        const fromObj = findEndpoint(conn.from, systems, vortexes, markers);
-        const toObj = findEndpoint(conn.to, systems, vortexes, markers);
-        if (!fromObj || !toObj) return null;
-
-        const fromRadius = endpointRadius(conn.from, systems, vortexes, orbitDataMap, markers);
-        const toRadius = endpointRadius(conn.to, systems, vortexes, orbitDataMap, markers);
-
-        const { p0t, p1, p2t } = computeConnectionCurve(
-          fromObj, toObj, conn.curvature ?? 0, fromRadius, toRadius,
-        );
-
-        const t = Math.max(0, Math.min(1, marker.position ?? 0.5));
-        const mp = bezierAt(p0t, p1, p2t, t);
-
+        const colors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
         const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
-        const connColors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
-        const cardAccent = allegiance?.color ?? connColors.color;
+        const cardAccent = allegiance?.color ?? colors.color;
         const cardW = 220;
         const cardH = 50 + (marker.kankaUrl ? 34 : 0);
 
+        const typeLabels: Record<string, string> = {
+          ship: "Ship",
+          fleet: "Fleet",
+          anomaly: "Anomaly",
+          poi: "Point of Interest",
+        };
+
         return (
-          <g transform={`translate(${mp.x.toFixed(1)},${mp.y.toFixed(1)}) scale(${SYS_SCALE * 2})`}>
+          <g transform={`translate(${marker.x.toFixed(1)},${marker.y.toFixed(1)}) scale(${SYS_SCALE * 2})`}>
             <SvgTooltip
               anchorX={0} anchorY={0}
               cardW={cardW} cardH={cardH}
               color={cardAccent} clearance={42}
               viewBox={vb}
-              parentOffsetX={mp.x} parentOffsetY={mp.y}
+              parentOffsetX={marker.x} parentOffsetY={marker.y}
               scale={SYS_SCALE * 2}
               onMouseEnter={markerCardEnter} onMouseLeave={markerCardLeave}>
               <div style={{ display: "flex", alignItems: "stretch", gap: "6px", marginBottom: "5px" }}>
@@ -191,7 +175,7 @@ export function ConnectionMarkerLayer({
                     {marker.name}
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {{ ship: "Ship", fleet: "Fleet", anomaly: "Anomaly", poi: "Point of Interest" }[marker.type] ?? marker.type}
+                    {typeLabels[marker.type] ?? marker.type}
                     {allegiance && (
                       <>
                         <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>

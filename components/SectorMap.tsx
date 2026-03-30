@@ -12,6 +12,7 @@ import {
   isInSectorTerritory,
 } from "@/lib/sectorMapHelpers";
 import { ConnectionMarkerLayer } from "@/components/sectormap/ConnectionMarkerLayer";
+import { FreeMarkerLayer } from "@/components/sectormap/FreeMarkerLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
 import { SearchOverlay } from "@/components/sectormap/SearchOverlay";
 import { usePlanningMode } from "@/hooks/usePlanningMode";
@@ -50,6 +51,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
   const cursorClientRef = useRef<{ x: number; y: number } | null>(null);
+  const devCoordsRef = useRef<HTMLSpanElement>(null);
+  const isDev = process.env.NODE_ENV === "development";
 
   // Body tooltip (in-system celestial bodies)
   const {
@@ -72,7 +75,18 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent) => {
     cursorClientRef.current = { x: e.clientX, y: e.clientY };
-  }, []);
+    if (devCoordsRef.current) {
+      const svg = svgRef.current;
+      const ctm = svg?.getScreenCTM();
+      if (svg && ctm) {
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        const svgPt = pt.matrixTransform(ctm.inverse());
+        devCoordsRef.current.textContent = `(${Math.round(svgPt.x)}, ${Math.round(svgPt.y)})`;
+      }
+    }
+  }, [svgRef]);
 
   // ── Planning mode event wrappers ──
   // Planning mode intercepts events first; if consumed, skip pan/zoom & normal interactions.
@@ -292,6 +306,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
             connections={sector.connections ?? []}
             systems={sector.systems}
             vortexes={sector.vortexes ?? []}
+            markers={sector.markers ?? []}
             sectorSlug={sector.slug}
             orbitDataMap={orbitDataMap}
             activeMarkerId={activeMarkerId}
@@ -301,6 +316,20 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
             markerCardLeave={markerCardLeave}
             vb={vb}
           />
+
+          {/* ── Free-floating markers ── */}
+          {(sector.markers?.length ?? 0) > 0 && (
+            <FreeMarkerLayer
+              markers={sector.markers!}
+              sectorSlug={sector.slug}
+              activeMarkerId={activeMarkerId}
+              showMarker={showMarker}
+              scheduleHideMarker={scheduleHideMarker}
+              markerCardEnter={markerCardEnter}
+              markerCardLeave={markerCardLeave}
+              vb={vb}
+            />
+          )}
 
           {/* ── Star systems ── */}
           {sector.systems.map((pin) => {
@@ -426,6 +455,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
       <div className="absolute bottom-3 left-3 text-[10px] text-slate-500 select-none pointer-events-none">
         {zoom.toFixed(1)}x
+        {isDev && <span ref={devCoordsRef} className="ml-2 text-amber-400/70" />}
       </div>
     </div>
   );

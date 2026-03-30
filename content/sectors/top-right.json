@@ -19,6 +19,15 @@
       ]
     }
   ],
+  "markers": [
+    {
+      "type": "poi",
+      "slug": "aegis-found",
+      "name": "Aegis Found",
+      "x": 318,
+      "y": 129
+    }
+  ],
   "connections": [
     {
       "from": "ertamis",
@@ -26,6 +35,13 @@
       "curvature": -140,
       "label": "Act II. - first chapter",
       "color": "#8e8cff"
+    },
+    {
+      "from": "aegis-found",
+      "to": "pernat",
+      "label": "ACT II - second chapter",
+      "color": "#8e8cff",
+      "curvature": 100
     }
   ],
   "systems": [

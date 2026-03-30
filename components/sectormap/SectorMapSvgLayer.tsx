@@ -75,6 +75,7 @@ export function SectorMapSvgLayer({ sector, systemsData }: SectorMapSvgLayerProp
         connections={sector.connections ?? []}
         systems={sector.systems}
         vortexes={vortexes}
+        markers={sector.markers ?? []}
         sectorColor={sector.color}
         orbitDataMap={orbitDataMap}
       />

@@ -1,4 +1,4 @@
-import type { SystemPin, VortexPin } from "@/types/sector";
+import type { SystemPin, VortexPin, MapMarker } from "@/types/sector";
 
 // ── Sector Map constants & pure geometry helpers ──
 
@@ -205,14 +205,24 @@ export function isInSectorTerritory(px: number, py: number, slug: string): boole
   return swept <= arcSpan;
 }
 
-/** Compute the trim radius for a connection endpoint (system orbit edge or vortex edge) */
+/** Default trim radius for free-floating markers used as connection endpoints */
+export const MARKER_ENDPOINT_RADIUS = 15;
+
+/** Compute the trim radius for a connection endpoint (system orbit edge, vortex edge, or marker) */
 export function endpointRadius(
   slug: string,
   systems: SystemPin[],
   vortexes: VortexPin[],
   orbitDataMap: Map<string, { maxOrbit: number }>,
+  markers?: MapMarker[],
 ): number {
   const sys = systems.find(s => s.slug === slug);
   if (sys) return (orbitDataMap.get(sys.slug)?.maxOrbit ?? 40) * SYS_SCALE + 8;
-  return vortexes.find(v => v.slug === slug)?.radius ?? 80;
+  const vortex = vortexes.find(v => v.slug === slug);
+  if (vortex) return vortex.radius ?? 80;
+  if (markers) {
+    const marker = markers.find(m => m.slug === slug);
+    if (marker) return MARKER_ENDPOINT_RADIUS;
+  }
+  return 80;
 }

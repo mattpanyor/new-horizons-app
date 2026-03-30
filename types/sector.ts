@@ -18,14 +18,26 @@ export interface VortexPin {
   ratio?: [number, number]; // [width, height] aspect ratio, e.g. [6, 3]
 }
 
-export interface ConnectionMarker {
-  type: "ship" | "fleet";
-  position: number;  // 0–1 along the visible (trimmed) line
-  // Inline card data
+export type MarkerType = "ship" | "fleet" | "anomaly" | "poi";
+
+export interface MapMarker {
+  type: MarkerType;
   name: string;
-  allegiance?: AllegianceKey; // key into ALLEGIANCES registry
+  slug?: string;      // unique id, required for use as connection line endpoint
+  allegiance?: AllegianceKey;
   kankaUrl?: string;
+  // Connection-line placement (used inside ConnectionLine.marker)
+  position?: number;  // 0–1 along the visible (trimmed) line
+  // Free-floating placement (used inside SectorMetadata.markers)
+  x?: number;         // canvas coordinate 0–1200
+  y?: number;         // canvas coordinate 0–800
+  angle?: number;     // rotation in degrees (default 0)
+  // Optional territory blob
+  territoryRadius?: number;  // wavy cloud radius around the marker
 }
+
+/** @deprecated Use MapMarker instead */
+export type ConnectionMarker = MapMarker;
 
 export interface ConnectionLine {
   from: string;       // slug of a system or vortex
@@ -35,7 +47,7 @@ export interface ConnectionLine {
   color?: string;     // defaults to sector color
   dashes?: string;    // stroke-dasharray (default "4 6")
   opacity?: number;   // line + label opacity (default 0.35)
-  marker?: ConnectionMarker;
+  marker?: MapMarker;
 }
 
 export interface SectorMetadata {
@@ -47,5 +59,6 @@ export interface SectorMetadata {
   systems: SystemPin[];
   vortexes?: VortexPin[];
   connections?: ConnectionLine[];
+  markers?: MapMarker[];  // free-floating markers not attached to connection lines
   published?: boolean;
 }
