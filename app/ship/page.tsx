@@ -24,7 +24,6 @@ export default async function ShipPage() {
         character={user.character ?? undefined}
         role={user.role ?? undefined}
         group={user.group}
-        location="Ship"
         accessLevel={user.accessLevel}
       />
       <StarSystemBackground />

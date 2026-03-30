@@ -23,7 +23,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         character={user.character ?? undefined}
         role={user.role ?? undefined}
         group={user.group}
-        location="Admin"
         accessLevel={user.accessLevel}
       />
       {children}

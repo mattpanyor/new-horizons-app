@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { InboxDropdown } from "@/components/inbox/InboxDropdown";
 
 interface Props {
   username: string;
   character?: string;
   role?: string;
   group: string;
-  location?: string;
   accessLevel?: number;
 }
 
@@ -15,9 +15,10 @@ const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
 const adminPages = [
   { label: "User Management", href: "/admin/users" },
+  { label: "Messages", href: "/admin/messages" },
 ];
 
-export default function Navbar({ username, character, role, group, location, accessLevel = 0 }: Props) {
+export default function Navbar({ username, character, role, group, accessLevel = 0 }: Props) {
   const displayName = character ?? username;
   const showAdmin = accessLevel >= 66;
   const [adminOpen, setAdminOpen] = useState(false);
@@ -35,7 +36,7 @@ export default function Navbar({ username, character, role, group, location, acc
   }, [adminOpen]);
 
   return (
-    <header className="h-16 w-full grid grid-cols-2 md:grid-cols-3 items-center px-5 border-b border-white/5 bg-black/40 backdrop-blur-sm shrink-0">
+    <header className="h-16 w-full grid grid-cols-2 md:grid-cols-3 items-center px-5 border-b border-white/5 bg-black/40 backdrop-blur-sm shrink-0 relative z-50">
 
       {/* Left — character + role */}
       <div className="flex flex-col justify-center gap-1.5 min-w-0">
@@ -65,16 +66,9 @@ export default function Navbar({ username, character, role, group, location, acc
         </span>
       </div>
 
-      {/* Right — location + admin */}
+      {/* Right — inbox + admin */}
       <div className="flex items-center justify-end gap-4">
-        {location && (
-          <span
-            className="text-[11px] tracking-[0.35em] uppercase text-white/40 whitespace-nowrap"
-            style={cinzel}
-          >
-            {location}
-          </span>
-        )}
+        <InboxDropdown />
 
         {showAdmin && (
           <div className="relative" ref={dropdownRef}>
@@ -119,6 +113,14 @@ export default function Navbar({ username, character, role, group, location, acc
                     <span className="text-[11px] tracking-[0.15em]">{page.label}</span>
                   </a>
                 ))}
+                <div className="border-t border-white/10" />
+                <a
+                  href="/logout"
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400/60 hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-200"
+                  style={cinzel}
+                >
+                  <span className="text-[11px] tracking-[0.15em]">Logout</span>
+                </a>
               </div>
             )}
           </div>
