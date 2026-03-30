@@ -12,6 +12,7 @@ import {
   isInSectorTerritory,
 } from "@/lib/sectorMapHelpers";
 import { ConnectionMarkerLayer } from "@/components/sectormap/ConnectionMarkerLayer";
+import { FreeMarkerLayer } from "@/components/sectormap/FreeMarkerLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
 import { SearchOverlay } from "@/components/sectormap/SearchOverlay";
 import { usePlanningMode } from "@/hooks/usePlanningMode";
@@ -19,6 +20,11 @@ import { PlanningLayer } from "@/components/sectormap/PlanningLayer";
 import { PlanningTotalBox } from "@/components/sectormap/PlanningTotalBox";
 import { PlanningToggle } from "@/components/sectormap/PlanningToggle";
 import { PLANNING_COLOR } from "@/lib/planningMode";
+import { LayerSelector } from "@/components/sectormap/LayerSelector";
+import { ConnectionLinesLayer } from "@/components/sectormap/ConnectionLinesLayer";
+import { wavyCloudPath } from "@/lib/sectorMapHelpers";
+import type { VortexPin, LayerSlug } from "@/types/sector";
+import { MAP_LAYERS } from "@/types/sector";
 
 const noop = () => {};
 const noopStr = (_s: string | null) => {};
@@ -50,6 +56,34 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
   const [hoveredSlug, setHoveredSlug] = useState<string | null>(null);
   const [activeSystemSlug, setActiveSystemSlug] = useState<string | null>(null);
   const cursorClientRef = useRef<{ x: number; y: number } | null>(null);
+  const devCoordsRef = useRef<HTMLSpanElement>(null);
+  const isDev = process.env.NODE_ENV === "development";
+  const [activeLayer, setActiveLayer] = useState("None");
+
+  // Auto-detect which layers exist in this sector's content
+  const sectorLayers = useMemo(() => {
+    const usedSlugs = new Set<LayerSlug>();
+    for (const c of sector.connections ?? []) if (c.layer) usedSlugs.add(c.layer);
+    for (const m of sector.markers ?? []) if (m.layer) usedSlugs.add(m.layer);
+    for (const v of sector.vortexes ?? []) if (v.layer) usedSlugs.add(v.layer);
+    return (Object.keys(MAP_LAYERS) as LayerSlug[])
+      .filter(slug => usedSlugs.has(slug))
+      .map(slug => MAP_LAYERS[slug]);
+  }, [sector.connections, sector.markers, sector.vortexes]);
+
+  // Filter layered elements — items without a layer always show, items with a layer only show when selected
+  const filteredConnections = useMemo(() =>
+    (sector.connections ?? []).filter(c => !c.layer || c.layer === activeLayer),
+    [sector.connections, activeLayer],
+  );
+  const filteredMarkers = useMemo(() =>
+    (sector.markers ?? []).filter(m => !m.layer || m.layer === activeLayer),
+    [sector.markers, activeLayer],
+  );
+  const filteredVortexes = useMemo(() =>
+    (sector.vortexes ?? []).filter(v => !v.layer || v.layer === activeLayer),
+    [sector.vortexes, activeLayer],
+  );
 
   // Body tooltip (in-system celestial bodies)
   const {
@@ -72,7 +106,18 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent) => {
     cursorClientRef.current = { x: e.clientX, y: e.clientY };
-  }, []);
+    if (devCoordsRef.current) {
+      const svg = svgRef.current;
+      const ctm = svg?.getScreenCTM();
+      if (svg && ctm) {
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        const svgPt = pt.matrixTransform(ctm.inverse());
+        devCoordsRef.current.textContent = `(${Math.round(svgPt.x)}, ${Math.round(svgPt.y)})`;
+      }
+    }
+  }, [svgRef]);
 
   // ── Planning mode event wrappers ──
   // Planning mode intercepts events first; if consumed, skip pan/zoom & normal interactions.
@@ -284,23 +329,38 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
         >
-          {/* ── Static SVG layers (server-rendered: gradients, territories, vortexes) ── */}
+          {/* ── Static SVG layers (server-rendered: gradients, territories) ── */}
           {staticSvgLayers}
 
-          {/* ── Connection lines ── */}
-          <ConnectionMarkerLayer
-            connections={sector.connections ?? []}
+          {/* ── Connection line paths + labels ── */}
+          <ConnectionLinesLayer
+            connections={filteredConnections}
             systems={sector.systems}
-            vortexes={sector.vortexes ?? []}
-            sectorSlug={sector.slug}
+            vortexes={filteredVortexes}
+            markers={filteredMarkers}
+            sectorColor={sector.color}
             orbitDataMap={orbitDataMap}
-            activeMarkerId={activeMarkerId}
-            showMarker={showMarker}
-            scheduleHideMarker={scheduleHideMarker}
-            markerCardEnter={markerCardEnter}
-            markerCardLeave={markerCardLeave}
-            vb={vb}
           />
+
+          {/* ── Vortex shapes ── */}
+          {filteredVortexes.map((v: VortexPin) => {
+            const color = v.color ?? sector.color;
+            const r = v.radius ?? 80;
+            const [rw, rh] = v.ratio ?? [1, 1];
+            const ry = r * (rh / Math.max(rw, rh));
+            return (
+              <g key={v.slug} style={{ pointerEvents: "none" }}>
+                <path d={wavyCloudPath(v.x, v.y, r, { ratio: v.ratio })}
+                  fill={color} fillOpacity={0.12}
+                  stroke={color} strokeOpacity={0.35} strokeWidth={1.5} />
+                <text x={v.x} y={v.y + ry + 18} textAnchor="middle"
+                  fill={color} fillOpacity={0.75} fontSize="11"
+                  fontFamily="var(--font-cinzel), serif">
+                  {v.name}
+                </text>
+              </g>
+            );
+          })}
 
           {/* ── Star systems ── */}
           {sector.systems.map((pin) => {
@@ -326,6 +386,36 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
               />
             );
           })}
+
+          {/* ── Connection markers (after star systems so tooltips render on top) ── */}
+          <ConnectionMarkerLayer
+            connections={filteredConnections}
+            systems={sector.systems}
+            vortexes={sector.vortexes ?? []}
+            markers={filteredMarkers}
+            sectorSlug={sector.slug}
+            orbitDataMap={orbitDataMap}
+            activeMarkerId={activeMarkerId}
+            showMarker={showMarker}
+            scheduleHideMarker={scheduleHideMarker}
+            markerCardEnter={markerCardEnter}
+            markerCardLeave={markerCardLeave}
+            vb={vb}
+          />
+
+          {/* ── Free-floating markers ── */}
+          {filteredMarkers.length > 0 && (
+            <FreeMarkerLayer
+              markers={filteredMarkers}
+              sectorSlug={sector.slug}
+              activeMarkerId={activeMarkerId}
+              showMarker={showMarker}
+              scheduleHideMarker={scheduleHideMarker}
+              markerCardEnter={markerCardEnter}
+              markerCardLeave={markerCardLeave}
+              vb={vb}
+            />
+          )}
 
           {/* ── Planning mode overlay ── */}
           {planning.active && (
@@ -387,6 +477,13 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
         {oobTooltipPos ? "Outside sector bounds" : ""}
       </div>
 
+      {/* ── Layer selector ── */}
+      {sectorLayers.length > 0 && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+          <LayerSelector layers={sectorLayers} selected={activeLayer} onChange={setActiveLayer} />
+        </div>
+      )}
+
       {/* ── Controls ── */}
       {activeSystemSlug && (
         <button
@@ -426,6 +523,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
 
       <div className="absolute bottom-3 left-3 text-[10px] text-slate-500 select-none pointer-events-none">
         {zoom.toFixed(1)}x
+        {isDev && <span ref={devCoordsRef} className="ml-2 text-amber-400/70" />}
       </div>
     </div>
   );

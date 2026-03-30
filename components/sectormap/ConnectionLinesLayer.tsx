@@ -1,31 +1,38 @@
 // Server Component — static connection line paths + labels between systems/vortexes.
 // No "use client" directive. Interactive markers stay in ConnectionMarkerLayer (client).
 
-import type { ConnectionLine, SystemPin, VortexPin } from "@/types/sector";
+import type { ConnectionLine, SystemPin, VortexPin, MapMarker } from "@/types/sector";
 import {
   computeConnectionCurve, perpNorm, endpointRadius,
 } from "@/lib/sectorMapHelpers";
+
+function findEndpoint(slug: string, systems: SystemPin[], vortexes: VortexPin[], markers: MapMarker[]): { x: number; y: number } | undefined {
+  return systems.find(s => s.slug === slug)
+    ?? vortexes.find(v => v.slug === slug)
+    ?? markers.find(m => m.slug === slug && m.x != null && m.y != null) as { x: number; y: number } | undefined;
+}
 
 interface ConnectionLinesLayerProps {
   connections: ConnectionLine[];
   systems: SystemPin[];
   vortexes: VortexPin[];
+  markers: MapMarker[];
   sectorColor: string;
   orbitDataMap: Map<string, { maxOrbit: number }>;
 }
 
 export function ConnectionLinesLayer({
-  connections, systems, vortexes, sectorColor, orbitDataMap,
+  connections, systems, vortexes, markers, sectorColor, orbitDataMap,
 }: ConnectionLinesLayerProps) {
   return (
     <>
       {connections.map((conn, connIdx) => {
-        const fromObj = systems.find(s => s.slug === conn.from) ?? vortexes.find(v => v.slug === conn.from);
-        const toObj = systems.find(s => s.slug === conn.to) ?? vortexes.find(v => v.slug === conn.to);
+        const fromObj = findEndpoint(conn.from, systems, vortexes, markers);
+        const toObj = findEndpoint(conn.to, systems, vortexes, markers);
         if (!fromObj || !toObj) return null;
 
-        const fromRadius = endpointRadius(conn.from, systems, vortexes, orbitDataMap);
-        const toRadius = endpointRadius(conn.to, systems, vortexes, orbitDataMap);
+        const fromRadius = endpointRadius(conn.from, systems, vortexes, orbitDataMap, markers);
+        const toRadius = endpointRadius(conn.to, systems, vortexes, orbitDataMap, markers);
 
         const { p0t, p1, p2t } = computeConnectionCurve(
           fromObj, toObj, conn.curvature ?? 0, fromRadius, toRadius,

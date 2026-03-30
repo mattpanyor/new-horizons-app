@@ -19,13 +19,72 @@
       ]
     }
   ],
+  "markers": [
+    {
+      "type": "poi",
+      "slug": "aegis-found",
+      "name": "Aegis Found",
+      "x": 318,
+      "y": 129,
+      "layer": "story",
+      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073491"
+    }
+  ],
   "connections": [
     {
       "from": "ertamis",
       "to": "callisto",
       "curvature": -140,
       "label": "Act II. - first chapter",
-      "color": "#8e8cff"
+      "color": "#8e8cff",
+      "layer": "story"
+    },
+    {
+      "from": "aegis-found",
+      "to": "pernat",
+      "label": "ACT II - second chapter",
+      "color": "#8e8cff",
+      "curvature": 100,
+      "layer": "story"
+    },
+    {
+      "from": "belliar",
+      "to": "ertamis",
+      "layer": "movement",
+      "curvature": 110,
+      "marker": {
+        "type": "ship",
+        "name": "Vanguard Wolf",
+        "position": 0.2,
+        "allegiance": "ashford",
+        "kankaUrl": "https://app.kanka.io/w/96303/entities/8945009"
+      }
+    },
+    {
+      "from": "pelao",
+      "to": "ertamis",
+      "layer": "movement",
+      "curvature": -150,
+      "marker": {
+        "type": "ship",
+        "name": "Arch of Laurel",
+        "position": 0.1,
+        "allegiance": "fairfield",
+        "kankaUrl": "https://app.kanka.io/w/96303/entities/8944998"
+      }
+    },
+    {
+      "from": "callisto",
+      "to": "pernat",
+      "layer": "movement",
+      "curvature": 160,
+      "marker": {
+        "type": "ship",
+        "name": "Ray of Purity",
+        "position": 0.1,
+        "allegiance": "inquisitorium",
+        "kankaUrl": "https://app.kanka.io/w/96303/entities/9081341"
+      }
     }
   ],
   "systems": [
@@ -43,8 +102,8 @@
     },
     {
       "slug": "ertamis",
-      "x": 250,
-      "y": 380,
+      "x": 216,
+      "y": 374,
       "allegiance": "feyrose",
       "territoryRadius": 165
     },

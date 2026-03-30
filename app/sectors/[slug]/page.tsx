@@ -45,7 +45,7 @@ export default async function SectorPage({
   return (
     <>
       <StarSystemBackground />
-      <div className="h-[calc(100dvh-4rem)] flex flex-col overflow-hidden px-4 pt-4">
+      <div className="h-[calc(100dvh-4rem)] flex flex-col overflow-hidden px-4 py-4">
         {/* Back button */}
         <div className="mb-2 shrink-0">
           <Link

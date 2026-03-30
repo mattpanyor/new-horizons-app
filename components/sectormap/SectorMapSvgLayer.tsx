@@ -2,13 +2,12 @@
 // connection line paths, and vortex shapes.
 // No "use client" directive. Rendered inside the client <svg> via the staticSvgLayers prop.
 
-import type { SectorMetadata, VortexPin } from "@/types/sector";
+import type { SectorMetadata } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
-import { SYS_MAX_R, wavyCloudPath } from "@/lib/sectorMapHelpers";
+import { SYS_MAX_R } from "@/lib/sectorMapHelpers";
 import { SectorArcLayer } from "./SectorArcLayer";
 import { TerritoryLayer } from "./TerritoryLayer";
-import { ConnectionLinesLayer } from "./ConnectionLinesLayer";
 
 interface SectorMapSvgLayerProps {
   sector: SectorMetadata;
@@ -16,18 +15,6 @@ interface SectorMapSvgLayerProps {
 }
 
 export function SectorMapSvgLayer({ sector, systemsData }: SectorMapSvgLayerProps) {
-  // Compute orbit data server-side for connection endpoint trimming
-  const orbitDataMap = new Map<string, { maxOrbit: number }>();
-  for (const pin of sector.systems) {
-    const sys = systemsData[pin.slug];
-    const maxOrbit = sys
-      ? Math.max(...sys.bodies.map(b => b.orbitDistance), 0.3) * SYS_MAX_R
-      : 40;
-    orbitDataMap.set(pin.slug, { maxOrbit });
-  }
-
-  const vortexes = sector.vortexes ?? [];
-
   return (
     <>
       {/* ── Gradient defs ── */}
@@ -70,34 +57,8 @@ export function SectorMapSvgLayer({ sector, systemsData }: SectorMapSvgLayerProp
       {/* ── Allegiance territories ── */}
       <TerritoryLayer systems={sector.systems} sectorSlug={sector.slug} />
 
-      {/* ── Connection line paths + labels ── */}
-      <ConnectionLinesLayer
-        connections={sector.connections ?? []}
-        systems={sector.systems}
-        vortexes={vortexes}
-        sectorColor={sector.color}
-        orbitDataMap={orbitDataMap}
-      />
-
-      {/* ── Vortex shapes ── */}
-      {vortexes.map((v: VortexPin) => {
-        const color = v.color ?? sector.color;
-        const r = v.radius ?? 80;
-        const [rw, rh] = v.ratio ?? [1, 1];
-        const ry = r * (rh / Math.max(rw, rh));
-        return (
-          <g key={v.slug} style={{ pointerEvents: "none" }}>
-            <path d={wavyCloudPath(v.x, v.y, r, { ratio: v.ratio })}
-              fill={color} fillOpacity={0.12}
-              stroke={color} strokeOpacity={0.35} strokeWidth={1.5} />
-            <text x={v.x} y={v.y + ry + 18} textAnchor="middle"
-              fill={color} fillOpacity={0.75} fontSize="11"
-              fontFamily="var(--font-cinzel), serif">
-              {v.name}
-            </text>
-          </g>
-        );
-      })}
+      {/* Connection lines, vortexes, and markers are rendered client-side in SectorMap
+          to support layer filtering */}
     </>
   );
 }

@@ -54,6 +54,23 @@ export const ASTEROID_FIELD_COLORS: BodyColors = {
   secondaryColor: "#57534E",
 };
 
+export const ANOMALY_COLORS: BodyColors = {
+  color: "#F472B6",
+  secondaryColor: "#9D174D",
+};
+
+export const POI_COLORS: BodyColors = {
+  color: "#A78BFA",
+  secondaryColor: "#5B21B6",
+};
+
+export const MARKER_COLORS: Record<string, BodyColors> = {
+  ship: SHIP_COLORS,
+  fleet: SHIP_COLORS,
+  anomaly: ANOMALY_COLORS,
+  poi: POI_COLORS,
+};
+
 export function getBodyColors(body: { type: string; biome?: string }): BodyColors {
   switch (body.type) {
     case "station": return STATION_COLORS;
