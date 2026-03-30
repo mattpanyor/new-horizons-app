@@ -19,7 +19,6 @@ export default async function SectorsLayout({ children }: { children: React.Reac
         character={user.character ?? undefined}
         role={user.role ?? undefined}
         group={user.group}
-        location="Galactic Map"
         accessLevel={user.accessLevel}
       />
       {children}

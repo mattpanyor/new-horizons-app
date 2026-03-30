@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSectorSlugs, getSectorBySlug } from "@/lib/sectors";
 import { getStarSystemBySlug } from "@/lib/starsystems";
-import { getKankaLocationMap } from "@/lib/kanka";
+import { getKankaUrlMap } from "@/lib/db/kankaEntities";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import SectorMapWithPresence from "@/components/SectorMapWithPresence";
@@ -43,8 +43,8 @@ export default async function SectorPage({
     }
   }
 
-  // Enrich with Kanka URLs by name-matching location entities
-  const kankaMap = await getKankaLocationMap();
+  // Enrich with Kanka URLs by name-matching entities from DB
+  const kankaMap = await getKankaUrlMap();
   if (kankaMap.size > 0) {
     for (const sys of Object.values(systemsData)) {
       if (!sys.kankaUrl) sys.kankaUrl = kankaMap.get(sys.name.toLowerCase());

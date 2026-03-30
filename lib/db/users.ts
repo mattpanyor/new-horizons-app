@@ -10,7 +10,6 @@ export interface User {
   role: string | null;
   character: string | null;
   accessLevel: number;
-  kankaId: number | null;
 }
 
 export async function authenticateUser(
@@ -18,7 +17,7 @@ export async function authenticateUser(
   password: string
 ): Promise<User | null> {
   const rows = await sql`
-    SELECT id, username, password, "group", role, character, access_level, kanka_id
+    SELECT id, username, password, "group", role, character, access_level
     FROM users
     WHERE username = ${username}
   `;
@@ -36,20 +35,19 @@ export async function authenticateUser(
     role: (row.role as string) ?? null,
     character: (row.character as string) ?? null,
     accessLevel: row.access_level as number,
-    kankaId: (row.kanka_id as number) ?? null,
   };
 }
 
 export async function getAllUsers(maxAccessLevel?: number): Promise<User[]> {
   const rows = maxAccessLevel !== undefined
     ? await sql`
-        SELECT id, username, "group", role, character, access_level, kanka_id
+        SELECT id, username, "group", role, character, access_level
         FROM users
         WHERE access_level <= ${maxAccessLevel}
         ORDER BY id
       `
     : await sql`
-        SELECT id, username, "group", role, character, access_level, kanka_id
+        SELECT id, username, "group", role, character, access_level
         FROM users
         ORDER BY id
       `;
@@ -61,13 +59,12 @@ export async function getAllUsers(maxAccessLevel?: number): Promise<User[]> {
     role: (row.role as string) ?? null,
     character: (row.character as string) ?? null,
     accessLevel: row.access_level as number,
-    kankaId: (row.kanka_id as number) ?? null,
   }));
 }
 
 export async function updateUser(
   id: number,
-  fields: { username: string; group: string; role: string | null; character: string | null; accessLevel: number; kankaId: number | null }
+  fields: { username: string; group: string; role: string | null; character: string | null; accessLevel: number }
 ): Promise<User | null> {
   const rows = await sql`
     UPDATE users SET
@@ -75,10 +72,9 @@ export async function updateUser(
       "group"      = ${fields.group},
       role         = ${fields.role},
       character    = ${fields.character},
-      access_level = ${fields.accessLevel},
-      kanka_id     = ${fields.kankaId}
+      access_level = ${fields.accessLevel}
     WHERE id = ${id}
-    RETURNING id, username, "group", role, character, access_level, kanka_id
+    RETURNING id, username, "group", role, character, access_level
   `;
 
   if (rows.length === 0) return null;
@@ -91,7 +87,6 @@ export async function updateUser(
     role: (row.role as string) ?? null,
     character: (row.character as string) ?? null,
     accessLevel: row.access_level as number,
-    kankaId: (row.kanka_id as number) ?? null,
   };
 }
 
@@ -113,13 +108,12 @@ export async function createUser(fields: {
   role: string | null;
   character: string | null;
   accessLevel: number;
-  kankaId: number | null;
 }): Promise<User> {
   const hash = await bcrypt.hash(fields.password, 10);
   const rows = await sql`
-    INSERT INTO users (username, password, "group", role, character, access_level, kanka_id)
-    VALUES (${fields.username}, ${hash}, ${fields.group}, ${fields.role}, ${fields.character}, ${fields.accessLevel}, ${fields.kankaId})
-    RETURNING id, username, "group", role, character, access_level, kanka_id
+    INSERT INTO users (username, password, "group", role, character, access_level)
+    VALUES (${fields.username}, ${hash}, ${fields.group}, ${fields.role}, ${fields.character}, ${fields.accessLevel})
+    RETURNING id, username, "group", role, character, access_level
   `;
 
   const row = rows[0];
@@ -130,7 +124,6 @@ export async function createUser(fields: {
     role: (row.role as string) ?? null,
     character: (row.character as string) ?? null,
     accessLevel: row.access_level as number,
-    kankaId: (row.kanka_id as number) ?? null,
   };
 }
 
@@ -138,7 +131,7 @@ export async function getUserByUsername(
   username: string
 ): Promise<User | null> {
   const rows = await sql`
-    SELECT id, username, "group", role, character, access_level, kanka_id
+    SELECT id, username, "group", role, character, access_level
     FROM users
     WHERE username = ${username}
   `;
@@ -153,6 +146,5 @@ export async function getUserByUsername(
     role: (row.role as string) ?? null,
     character: (row.character as string) ?? null,
     accessLevel: row.access_level as number,
-    kankaId: (row.kanka_id as number) ?? null,
   };
 }

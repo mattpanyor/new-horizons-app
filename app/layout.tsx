@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Cinzel } from "next/font/google";
 import "./globals.css";
 
@@ -18,6 +18,12 @@ const cinzel = Cinzel({
 export const metadata: Metadata = {
   title: "New Horizons App",
   description: "Helper for World Building",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
