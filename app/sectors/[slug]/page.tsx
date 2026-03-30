@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSectorSlugs, getSectorBySlug } from "@/lib/sectors";
 import { getStarSystemBySlug } from "@/lib/starsystems";
+import { getKankaUrlMap } from "@/lib/db/kankaEntities";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import SectorMapWithPresence from "@/components/SectorMapWithPresence";
@@ -39,6 +40,26 @@ export default async function SectorPage({
       systemsData[pin.slug] = getStarSystemBySlug(slug, pin.slug);
     } catch {
       // Star system JSON not found — pin will still appear on the map, just won't be expandable
+    }
+  }
+
+  // Enrich with Kanka URLs by name-matching entities from DB
+  const kankaMap = await getKankaUrlMap();
+  if (kankaMap.size > 0) {
+    for (const sys of Object.values(systemsData)) {
+      if (!sys.kankaUrl) sys.kankaUrl = kankaMap.get(sys.name.toLowerCase());
+      if (!sys.star.kankaUrl) sys.star.kankaUrl = kankaMap.get(sys.star.name.toLowerCase());
+      for (const body of sys.bodies) {
+        if (!body.kankaUrl) body.kankaUrl = kankaMap.get(body.name.toLowerCase());
+      }
+    }
+    for (const marker of sector.markers ?? []) {
+      if (!marker.kankaUrl) marker.kankaUrl = kankaMap.get(marker.name.toLowerCase());
+    }
+    for (const conn of sector.connections ?? []) {
+      if (conn.marker && !conn.marker.kankaUrl) {
+        conn.marker.kankaUrl = kankaMap.get(conn.marker.name.toLowerCase());
+      }
     }
   }
 

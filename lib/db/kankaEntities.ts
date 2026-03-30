@@ -48,6 +48,24 @@ export async function getKankaEntityByEntityId(entityId: number): Promise<KankaE
   };
 }
 
+const KANKA_CAMPAIGN_ID = "96303";
+
+/** Returns a lowercase name → Kanka URL map for all entities in the DB */
+export async function getKankaUrlMap(): Promise<Map<string, string>> {
+  const rows = await sql`
+    SELECT entity_id, name FROM kanka_entities
+  `;
+
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    map.set(
+      (row.name as string).toLowerCase(),
+      `https://app.kanka.io/w/${KANKA_CAMPAIGN_ID}/entities/${row.entity_id}`,
+    );
+  }
+  return map;
+}
+
 export async function upsertKankaEntity(fields: {
   entityId: number;
   name: string;
