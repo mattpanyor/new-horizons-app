@@ -1,7 +1,6 @@
 {
   "name": "Callisto System",
   "published": true,
-  "kankaUrl": "https://app.kanka.io/w/96303/entities/8893889",
   "star": {
     "name": "Callisto",
     "type": "White Dwarf",
@@ -18,7 +17,6 @@
       "orbitDistance": 1,
       "labelPosition": "bottom",
       "special_attribute": "lathanium",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893899",
       "allegiance": "feyrose"
     },
     {
@@ -28,7 +26,6 @@
       "orbitPosition": 200,
       "orbitDistance": 0.5,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893933",
       "allegiance": "feyrose"
     },
     {
@@ -39,7 +36,6 @@
       "orbitPosition": 190,
       "orbitDistance": 0.4,
       "labelPosition": "top",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899890",
       "allegiance": "feyrose"
     },
     {
@@ -51,7 +47,6 @@
       "orbitDistance": 0.8,
       "labelPosition": "bottom",
       "special_attribute": "nobility",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893898",
       "allegiance": "feyrose"
     },
     {
@@ -61,7 +56,6 @@
       "orbitPosition": 250,
       "orbitDistance": 0.6,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8893941",
       "allegiance": "exploratorium"
     }
   ]

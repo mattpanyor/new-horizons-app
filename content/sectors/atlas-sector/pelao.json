@@ -1,7 +1,6 @@
 {
   "name": "Pelao System",
   "published": true,
-  "kankaUrl": "https://app.kanka.io/w/96303/entities/8893960",
   "star": {
     "name": "Pelao",
     "type": "Yellow Dwarf",
@@ -16,7 +15,6 @@
       "orbitPosition": 75,
       "orbitDistance": 0.55,
       "labelPosition": "top",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899789",
       "allegiance": "fairfield"
     },
     {
@@ -27,18 +25,16 @@
       "orbitPosition": 315,
       "orbitDistance": 0.55,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899796",
       "allegiance": "fairfield"
     },
     {
       "id": "bertan-3",
-      "name": "Verdantia",
+      "name": "Verdantia (Bertan 3)",
       "type": "planet",
       "biome": "tropical",
       "orbitPosition": 210,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899809",
       "allegiance": "fairfield"
     },
     {
@@ -49,7 +45,6 @@
       "orbitPosition": 135,
       "orbitDistance": 0.35,
       "labelPosition": "top",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8899795",
       "allegiance": "fairfield"
     },
     {
@@ -59,7 +54,6 @@
       "orbitPosition": 155,
       "orbitDistance": 0.4,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073489",
       "allegiance": "fairfield"
     }
   ]

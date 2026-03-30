@@ -1,7 +1,6 @@
 {
   "name": "Belliar system",
   "published": true,
-  "kankaUrl": "https://app.kanka.io/w/96303/entities/8894786",
   "star": {
     "name": "Belliar",
     "type": "Red Supergiant",
@@ -11,13 +10,12 @@
   "bodies": [
     {
       "id": "leo-1",
-      "name": "Gallor",
+      "name": "Gallor (Leo 1)",
       "type": "planet",
       "biome": "molten",
       "orbitPosition": 40,
       "orbitDistance": 0.6,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8909208",
       "allegiance": "ashford"
     },
     {
@@ -28,7 +26,6 @@
       "orbitPosition": 210,
       "orbitDistance": 0.65,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915786",
       "allegiance": "ashford"
     },
     {
@@ -39,7 +36,6 @@
       "orbitPosition": 300,
       "orbitDistance": 0.85,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8915788",
       "allegiance": "ashford"
     },
     {
@@ -49,7 +45,6 @@
       "orbitPosition": 10,
       "orbitDistance": 0.4,
       "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/9073445",
       "allegiance": "ashford"
     }
   ]
