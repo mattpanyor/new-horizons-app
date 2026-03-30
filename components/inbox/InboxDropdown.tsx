@@ -30,7 +30,6 @@ export function InboxDropdown() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedMessage, setSelectedMessage] = useState<InboxMessage | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [kankaDown, setKankaDown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Poll unread count
@@ -52,22 +51,13 @@ export function InboxDropdown() {
   const fetchMessages = useCallback(async () => {
     try {
       const res = await fetch("/api/messages");
-      if (res.status === 503) {
-        setKankaDown(true);
-        setLoaded(true);
-        return;
-      }
       if (res.ok) {
         const data: InboxMessage[] = await res.json();
         setMessages(data);
         setUnreadCount(data.filter((m) => !m.isRead).length);
-        setKankaDown(false);
         setLoaded(true);
       }
-    } catch {
-      setKankaDown(true);
-      setLoaded(true);
-    }
+    } catch { /* ignore */ }
   }, []);
 
   // Fetch messages when dropdown opens
@@ -154,12 +144,7 @@ export function InboxDropdown() {
 
           {/* Message list */}
           <div className="flex-1 overflow-y-auto">
-            {kankaDown ? (
-              <div className="px-4 py-10 text-center">
-                <div className="text-white/15 text-xs tracking-[0.3em] uppercase" style={cinzel}>Imperial Runeways are unavailable</div>
-                <div className="text-white/10 text-[10px] mt-2" style={cinzel}>Please try again later</div>
-              </div>
-            ) : !loaded ? (
+            {!loaded ? (
               <div className="px-4 py-8 text-center text-white/30 text-xs" style={cinzel}>Loading...</div>
             ) : filtered.length === 0 ? (
               <div className="px-4 py-8 text-center text-white/30 text-xs" style={cinzel}>

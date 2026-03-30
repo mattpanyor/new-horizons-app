@@ -16,6 +16,7 @@ const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 const adminPages = [
   { label: "User Management", href: "/admin/users" },
   { label: "Messages", href: "/admin/messages" },
+  { label: "Kanka Sync", href: "/admin/kanka" },
 ];
 
 export default function Navbar({ username, character, role, group, accessLevel = 0 }: Props) {

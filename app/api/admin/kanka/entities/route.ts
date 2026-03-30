@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername } from "@/lib/db/users";
-import { getKankaEntities } from "@/lib/kanka";
+import { getAllKankaEntities } from "@/lib/db/kankaEntities";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -15,6 +15,6 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const entities = await getKankaEntities();
+  const entities = await getAllKankaEntities();
   return NextResponse.json(entities);
 }

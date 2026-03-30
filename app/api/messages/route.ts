@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername } from "@/lib/db/users";
 import { getMessagesForUser } from "@/lib/db/messages";
-import { fetchKankaEntityById } from "@/lib/kanka";
+import { getKankaEntityByEntityId } from "@/lib/db/kankaEntities";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -22,25 +22,13 @@ export async function GET() {
     return NextResponse.json([]);
   }
 
-  // Deduplicate Kanka entity IDs and fetch only those needed
-  const kankaIds = [...new Set(messages.filter((m) => m.kankaEntityId != null).map((m) => m.kankaEntityId!))];
-
-  if (kankaIds.length > 0) {
-    const results = await Promise.all(kankaIds.map((id) => fetchKankaEntityById(id)));
-    const allFailed = results.every((r) => r === undefined);
-    if (allFailed && process.env.KANKA_API && process.env.KANKA_CAMPAIGN_ID) {
-      return NextResponse.json({ error: "kanka_unavailable" }, { status: 503 });
-    }
-  }
-
-  // Resolve Kanka entity info for each message (already cached from above)
   const enriched = await Promise.all(
     messages.map(async (msg) => {
       let sender = null;
       if (msg.kankaEntityId) {
-        const entity = await fetchKankaEntityById(msg.kankaEntityId);
+        const entity = await getKankaEntityByEntityId(msg.kankaEntityId);
         if (entity) {
-          sender = { name: entity.name, image: entity.image, title: entity.title };
+          sender = { name: entity.name, image: entity.imageUrl, title: entity.title };
         }
       }
       return { ...msg, sender };
