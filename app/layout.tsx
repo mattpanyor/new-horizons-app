@@ -18,6 +18,7 @@ const cinzel = Cinzel({
 export const metadata: Metadata = {
   title: "New Horizons App",
   description: "Helper for World Building",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
 export default function RootLayout({
