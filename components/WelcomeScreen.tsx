@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import { useCountdown } from "@/hooks/useCountdown";
 
-const DELAY = 5;
+const DELAY = 3;
 
 interface Props {
   username: string;
