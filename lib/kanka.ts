@@ -1,6 +1,7 @@
 import type { KankaLocation, KankaMember, KankaPaginatedResponse } from "@/types/kanka";
 
 const KANKA_BASE = "https://api.kanka.io/1.0";
+const KANKA_TIMEOUT = 5000; // 5s timeout per request
 
 let cachedMap: Map<string, string> | null = null;
 let cachedMembers: Map<number, string> | null = null;
@@ -22,37 +23,43 @@ export async function getKankaLocationMap(): Promise<Map<string, string>> {
   }
 
   const map = new Map<string, string>();
-  let page = 1;
-  let hasMore = true;
 
-  while (hasMore) {
-    const res = await fetch(
-      `${KANKA_BASE}/campaigns/${campaignId}/locations?page=${page}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+  try {
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const res = await fetch(
+        `${KANKA_BASE}/campaigns/${campaignId}/locations?page=${page}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          signal: AbortSignal.timeout(KANKA_TIMEOUT),
         },
-        cache: "no-store",
-      },
-    );
-
-    if (!res.ok) {
-      console.warn(`[kanka] Failed to fetch locations page ${page}: ${res.status}`);
-      break;
-    }
-
-    const json: KankaPaginatedResponse<KankaLocation> = await res.json();
-
-    for (const loc of json.data) {
-      map.set(
-        loc.name.toLowerCase(),
-        `https://app.kanka.io/w/${campaignId}/entities/${loc.entity_id}`,
       );
-    }
 
-    hasMore = json.links.next !== null;
-    page++;
+      if (!res.ok) {
+        console.warn(`[kanka] Failed to fetch locations page ${page}: ${res.status}`);
+        break;
+      }
+
+      const json: KankaPaginatedResponse<KankaLocation> = await res.json();
+
+      for (const loc of json.data) {
+        map.set(
+          loc.name.toLowerCase(),
+          `https://app.kanka.io/w/${campaignId}/entities/${loc.entity_id}`,
+        );
+      }
+
+      hasMore = json.links.next !== null;
+      page++;
+    }
+  } catch (err) {
+    console.warn(`[kanka] Location fetch failed:`, err);
   }
 
   cachedMap = map;
@@ -74,27 +81,31 @@ export async function getKankaMemberMap(): Promise<Map<number, string>> {
     return cachedMembers;
   }
 
-  const res = await fetch(
-    `${KANKA_BASE}/campaigns/${campaignId}/users`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    },
-  );
-
-  if (!res.ok) {
-    console.warn(`[kanka] Failed to fetch campaign members: ${res.status}`);
-    cachedMembers = new Map();
-    return cachedMembers;
-  }
-
-  const json: { data: KankaMember[] } = await res.json();
   const map = new Map<number, string>();
-  for (const member of json.data) {
-    map.set(member.id, member.name);
+
+  try {
+    const res = await fetch(
+      `${KANKA_BASE}/campaigns/${campaignId}/users`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(KANKA_TIMEOUT),
+      },
+    );
+
+    if (!res.ok) {
+      console.warn(`[kanka] Failed to fetch campaign members: ${res.status}`);
+    } else {
+      const json: { data: KankaMember[] } = await res.json();
+      for (const member of json.data) {
+        map.set(member.id, member.name);
+      }
+    }
+  } catch (err) {
+    console.warn(`[kanka] Member fetch failed:`, err);
   }
 
   cachedMembers = map;
