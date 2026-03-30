@@ -16,9 +16,19 @@ export interface VortexPin {
   color?: string;           // defaults to sector color
   radius?: number;          // base radius in canvas units, default 80
   ratio?: [number, number]; // [width, height] aspect ratio, e.g. [6, 3]
+  layer?: LayerSlug;        // only visible when this layer is selected
 }
 
 export type MarkerType = "ship" | "fleet" | "anomaly" | "poi";
+
+export const MAP_LAYERS = {
+  movement: { slug: "movement", label: "Movement" },
+  story: { slug: "story", label: "Story" },
+  war: { slug: "conflict", label: "Conflict" },
+  invasion: { slug: "invasion", label: "Invasion" },
+} as const;
+
+export type LayerSlug = keyof typeof MAP_LAYERS;
 
 export interface MapMarker {
   type: MarkerType;
@@ -34,6 +44,7 @@ export interface MapMarker {
   angle?: number;     // rotation in degrees (default 0)
   // Optional territory blob
   territoryRadius?: number;  // wavy cloud radius around the marker
+  layer?: LayerSlug;        // only visible when this layer is selected
 }
 
 /** @deprecated Use MapMarker instead */
@@ -48,6 +59,7 @@ export interface ConnectionLine {
   dashes?: string;    // stroke-dasharray (default "4 6")
   opacity?: number;   // line + label opacity (default 0.35)
   marker?: MapMarker;
+  layer?: LayerSlug;        // only visible when this layer is selected
 }
 
 export interface SectorMetadata {

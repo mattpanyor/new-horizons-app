@@ -51,16 +51,6 @@
       "labelPosition": "bottom",
       "kankaUrl": "https://app.kanka.io/w/96303/entities/9073445",
       "allegiance": "ashford"
-    },
-    {
-      "id": "vanguard-wolf",
-      "name": "Vanguard Wolf",
-      "type": "ship",
-      "orbitPosition": 90,
-      "orbitDistance": 0.3,
-      "labelPosition": "bottom",
-      "kankaUrl": "https://app.kanka.io/w/96303/entities/8945009",
-      "allegiance": "ashford"
     }
   ]
 }
