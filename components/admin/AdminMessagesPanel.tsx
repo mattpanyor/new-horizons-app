@@ -65,15 +65,13 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
       .catch(() => {});
   }, []);
 
-  // Fetch kanka entities when modal opens
+  // Fetch kanka entities on mount
   useEffect(() => {
-    if (!editing) return;
-    if (kankaEntities.length > 0) return;
     fetch("/api/admin/kanka/entities")
       .then((r) => r.json())
       .then(setKankaEntities)
       .catch(() => {});
-  }, [editing, kankaEntities.length]);
+  }, []);
 
   // Close entity dropdown on outside click
   useEffect(() => {
@@ -198,7 +196,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
                     {(() => {
                       const ent = kankaEntities.find((e) => e.entityId === msg.kankaEntityId);
                       return ent?.imageUrl ? (
-                        <img src={ent.imageUrl} alt="" className="w-full h-full object-cover" />
+                        <img src={ent.imageUrl} alt="" className="w-full h-full object-cover object-top" />
                       ) : (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/20">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -313,7 +311,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
                           >
                             <div className="shrink-0 w-6 h-6 rounded border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center">
                               {entity.imageUrl ? (
-                                <img src={entity.imageUrl} alt="" className="w-full h-full object-cover" />
+                                <img src={entity.imageUrl} alt="" className="w-full h-full object-cover object-top" />
                               ) : (
                                 <span className="text-[8px] text-white/20">{entity.type[0].toUpperCase()}</span>
                               )}

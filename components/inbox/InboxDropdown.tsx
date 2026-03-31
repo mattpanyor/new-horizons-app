@@ -163,7 +163,7 @@ export function InboxDropdown() {
                     {/* Avatar */}
                     <div className="shrink-0 w-10 h-10 rounded border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center">
                       {msg.sender?.image ? (
-                        <img src={msg.sender.image} alt="" className="w-full h-full object-cover" />
+                        <img src={msg.sender.image} alt="" className="w-full h-full object-cover object-top" />
                       ) : (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/20">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
