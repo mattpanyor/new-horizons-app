@@ -189,10 +189,10 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
             >
               <button
                 onClick={() => openEdit(msg)}
-                className="flex-1 text-left px-4 py-3"
+                className="flex-1 text-left px-3 sm:px-4 py-3 min-w-0"
               >
-                <div className="flex gap-3 items-center">
-                  <div className="shrink-0 w-8 h-8 rounded border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center">
+                <div className="flex gap-2 sm:gap-3 items-center">
+                  <div className="shrink-0 w-8 h-8 rounded border border-white/10 bg-white/5 overflow-hidden hidden sm:flex items-center justify-center">
                     {(() => {
                       const ent = kankaEntities.find((e) => e.entityId === msg.kankaEntityId);
                       return ent?.imageUrl ? (
@@ -206,21 +206,21 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
                     })()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xs text-white/70 font-semibold" style={cinzel}>{entityName(msg.kankaEntityId)}</span>
-                      <span className="text-[9px] text-white/25">
+                    <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
+                      <span className="text-xs text-white/70 font-semibold truncate" style={cinzel}>{entityName(msg.kankaEntityId)}</span>
+                      <span className="text-[9px] text-white/25 shrink-0">
                         {msg.sendToAll ? "All users" : `${msg.recipientUserIds.length} recipient${msg.recipientUserIds.length !== 1 ? "s" : ""}`}
                       </span>
                     </div>
                     <div className="text-[11px] text-white/50 truncate mt-0.5">{msg.subject}</div>
-                    <div className="text-[10px] text-white/25 truncate mt-0.5">{msg.body.slice(0, 100)}</div>
+                    <div className="text-[10px] text-white/25 truncate mt-0.5 hidden sm:block">{msg.body.slice(0, 100)}</div>
                   </div>
                 </div>
               </button>
               {/* Delete */}
-              <div className="px-3">
+              <div className="px-2 sm:px-3 shrink-0">
                 {confirmDeleteId === msg.id ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <button
                       onClick={() => handleDelete(msg.id)}
                       className="px-2 py-1 text-xs rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors"
@@ -266,7 +266,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
       {/* Edit/Add modal */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900/95 border border-white/10 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-gray-900/95 border border-white/10 rounded-lg p-4 sm:p-6 w-full max-w-md mx-3 sm:mx-0 max-h-[90vh] overflow-y-auto">
             <h2
               className="text-sm tracking-[0.3em] uppercase text-white/70 mb-4"
               style={cinzel}
