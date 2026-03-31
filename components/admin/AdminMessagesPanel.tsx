@@ -27,6 +27,7 @@ interface MessageRow {
   sendToAll: boolean;
   createdAt: string;
   recipientUserIds: number[];
+  readByUserIds: number[];
 }
 
 interface EditForm {
@@ -47,10 +48,15 @@ const emptyForm: EditForm = {
   recipientUserIds: [],
 };
 
+function isFullyRead(msg: MessageRow): boolean {
+  return msg.recipientUserIds.length > 0 && msg.recipientUserIds.every((uid) => msg.readByUserIds.includes(uid));
+}
+
 export default function AdminMessagesPanel({ users }: { users: User[] }) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [editing, setEditing] = useState<EditForm | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [fullyReadOpen, setFullyReadOpen] = useState(false);
   const [kankaEntities, setKankaEntities] = useState<KankaEntity[]>([]);
   const [entitySearch, setEntitySearch] = useState("");
   const [entityDropdownOpen, setEntityDropdownOpen] = useState(false);
@@ -169,6 +175,94 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
     return kankaEntities.find((e) => e.entityId === kankaEntityId)?.name ?? `Entity #${kankaEntityId}`;
   }
 
+  function resolveUsername(uid: number): string {
+    const u = users.find((u) => u.id === uid);
+    return u?.character ?? u?.username ?? `#${uid}`;
+  }
+
+  function renderMessageRow(msg: MessageRow) {
+    return (
+      <div
+        key={msg.id}
+        className="flex items-center border-b border-white/5 hover:bg-white/[0.04] transition-colors"
+      >
+        <button
+          onClick={() => openEdit(msg)}
+          className="flex-1 text-left px-3 sm:px-4 py-3 min-w-0"
+        >
+          <div className="flex gap-2 sm:gap-3 items-center">
+            <div className="shrink-0 w-8 h-8 rounded border border-white/10 bg-white/5 overflow-hidden hidden sm:flex items-center justify-center">
+              {(() => {
+                const ent = kankaEntities.find((e) => e.entityId === msg.kankaEntityId);
+                return ent?.imageUrl ? (
+                  <img src={ent.imageUrl} alt="" className="w-full h-full object-cover object-top" />
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/20">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                );
+              })()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
+                <span className="text-xs text-white/70 font-semibold truncate" style={cinzel}>{entityName(msg.kankaEntityId)}</span>
+                <span className="text-[9px] text-white/25 shrink-0">
+                  {msg.sendToAll ? "All users" : `${msg.recipientUserIds.length} recipient${msg.recipientUserIds.length !== 1 ? "s" : ""}`}
+                </span>
+                <span className="text-[9px] shrink-0" title={msg.readByUserIds.length > 0 ? msg.readByUserIds.map(resolveUsername).join(", ") : ""}>
+                  <span className={msg.readByUserIds.length > 0 ? "text-emerald-400/60" : "text-white/20"}>
+                    {msg.readByUserIds.length} read
+                  </span>
+                  {msg.readByUserIds.length > 0 && (
+                    <span className="text-emerald-400/40">
+                      {" "}[{msg.readByUserIds.map(resolveUsername).join(", ")}]
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="text-[11px] text-white/50 truncate mt-0.5">{msg.subject}</div>
+              <div className="text-[10px] text-white/25 truncate mt-0.5 hidden sm:block">{msg.body.slice(0, 100)}</div>
+            </div>
+          </div>
+        </button>
+        {/* Delete */}
+        <div className="px-2 sm:px-3 shrink-0">
+          {confirmDeleteId === msg.id ? (
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                onClick={() => handleDelete(msg.id)}
+                className="px-2 py-1 text-xs rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="px-2 py-1 text-xs rounded bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 transition-colors"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDeleteId(msg.id)}
+              className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
+              title="Delete"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const activeMessages = messages.filter((msg) => !isFullyRead(msg));
+  const fullyReadMessages = messages.filter(isFullyRead);
+
   return (
     <div className="w-full max-w-6xl mx-auto">
       {error && (
@@ -177,78 +271,12 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
         </div>
       )}
 
-      {/* Message list */}
+      {/* Active message list */}
       <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 backdrop-blur-sm">
-        {messages.length === 0 ? (
-          <div className="px-4 py-8 text-center text-white/30 text-xs" style={cinzel}>No messages</div>
+        {activeMessages.length === 0 ? (
+          <div className="px-4 py-8 text-center text-white/30 text-xs" style={cinzel}>No pending messages</div>
         ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className="flex items-center border-b border-white/5 hover:bg-white/[0.04] transition-colors"
-            >
-              <button
-                onClick={() => openEdit(msg)}
-                className="flex-1 text-left px-3 sm:px-4 py-3 min-w-0"
-              >
-                <div className="flex gap-2 sm:gap-3 items-center">
-                  <div className="shrink-0 w-8 h-8 rounded border border-white/10 bg-white/5 overflow-hidden hidden sm:flex items-center justify-center">
-                    {(() => {
-                      const ent = kankaEntities.find((e) => e.entityId === msg.kankaEntityId);
-                      return ent?.imageUrl ? (
-                        <img src={ent.imageUrl} alt="" className="w-full h-full object-cover object-top" />
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/20">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                      );
-                    })()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
-                      <span className="text-xs text-white/70 font-semibold truncate" style={cinzel}>{entityName(msg.kankaEntityId)}</span>
-                      <span className="text-[9px] text-white/25 shrink-0">
-                        {msg.sendToAll ? "All users" : `${msg.recipientUserIds.length} recipient${msg.recipientUserIds.length !== 1 ? "s" : ""}`}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-white/50 truncate mt-0.5">{msg.subject}</div>
-                    <div className="text-[10px] text-white/25 truncate mt-0.5 hidden sm:block">{msg.body.slice(0, 100)}</div>
-                  </div>
-                </div>
-              </button>
-              {/* Delete */}
-              <div className="px-2 sm:px-3 shrink-0">
-                {confirmDeleteId === msg.id ? (
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <button
-                      onClick={() => handleDelete(msg.id)}
-                      className="px-2 py-1 text-xs rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="px-2 py-1 text-xs rounded bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 transition-colors"
-                    >
-                      No
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(msg.id)}
-                    className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-                    title="Delete"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
+          activeMessages.map(renderMessageRow)
         )}
       </div>
 
@@ -262,6 +290,37 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
         </svg>
         Add Message
       </button>
+
+      {/* Fully read messages (collapsible) */}
+      {fullyReadMessages.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setFullyReadOpen(!fullyReadOpen)}
+            className="flex items-center gap-2 text-xs text-white/30 hover:text-white/50 transition-colors mb-2"
+            style={cinzel}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${fullyReadOpen ? "rotate-90" : ""}`}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <span className="tracking-[0.2em] uppercase">Read by all ({fullyReadMessages.length})</span>
+          </button>
+          {fullyReadOpen && (
+            <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 backdrop-blur-sm opacity-60">
+              {fullyReadMessages.map(renderMessageRow)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Edit/Add modal */}
       {editing && (

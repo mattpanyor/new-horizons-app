@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername, getAllUsers } from "@/lib/db/users";
-import { getAllMessages, getMessageRecipients, createMessage, updateMessage, deleteMessage } from "@/lib/db/messages";
+import { getAllMessages, getMessageRecipients, getMessageReadByUserIds, createMessage, updateMessage, deleteMessage } from "@/lib/db/messages";
 
 async function requireAdmin() {
   const cookieStore = await cookies();
@@ -25,6 +25,7 @@ export async function GET() {
     messages.map(async (msg) => ({
       ...msg,
       recipientUserIds: await getMessageRecipients(msg.id),
+      readByUserIds: await getMessageReadByUserIds(msg.id),
     }))
   );
 

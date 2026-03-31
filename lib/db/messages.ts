@@ -83,6 +83,14 @@ export async function getMessageRecipients(messageId: number): Promise<number[]>
   return rows.map((r) => r.user_id as number);
 }
 
+/** Get user IDs who have read a message */
+export async function getMessageReadByUserIds(messageId: number): Promise<number[]> {
+  const rows = await sql`
+    SELECT user_id FROM message_recipients WHERE message_id = ${messageId} AND is_read = true
+  `;
+  return rows.map((r) => r.user_id as number);
+}
+
 /** Create a message and insert recipient rows */
 export async function createMessage(fields: {
   kankaEntityId: number | null;
