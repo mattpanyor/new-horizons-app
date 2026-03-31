@@ -144,8 +144,8 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
         </div>
       )}
 
-      <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 backdrop-blur-sm">
-        <table className="w-full text-sm text-left">
+      <div className="border border-white/10 rounded-lg overflow-x-auto bg-black/40 backdrop-blur-sm">
+        <table className="w-full text-sm text-left min-w-[600px]">
           <thead>
             <tr className="border-b border-white/10 bg-white/5">
               {columns.map((col) => (

@@ -36,7 +36,7 @@ export async function getMessagesForUser(userId: number): Promise<MessageWithRea
     FROM messages m
     JOIN message_recipients mr ON mr.message_id = m.id
     WHERE mr.user_id = ${userId}
-    ORDER BY m.created_at DESC
+    ORDER BY m.created_at ASC
   `;
 
   return rows.map((row) => ({
