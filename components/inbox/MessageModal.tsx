@@ -11,6 +11,26 @@ interface MessageModalProps {
   onAcknowledge?: () => void;
 }
 
+function renderMessageBody(body: string): React.ReactNode[] {
+  const parts = body.split(/(\[yt=[^\]]+\])/g);
+  return parts.map((part, i) => {
+    const match = part.match(/^\[yt=([^\]]+)\]$/);
+    if (match) {
+      return (
+        <div key={i} className="my-3 rounded overflow-hidden" style={{ border: "1px solid rgba(99,102,241,0.2)" }}>
+          <iframe
+            src={`https://www.youtube.com/embed/${match[1]}`}
+            className="w-full aspect-video"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+    return part ? <span key={i}>{part}</span> : null;
+  });
+}
+
 export function MessageModal({ message, onClose, onAcknowledge }: MessageModalProps) {
   return createPortal(
     <div
@@ -124,7 +144,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
         {/* Body */}
         <div className="px-6 pt-2 max-h-[40vh] overflow-y-auto">
           <div className="text-sm text-white/55 leading-relaxed whitespace-pre-wrap">
-            {message.body}
+            {renderMessageBody(message.body)}
           </div>
         </div>
 
