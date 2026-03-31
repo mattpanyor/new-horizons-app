@@ -85,6 +85,25 @@ body {
   }
 }
 
+/* Sci-fi scrollbar */
+.scifi-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.scifi-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scifi-scroll::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.25);
+  border-radius: 2px;
+}
+.scifi-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.45);
+}
+.scifi-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.25) transparent;
+}
+
 /* Star glow pulse animation */
 @keyframes starPulse {
   0%, 100% {

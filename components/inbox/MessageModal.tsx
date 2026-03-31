@@ -142,7 +142,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
         </div>
 
         {/* Body */}
-        <div className="px-6 pt-2 max-h-[40vh] overflow-y-auto">
+        <div className="px-6 pt-2 max-h-[40vh] overflow-y-auto scifi-scroll">
           <div className="text-sm text-white/55 leading-relaxed whitespace-pre-wrap">
             {renderMessageBody(message.body)}
           </div>

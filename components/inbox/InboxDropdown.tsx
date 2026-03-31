@@ -143,7 +143,7 @@ export function InboxDropdown() {
           </div>
 
           {/* Message list */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto scifi-scroll">
             {!loaded ? (
               <div className="px-4 py-8 text-center text-white/30 text-xs" style={cinzel}>Loading...</div>
             ) : filtered.length === 0 ? (
