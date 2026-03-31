@@ -153,7 +153,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
           {onAcknowledge ? (
             <button
               onClick={onAcknowledge}
-              className="w-[40%] py-2.5 text-xs tracking-[0.3em] uppercase rounded transition-colors"
+              className="px-8 py-2.5 text-xs tracking-[0.3em] uppercase rounded transition-colors"
               style={{
                 ...cinzel,
                 background: "rgba(99, 102, 241, 0.15)",
@@ -170,7 +170,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
                 e.currentTarget.style.borderColor = "rgba(99, 102, 241, 0.35)";
               }}
             >
-              Acknowledged
+              Mark as Read
             </button>
           ) : (
             <div
