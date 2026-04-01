@@ -34,7 +34,15 @@
     {
       "from": "ertamis",
       "to": "callisto",
-      "curvature": -140,
+      "curvature": 140,
+      "label": "Act II. - first chapter",
+      "color": "#8e8cff",
+      "layer": "story"
+    },
+    {
+      "from": "callisto",
+      "to": "aegis-found",
+      "curvature": 80,
       "label": "Act II. - first chapter",
       "color": "#8e8cff",
       "layer": "story"
