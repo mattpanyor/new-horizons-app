@@ -12,6 +12,7 @@ import {
   SYS_MAX_R, SYS_SCALE,
   isInSectorTerritory,
 } from "@/lib/sectorMapHelpers";
+import { SYSTEM_OVERRIDES } from "@/components/sectormap/ImperialCoreCluster";
 import { ConnectionMarkerLayer } from "@/components/sectormap/ConnectionMarkerLayer";
 import { FreeMarkerLayer } from "@/components/sectormap/FreeMarkerLayer";
 import { StarSystemView } from "@/components/sectormap/StarSystemView";
@@ -247,8 +248,9 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     setActiveSystemSlug(pin.slug);
     setHoveredSlug(null);
     hideBody();
-    const w = FULL_W / FOCUS_ZOOM;
-    const h = FULL_H / FOCUS_ZOOM;
+    const zoom = SYSTEM_OVERRIDES[pin.slug]?.focusZoom ?? FOCUS_ZOOM;
+    const w = FULL_W / zoom;
+    const h = FULL_H / zoom;
     animateToVb({ x: pin.x - w / 2, y: pin.y - h / 2, w, h }, 500);
   }, [hideBody, animateToVb]);
 
@@ -311,10 +313,13 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
         setHoveredSlug(null);
         hideBody();
       }
-    } else if (currentZoom < AUTO_SELECT_ZOOM && activeSystemSlug) {
-      setActiveSystemSlug(null);
-      setHoveredSlug(systemUnderCursor());
-      hideBody();
+    } else if (activeSystemSlug) {
+      const activeMinZoom = SYSTEM_OVERRIDES[activeSystemSlug]?.focusZoom ?? AUTO_SELECT_ZOOM;
+      if (currentZoom < activeMinZoom * 0.8) {
+        setActiveSystemSlug(null);
+        setHoveredSlug(systemUnderCursor());
+        hideBody();
+      }
     }
   }, [vb, activeSystemSlug, sector.systems, hideBody, systemUnderCursor, isAnimatingRef]);
 
@@ -343,7 +348,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
       const sys = systemsData[pin.slug];
       if (sys) {
         const orbitDistances = [...new Set(sys.bodies.map((b) => b.orbitDistance))].sort();
-        const maxOrbit = Math.max(...sys.bodies.map((b) => b.orbitDistance), 0.3) * SYS_MAX_R;
+        const maxR = SYSTEM_OVERRIDES[pin.slug]?.maxR ?? SYS_MAX_R;
+        const maxOrbit = Math.max(...sys.bodies.map((b) => b.orbitDistance), 0.3) * maxR;
         map.set(pin.slug, { orbitDistances, maxOrbit });
       } else {
         map.set(pin.slug, { orbitDistances: [], maxOrbit: 40 });

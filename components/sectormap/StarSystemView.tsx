@@ -21,6 +21,7 @@ import { BodyShape, bodyLabelR } from "./bodies/BodyShape";
 import { BodyInfoCard, bodyCardHeight } from "./bodies/BodyInfoCard";
 import { ALLEGIANCES } from "@/lib/allegiances";
 import { SpecialAttributeIcon } from "@/components/specialAttributes/SpecialAttributeIcon";
+import { ImperialCoreCluster, SYSTEM_OVERRIDES } from "./ImperialCoreCluster";
 
 interface StarSystemViewProps {
   pin: SystemPin;
@@ -44,8 +45,12 @@ export const StarSystemView = memo(function StarSystemView({
   isHovered, orbitData, vb, activeBodyId, tooltipActions,
   onFocusSystem, onHoverSystem,
 }: StarSystemViewProps) {
+  const override = SYSTEM_OVERRIDES[pin.slug];
+
   const { orbitDistances, maxOrbit } = orbitData;
-  const labelY = pin.y + (maxOrbit + 30) * SYS_SCALE + 14;
+  const sysScale = override?.scale ?? SYS_SCALE;
+  const sysMaxR = override?.maxR ?? SYS_MAX_R;
+  const labelY = pin.y + (maxOrbit + 30) * sysScale + 14;
 
   // Per-system refs for proximity detection
   const bodyRafRef = useRef<number | null>(null);
@@ -63,6 +68,12 @@ export const StarSystemView = memo(function StarSystemView({
     pt.x = clientX;
     pt.y = clientY;
     const localPt = pt.matrixTransform(ctm.inverse());
+
+    // Delegate to custom hit detection if this system has an override
+    if (override?.findNearestBody) {
+      return override.findNearestBody(localPt.x, localPt.y, bodies);
+    }
+
     let nearest: string | null = null;
     let bestRatio = 1;
     for (const body of bodies) {
@@ -73,7 +84,7 @@ export const StarSystemView = memo(function StarSystemView({
       if (ratio < bestRatio) { bestRatio = ratio; nearest = body.id; }
     }
     return nearest;
-  }, []);
+  }, [override]);
 
   const handleBodyProximity = useCallback((e: React.MouseEvent<SVGGElement>) => {
     if (!sys || bodyRafRef.current !== null) return;
@@ -124,12 +135,12 @@ export const StarSystemView = memo(function StarSystemView({
     >
       {/* Hit area — only in overview mode */}
       {noActiveSystem && (
-        <circle cx={pin.x} cy={pin.y} r={(maxOrbit + 50) * SYS_SCALE} fill="transparent" />
+        <circle cx={pin.x} cy={pin.y} r={(maxOrbit + 50) * sysScale} fill="transparent" />
       )}
 
       {sys ? (
         <g
-          transform={`translate(${pin.x}, ${pin.y}) scale(${SYS_SCALE})`}
+          transform={`translate(${pin.x}, ${pin.y}) scale(${sysScale})`}
           onMouseMove={isActive ? handleBodyProximity : undefined}
           onMouseLeave={isActive ? handleMouseLeave : undefined}
           onClick={isActive ? handleBodyClick : undefined}
@@ -137,15 +148,15 @@ export const StarSystemView = memo(function StarSystemView({
           {/* Interaction surface for active system */}
           {isActive && (
             <rect
-              x={-SYS_MAX_R - 40} y={-SYS_MAX_R - 40}
-              width={(SYS_MAX_R + 40) * 2} height={(SYS_MAX_R + 40) * 2}
+              x={-sysMaxR - 40} y={-sysMaxR - 40}
+              width={(sysMaxR + 40) * 2} height={(sysMaxR + 40) * 2}
               fill="transparent" pointerEvents="all"
             />
           )}
 
           {/* Orbit rings */}
           {orbitDistances.map((dist) => (
-            <circle key={dist} cx={0} cy={0} r={dist * SYS_MAX_R}
+            <circle key={dist} cx={0} cy={0} r={dist * sysMaxR}
               fill="none"
               stroke={isHovered ? "rgba(148,151,255,0.38)" : "rgba(99,102,241,0.15)"}
               strokeWidth={isHovered ? 1.5 : 1}
@@ -153,27 +164,71 @@ export const StarSystemView = memo(function StarSystemView({
               style={{ transition: "stroke 0.25s, stroke-width 0.25s" }} />
           ))}
 
-          {/* Star */}
-          <circle cx={0} cy={0} r={80} fill={`url(#starCorona-${pin.slug})`}
-            style={{ animation: "starPulse 4s ease-in-out infinite" }} />
-          <circle cx={0} cy={0} r={40} fill={`url(#starGlow-${pin.slug})`} />
-          {/* Hover halo ring */}
-          <circle cx={0} cy={0} r={65} fill="none"
-            stroke={sys.star.color} strokeWidth={12}
-            strokeOpacity={isHovered ? 0.18 : 0}
-            style={{ transition: "stroke-opacity 0.25s" }} />
-          <circle cx={0} cy={0} r={22} fill={sys.star.color}
-            style={{
-              filter: isHovered
-                ? `drop-shadow(0 0 22px ${sys.star.color}) drop-shadow(0 0 8px white)`
-                : `drop-shadow(0 0 12px ${sys.star.color})`,
-              transition: "filter 0.25s",
-            }} />
-          <text x={0} y={55} textAnchor="middle"
-            fill={sys.star.color} fontSize="15"
-            fontFamily="var(--font-cinzel), serif" fontWeight="600">
-            {sys.star.name}
-          </text>
+          {/* Star(s) */}
+          {sys.secondaryStar ? (
+            <>
+              {/* Binary star system — positioned on a shared invisible orbit circle */}
+              {(() => {
+                const ORBIT_R = 30;
+                const angle = sys.binaryAngle ?? 0;
+                const rad = ((angle - 90) * Math.PI) / 180;
+                const px = ORBIT_R * Math.cos(rad);
+                const py = ORBIT_R * Math.sin(rad);
+                const stars = [
+                  { star: sys.star, suffix: pin.slug, sx: px, sy: py, r: 22, coronaR: 80, glowR: 40 },
+                  { star: sys.secondaryStar!, suffix: `${pin.slug}-secondary`, sx: -px, sy: -py, r: 16, coronaR: 60, glowR: 30 },
+                ];
+                return stars.map(({ star, suffix, sx, sy, r, coronaR, glowR }) => (
+                  <g key={suffix}>
+                    <circle cx={sx} cy={sy} r={coronaR} fill={`url(#starCorona-${suffix})`}
+                      style={{ animation: "starPulse 4s ease-in-out infinite" }} />
+                    <circle cx={sx} cy={sy} r={glowR} fill={`url(#starGlow-${suffix})`} />
+                    <circle cx={sx} cy={sy} r={r} fill={star.color}
+                      style={{
+                        filter: isHovered
+                          ? `drop-shadow(0 0 22px ${star.color}) drop-shadow(0 0 8px white)`
+                          : `drop-shadow(0 0 12px ${star.color})`,
+                        transition: "filter 0.25s",
+                      }} />
+                  </g>
+                ));
+              })()}
+              {/* Shared hover halo */}
+              <circle cx={0} cy={0} r={65} fill="none"
+                stroke={sys.star.color} strokeWidth={12}
+                strokeOpacity={isHovered ? 0.18 : 0}
+                style={{ transition: "stroke-opacity 0.25s" }} />
+              {/* Combined label */}
+              <text x={0} y={55} textAnchor="middle"
+                fill={sys.star.color} fontSize="15"
+                fontFamily="var(--font-cinzel), serif" fontWeight="600">
+                {sys.star.name} &amp; {sys.secondaryStar.name}
+              </text>
+            </>
+          ) : (
+            <>
+              {/* Single star */}
+              <circle cx={0} cy={0} r={80} fill={`url(#starCorona-${pin.slug})`}
+                style={{ animation: "starPulse 4s ease-in-out infinite" }} />
+              <circle cx={0} cy={0} r={40} fill={`url(#starGlow-${pin.slug})`} />
+              <circle cx={0} cy={0} r={65} fill="none"
+                stroke={sys.star.color} strokeWidth={12}
+                strokeOpacity={isHovered ? 0.18 : 0}
+                style={{ transition: "stroke-opacity 0.25s" }} />
+              <circle cx={0} cy={0} r={22} fill={sys.star.color}
+                style={{
+                  filter: isHovered
+                    ? `drop-shadow(0 0 22px ${sys.star.color}) drop-shadow(0 0 8px white)`
+                    : `drop-shadow(0 0 12px ${sys.star.color})`,
+                  transition: "filter 0.25s",
+                }} />
+              <text x={0} y={55} textAnchor="middle"
+                fill={sys.star.color} fontSize="15"
+                fontFamily="var(--font-cinzel), serif" fontWeight="600">
+                {sys.star.name}
+              </text>
+            </>
+          )}
           {isActive && sys.star.kankaUrl && (
             <a href={sys.star.kankaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
               <text x={0} y={74} textAnchor="middle"
@@ -185,72 +240,87 @@ export const StarSystemView = memo(function StarSystemView({
             </a>
           )}
 
-          {/* Pass 1: Body shapes + labels */}
-          {sys.bodies.map((body) => {
-            const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
-            const isBodyActive = isActive && activeBodyId === body.id;
-            const { color: bodyColor } = getBodyColors(body);
-            const labelR = bodyLabelR(body.type);
+          {/* Body rendering — custom systems use their own renderer, others use standard layout */}
+          {override ? (
+            <ImperialCoreCluster
+              pin={pin}
+              sectorSlug={sectorSlug}
+              bodies={sys.bodies}
+              isActive={isActive}
+              activeBodyId={activeBodyId}
+              vb={vb}
+              tooltipActions={tooltipActions}
+            />
+          ) : (
+            <>
+              {/* Pass 1: Body shapes + labels */}
+              {sys.bodies.map((body) => {
+                const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
+                const isBodyActive = isActive && activeBodyId === body.id;
+                const { color: bodyColor } = getBodyColors(body);
+                const labelR = bodyLabelR(body.type);
 
-            return (
-              <g key={body.id} style={{ cursor: isActive ? "pointer" : "default", pointerEvents: "none" }}>
-                <BodyShape
-                  bodyId={body.id}
-                  bodyType={body.type}
-                  posX={pos.x}
-                  posY={pos.y}
-                  pinSlug={pin.slug}
-                  sectorSlug={sectorSlug}
-                  bodyColor={bodyColor}
-                  isBodyActive={isBodyActive}
-                  isActive={isActive}
-                />
+                return (
+                  <g key={body.id} style={{ cursor: isActive ? "pointer" : "default", pointerEvents: "none" }}>
+                    <BodyShape
+                      bodyId={body.id}
+                      bodyType={body.type}
+                      posX={pos.x}
+                      posY={pos.y}
+                      pinSlug={pin.slug}
+                      sectorSlug={sectorSlug}
+                      bodyColor={bodyColor}
+                      isBodyActive={isBodyActive}
+                      isActive={isActive}
+                    />
 
-                <SpecialAttributeIcon type={body.special_attribute} posX={pos.x} posY={pos.y} labelR={labelR} />
+                    <SpecialAttributeIcon type={body.special_attribute} posX={pos.x} posY={pos.y} labelR={labelR} />
 
-                <text x={pos.x} y={body.labelPosition === "top" ? pos.y - labelR - 6 : pos.y + labelR + 18}
-                  textAnchor="middle"
-                  fill={isBodyActive ? "white" : "rgba(255,255,255,0.6)"} fontSize="14"
-                  fontFamily="var(--font-cinzel), serif">
-                  {body.name}
-                </text>
-              </g>
-            );
-          })}
+                    <text x={pos.x} y={body.labelPosition === "top" ? pos.y - labelR - 6 : pos.y + labelR + 18}
+                      textAnchor="middle"
+                      fill={isBodyActive ? "white" : "rgba(255,255,255,0.6)"} fontSize="14"
+                      fontFamily="var(--font-cinzel), serif">
+                      {body.name}
+                    </text>
+                  </g>
+                );
+              })}
 
-          {/* Pass 2: Active body info card */}
-          {isActive && activeBodyId && (() => {
-            const body = sys.bodies.find(b => b.id === activeBodyId);
-            if (!body) return null;
-            const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
-            const { color: bodyColor } = getBodyColors(body);
-            const cardW = 220;
-            const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl, body.allegiance);
-            const bodyR = bodyLabelR(body.type);
+              {/* Pass 2: Active body info card */}
+              {isActive && activeBodyId && (() => {
+                const body = sys.bodies.find(b => b.id === activeBodyId);
+                if (!body) return null;
+                const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
+                const { color: bodyColor } = getBodyColors(body);
+                const cardW = 220;
+                const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl, body.allegiance);
+                const bodyR = bodyLabelR(body.type);
 
-            return (
-              <SvgTooltip
-                anchorX={pos.x} anchorY={pos.y}
-                cardW={cardW} cardH={cardH}
-                color={bodyColor} clearance={bodyR + 16}
-                viewBox={vb!}
-                parentOffsetX={pin.x} parentOffsetY={pin.y}
-                scale={SYS_SCALE}
-                onMouseEnter={tooltipActions.cardEnter}
-                onMouseLeave={tooltipActions.cardLeave}
-              >
-                <BodyInfoCard
-                  name={body.name}
-                  type={body.type}
-                  biome={body.biome}
-                  specialAttribute={body.special_attribute}
-                  kankaUrl={body.kankaUrl}
-                  bodyColor={bodyColor}
-                  allegiance={body.allegiance ? ALLEGIANCES[body.allegiance] : undefined}
-                />
-              </SvgTooltip>
-            );
-          })()}
+                return (
+                  <SvgTooltip
+                    anchorX={pos.x} anchorY={pos.y}
+                    cardW={cardW} cardH={cardH}
+                    color={bodyColor} clearance={bodyR + 16}
+                    viewBox={vb!}
+                    parentOffsetX={pin.x} parentOffsetY={pin.y}
+                    scale={sysScale}
+                    onMouseEnter={tooltipActions.cardEnter}
+                    onMouseLeave={tooltipActions.cardLeave}
+                  >
+                    <BodyInfoCard
+                      name={body.name}
+                      type={body.type}
+                      biome={body.biome}
+                      specialAttribute={body.special_attribute}
+                      kankaUrl={body.kankaUrl}
+                      bodyColor={bodyColor}
+                      allegiance={body.allegiance ? ALLEGIANCES[body.allegiance] : undefined}
+                    />
+                  </SvgTooltip>
+                );
+              })()}
+            </>
+          )}
         </g>
       ) : (
         <circle cx={pin.x} cy={pin.y} r={8}

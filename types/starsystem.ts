@@ -46,6 +46,8 @@ export interface StarSystemMetadata {
   slug: string;
   name: string;
   star: Star;
+  secondaryStar?: Star;
+  binaryAngle?: number; // degrees 0-360, angle of primary star on shared orbit (secondary is opposite). Default 0 = primary right
   bodies: CelestialBody[];
   published?: boolean;
   kankaUrl?: string;
