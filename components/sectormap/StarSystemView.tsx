@@ -205,6 +205,161 @@ export const StarSystemView = memo(function StarSystemView({
                 {sys.star.name} &amp; {sys.secondaryStar.name}
               </text>
             </>
+          ) : sys.star.type.toLowerCase().includes("neutron") ? (
+            <>
+              {/* Neutron Star — tiny, intense, sharp-edged with expanding heat ripples */}
+              <defs>
+                <radialGradient id={`neutron-glow-${pin.slug}`}>
+                  <stop offset="0%" stopColor="white" stopOpacity="0.9" />
+                  <stop offset="25%" stopColor="#B0C4FF" stopOpacity="0.5" />
+                  <stop offset="50%" stopColor={sys.star.color} stopOpacity="0.15" />
+                  <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              {/* Heat ripples — expanding concentric rings */}
+              {[0, 1, 2].map((i) => (
+                <circle key={`ripple-${i}`} cx={0} cy={0} r={20}
+                  fill="none" stroke={sys.star.color} strokeWidth={0.8}>
+                  <animate attributeName="r" values="12;50;80" dur="3s" begin={`${i * 1}s`} repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.4;0.15;0" dur="3s" begin={`${i * 1}s`} repeatCount="indefinite" />
+                </circle>
+              ))}
+
+              {/* Ambient glow — tight, intense */}
+              <circle cx={0} cy={0} r={25} fill={`url(#neutron-glow-${pin.slug})`}>
+                <animate attributeName="opacity" values="0.7;1;0.7" dur="1.5s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Hard surface edge */}
+              <circle cx={0} cy={0} r={10} fill="none"
+                stroke="#B0C4FF" strokeWidth={1} opacity="0.4" />
+
+              {/* Core — tiny, white-blue, sharp */}
+              <circle cx={0} cy={0} r={10}
+                fill="white"
+                style={{ filter: `drop-shadow(0 0 10px #B0C4FF) drop-shadow(0 0 5px white)` }}>
+                <animate attributeName="r" values="9;11;9" dur="1.5s" repeatCount="indefinite" />
+              </circle>
+              <circle cx={0} cy={0} r={6} fill="#E8EEFF" />
+              <circle cx={0} cy={0} r={3} fill="white" />
+
+              {/* Hover halo */}
+              <circle cx={0} cy={0} r={45} fill="none"
+                stroke={sys.star.color} strokeWidth={8}
+                strokeOpacity={isHovered ? 0.18 : 0}
+                style={{ transition: "stroke-opacity 0.25s" }} />
+
+              <text x={0} y={55} textAnchor="middle"
+                fill={sys.star.color} fontSize="15"
+                fontFamily="var(--font-cinzel), serif" fontWeight="600">
+                {sys.star.name}
+              </text>
+            </>
+          ) : sys.star.type.toLowerCase().includes("pulsar") ? (
+            <>
+              {/* Pulsar — compact neutron star with soft beam cones at fixed angle */}
+              <defs>
+                {/* Beam gradient: bright near core, fades to nothing */}
+                <radialGradient id={`pulsar-beam-${pin.slug}`} cx="50%" cy="0%" rx="50%" ry="100%">
+                  <stop offset="0%" stopColor="white" stopOpacity="0.6" />
+                  <stop offset="15%" stopColor={sys.star.color} stopOpacity="0.4" />
+                  <stop offset="60%" stopColor={sys.star.color} stopOpacity="0.08" />
+                  <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
+                </radialGradient>
+                {/* Core ambient glow */}
+                <radialGradient id={`pulsar-glow-${pin.slug}`}>
+                  <stop offset="0%" stopColor="white" stopOpacity="0.8" />
+                  <stop offset="30%" stopColor={sys.star.color} stopOpacity="0.4" />
+                  <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
+                </radialGradient>
+                {/* Disk gradient */}
+                <radialGradient id={`pulsar-disk-${pin.slug}`}>
+                  <stop offset="0%" stopColor={sys.star.color} stopOpacity="0.3" />
+                  <stop offset="60%" stopColor={sys.star.color} stopOpacity="0.12" />
+                  <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              {/* Beam assembly at -30° */}
+              <g transform="rotate(-30)">
+                {/* Outer soft beams — wide, dim */}
+                <ellipse cx={0} cy={-40} rx={14} ry={35} fill={`url(#pulsar-beam-${pin.slug})`}>
+                  <animate attributeName="opacity" values="0.5;0.8;0.5" dur="2s" repeatCount="indefinite" />
+                </ellipse>
+                <ellipse cx={0} cy={40} rx={14} ry={35} fill={`url(#pulsar-beam-${pin.slug})`}>
+                  <animate attributeName="opacity" values="0.5;0.8;0.5" dur="2s" repeatCount="indefinite" />
+                </ellipse>
+                {/* Inner bright beams — narrow, bright */}
+                <ellipse cx={0} cy={-35} rx={4} ry={30} fill="white" opacity="0.12">
+                  <animate attributeName="opacity" values="0.08;0.18;0.08" dur="2s" repeatCount="indefinite" />
+                </ellipse>
+                <ellipse cx={0} cy={35} rx={4} ry={30} fill="white" opacity="0.12">
+                  <animate attributeName="opacity" values="0.08;0.18;0.08" dur="2s" repeatCount="indefinite" />
+                </ellipse>
+              </g>
+
+              {/* Magnetic field lines — arcing pole to pole */}
+              <g transform="rotate(-30)" style={{ pointerEvents: "none" }}>
+                {[
+                  { bulge: 25, w: 1.0, o: 0.35, dur: 2.8 },
+                  { bulge: 38, w: 1.2, o: 0.45, dur: 2.4 },
+                  { bulge: 52, w: 0.9, o: 0.30, dur: 3.2 },
+                  { bulge: 66, w: 0.7, o: 0.22, dur: 3.0 },
+                  { bulge: 80, w: 0.5, o: 0.15, dur: 2.6 },
+                ].map(({ bulge, w, o, dur }, i) => (
+                  <g key={`field-${i}`}>
+                    {/* Right arc */}
+                    <path
+                      d={`M 0,-20 C ${bulge},-14 ${bulge},14 0,20`}
+                      fill="none" stroke={sys.star.color} strokeWidth={w}
+                    >
+                      <animate attributeName="opacity" values={`${o * 0.6};${o};${o * 0.6}`} dur={`${dur}s`} repeatCount="indefinite" />
+                    </path>
+                    {/* Left arc (mirrored) */}
+                    <path
+                      d={`M 0,-20 C ${-bulge},-14 ${-bulge},14 0,20`}
+                      fill="none" stroke={sys.star.color} strokeWidth={w}
+                    >
+                      <animate attributeName="opacity" values={`${o * 0.6};${o};${o * 0.6}`} dur={`${dur}s`} repeatCount="indefinite" />
+                    </path>
+                  </g>
+                ))}
+              </g>
+
+              {/* Accretion disk — perpendicular to beams (rotated 60°) */}
+              <g transform="rotate(60)">
+                <ellipse cx={0} cy={0} rx={38} ry={5} fill={`url(#pulsar-disk-${pin.slug})`} />
+                <ellipse cx={0} cy={0} rx={38} ry={5}
+                  fill="none" stroke={sys.star.color} strokeWidth={0.8} opacity="0.25">
+                  <animate attributeName="opacity" values="0.15;0.35;0.15" dur="2s" repeatCount="indefinite" />
+                </ellipse>
+              </g>
+
+              {/* Ambient glow */}
+              <circle cx={0} cy={0} r={22} fill={`url(#pulsar-glow-${pin.slug})`}>
+                <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Core — tiny, white-hot */}
+              <circle cx={0} cy={0} r={6} fill="white"
+                style={{ filter: `drop-shadow(0 0 8px ${sys.star.color}) drop-shadow(0 0 4px white)` }}>
+                <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite" />
+              </circle>
+              <circle cx={0} cy={0} r={3} fill="white" />
+
+              {/* Hover halo */}
+              <circle cx={0} cy={0} r={45} fill="none"
+                stroke={sys.star.color} strokeWidth={8}
+                strokeOpacity={isHovered ? 0.18 : 0}
+                style={{ transition: "stroke-opacity 0.25s" }} />
+
+              <text x={0} y={55} textAnchor="middle"
+                fill={sys.star.color} fontSize="15"
+                fontFamily="var(--font-cinzel), serif" fontWeight="600">
+                {sys.star.name}
+              </text>
+            </>
           ) : (
             <>
               {/* Single star */}

@@ -19,7 +19,7 @@ export interface VortexPin {
   layer?: LayerSlug;        // only visible when this layer is selected
 }
 
-export type MarkerType = "ship" | "fleet" | "anomaly" | "poi";
+export type MarkerType = "ship" | "fleet" | "anomaly" | "poi" | "black-hole";
 
 export const MAP_LAYERS = {
   movement: { slug: "movement", label: "Movement" },

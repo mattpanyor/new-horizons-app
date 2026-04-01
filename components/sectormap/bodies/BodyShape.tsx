@@ -77,7 +77,74 @@ export function BodyShape({
         </g>
       )}
 
-      {bodyType !== "station" && bodyType !== "ship" && bodyType !== "fleet" && bodyType !== "asteroid-field" && (
+      {bodyType === "black-hole" && (
+        <g style={glowStyle}>
+          <defs>
+            <radialGradient id={`bh-lensing-${bodyId}`}>
+              <stop offset="0%" stopColor={bodyColor} stopOpacity="0" />
+              <stop offset="60%" stopColor={bodyColor} stopOpacity="0" />
+              <stop offset="80%" stopColor={bodyColor} stopOpacity="0.35" />
+              <stop offset="90%" stopColor="white" stopOpacity="0.15" />
+              <stop offset="100%" stopColor={bodyColor} stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id={`bh-disk-${bodyId}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={bodyColor} stopOpacity="0" />
+              <stop offset="20%" stopColor={bodyColor} stopOpacity="0.6" />
+              <stop offset="50%" stopColor="white" stopOpacity="0.4" />
+              <stop offset="80%" stopColor={bodyColor} stopOpacity="0.6" />
+              <stop offset="100%" stopColor={bodyColor} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* Gravitational lensing glow */}
+          <circle cx={posX} cy={posY} r={22} fill={`url(#bh-lensing-${bodyId})`}>
+            <animate attributeName="opacity" values="0.8;1;0.8" dur="4s" repeatCount="indefinite" />
+          </circle>
+
+          {/* Back accretion disk */}
+          <g transform={`translate(${posX},${posY}) rotate(-20)`}>
+            <ellipse cx={0} cy={0} rx={35} ry={5}
+              fill={`url(#bh-disk-${bodyId})`} opacity="0.5">
+              <animate attributeName="opacity" values="0.4;0.6;0.4" dur="3s" repeatCount="indefinite" />
+            </ellipse>
+            <ellipse cx={0} cy={0} rx={35} ry={5}
+              fill="none" stroke={bodyColor} strokeWidth={0.8} opacity="0.3" />
+          </g>
+
+          {/* Event horizon — pure void */}
+          <circle cx={posX} cy={posY} r={12} fill="#000000" />
+
+          {/* Photon ring */}
+          <circle cx={posX} cy={posY} r={13} fill="none"
+            stroke="white" strokeWidth={0.6} opacity="0.5">
+            <animate attributeName="opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={posX} cy={posY} r={14} fill="none"
+            stroke={bodyColor} strokeWidth={1} opacity="0.4">
+            <animate attributeName="opacity" values="0.25;0.5;0.25" dur="2s" repeatCount="indefinite" />
+          </circle>
+
+          {/* Front accretion disk arc */}
+          <g transform={`translate(${posX},${posY}) rotate(-20)`}>
+            <clipPath id={`bh-front-${bodyId}`}>
+              <rect x={-40} y={0} width={80} height={10} />
+            </clipPath>
+            <ellipse cx={0} cy={0} rx={30} ry={4.5}
+              fill={`url(#bh-disk-${bodyId})`} opacity="0.7"
+              clipPath={`url(#bh-front-${bodyId})`}>
+              <animate attributeName="opacity" values="0.5;0.8;0.5" dur="3s" repeatCount="indefinite" />
+            </ellipse>
+          </g>
+
+          {/* Lensed light arc at top */}
+          <path d={`M ${posX - 15},${posY - 4} A 15,15 0 0,1 ${posX + 15},${posY - 4}`}
+            fill="none" stroke={bodyColor} strokeWidth={2} opacity="0.25">
+            <animate attributeName="opacity" values="0.15;0.35;0.15" dur="3s" repeatCount="indefinite" />
+          </path>
+        </g>
+      )}
+
+      {bodyType !== "station" && bodyType !== "ship" && bodyType !== "fleet" && bodyType !== "asteroid-field" && bodyType !== "black-hole" && (
         <circle cx={posX} cy={posY} r={12}
           fill={fillId} stroke={activeStroke}
           strokeWidth={isBodyActive ? "2" : "0.5"} style={glowStyle} />
@@ -90,5 +157,6 @@ export function BodyShape({
 export function bodyLabelR(bodyType: string): number {
   return bodyType === "fleet" ? 22 :
     bodyType === "asteroid-field" ? 32 :
-      bodyType === "station" ? 10 : 12;
+      bodyType === "black-hole" ? 18 :
+        bodyType === "station" ? 10 : 12;
 }

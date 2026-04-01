@@ -116,6 +116,57 @@ export function FreeMarkerLayer({
               </>
             )}
 
+            {marker.type === "black-hole" && (
+              <>
+                <defs>
+                  <radialGradient id={`${gradId}-lensing`}>
+                    <stop offset="0%" stopColor={markerColor} stopOpacity="0" />
+                    <stop offset="60%" stopColor={markerColor} stopOpacity="0" />
+                    <stop offset="80%" stopColor={markerColor} stopOpacity="0.35" />
+                    <stop offset="90%" stopColor="white" stopOpacity="0.15" />
+                    <stop offset="100%" stopColor={markerColor} stopOpacity="0" />
+                  </radialGradient>
+                  <linearGradient id={`${gradId}-disk`} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={markerColor} stopOpacity="0" />
+                    <stop offset="20%" stopColor={markerColor} stopOpacity="0.6" />
+                    <stop offset="50%" stopColor="white" stopOpacity="0.4" />
+                    <stop offset="80%" stopColor={markerColor} stopOpacity="0.6" />
+                    <stop offset="100%" stopColor={markerColor} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {/* Lensing glow */}
+                <circle r={14} fill={`url(#${gradId}-lensing)`}>
+                  <animate attributeName="opacity" values="0.8;1;0.8" dur="4s" repeatCount="indefinite" />
+                </circle>
+                {/* Back accretion disk */}
+                <g transform="rotate(-20)">
+                  <ellipse rx={20} ry={3} fill={`url(#${gradId}-disk)`} opacity="0.5" />
+                </g>
+                {/* Event horizon */}
+                <circle r={7} fill="#000000" />
+                {/* Photon ring */}
+                <circle r={7.8} fill="none" stroke="white" strokeWidth={0.5} opacity="0.5">
+                  <animate attributeName="opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite" />
+                </circle>
+                <circle r={8.5} fill="none" stroke={markerColor} strokeWidth={0.7} opacity="0.4">
+                  <animate attributeName="opacity" values="0.25;0.5;0.25" dur="2s" repeatCount="indefinite" />
+                </circle>
+                {/* Front accretion disk arc */}
+                <g transform="rotate(-20)">
+                  <clipPath id={`${gradId}-front`}>
+                    <rect x={-25} y={0} width={50} height={8} />
+                  </clipPath>
+                  <ellipse rx={17} ry={2.5} fill={`url(#${gradId}-disk)`} opacity="0.7"
+                    clipPath={`url(#${gradId}-front)`} />
+                </g>
+                {/* Lensed arc */}
+                <path d="M -9,-2.5 A 9,9 0 0,1 9,-2.5"
+                  fill="none" stroke={markerColor} strokeWidth={1.5} opacity="0.25">
+                  <animate attributeName="opacity" values="0.15;0.35;0.15" dur="3s" repeatCount="indefinite" />
+                </path>
+              </>
+            )}
+
             {marker.type === "poi" && (
               <>
                 <defs>
@@ -157,6 +208,7 @@ export function FreeMarkerLayer({
           fleet: "Fleet",
           anomaly: "Anomaly",
           poi: "Point of Interest",
+          "black-hole": "Black Hole",
         };
 
         return (

@@ -1,4 +1,4 @@
-export type CelestialBodyType = "planet" | "station" | "moon" | "ship" | "fleet" | "asteroid-field";
+export type CelestialBodyType = "planet" | "station" | "moon" | "ship" | "fleet" | "asteroid-field" | "black-hole";
 
 export type PlanetBiome =
   | "desert"
