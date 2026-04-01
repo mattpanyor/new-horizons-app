@@ -14,6 +14,7 @@ interface Props {
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
 const adminPages = [
+  { label: "Home", href: "/sectors" },
   { label: "User Management", href: "/admin/users" },
   { label: "Messages", href: "/admin/messages" },
   { label: "Kanka Sync", href: "/admin/kanka" },
