@@ -64,11 +64,17 @@ export const POI_COLORS: BodyColors = {
   secondaryColor: "#5B21B6",
 };
 
+export const BLACK_HOLE_COLORS: BodyColors = {
+  color: "#A78BFA",
+  secondaryColor: "#2E1065",
+};
+
 export const MARKER_COLORS: Record<string, BodyColors> = {
   ship: SHIP_COLORS,
   fleet: SHIP_COLORS,
   anomaly: ANOMALY_COLORS,
   poi: POI_COLORS,
+  "black-hole": BLACK_HOLE_COLORS,
 };
 
 export function getBodyColors(body: { type: string; biome?: string }): BodyColors {
@@ -79,6 +85,7 @@ export function getBodyColors(body: { type: string; biome?: string }): BodyColor
     case "ship": return SHIP_COLORS;
     case "fleet": return SHIP_COLORS;
     case "asteroid-field": return ASTEROID_FIELD_COLORS;
+    case "black-hole": return { color: "#A78BFA", secondaryColor: "#2E1065" };
     default:
       return body.biome ? (BIOME_COLORS[body.biome] ?? DEFAULT_PLANET_COLORS) : DEFAULT_PLANET_COLORS;
   }

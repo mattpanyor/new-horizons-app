@@ -26,17 +26,23 @@ export function SectorMapSvgLayer({ sector, systemsData }: SectorMapSvgLayerProp
         {sector.systems.flatMap((pin) => {
           const sys = systemsData[pin.slug];
           if (!sys) return [];
+          const stars = [sys.star, ...(sys.secondaryStar ? [sys.secondaryStar] : [])];
           return [
-            <radialGradient key={`starGlow-${pin.slug}`} id={`starGlow-${pin.slug}`}>
-              <stop offset="0%" stopColor={sys.star.color} stopOpacity="1" />
-              <stop offset="30%" stopColor={sys.star.color} stopOpacity="0.8" />
-              <stop offset="60%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0.3" />
-              <stop offset="100%" stopColor={sys.star.secondaryColor ?? sys.star.color} stopOpacity="0" />
-            </radialGradient>,
-            <radialGradient key={`starCorona-${pin.slug}`} id={`starCorona-${pin.slug}`}>
-              <stop offset="0%" stopColor={sys.star.color} stopOpacity="0.15" />
-              <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
-            </radialGradient>,
+            ...stars.map((star, i) => {
+              const suffix = i === 0 ? pin.slug : `${pin.slug}-secondary`;
+              return [
+                <radialGradient key={`starGlow-${suffix}`} id={`starGlow-${suffix}`}>
+                  <stop offset="0%" stopColor={star.color} stopOpacity="1" />
+                  <stop offset="30%" stopColor={star.color} stopOpacity="0.8" />
+                  <stop offset="60%" stopColor={star.secondaryColor ?? star.color} stopOpacity="0.3" />
+                  <stop offset="100%" stopColor={star.secondaryColor ?? star.color} stopOpacity="0" />
+                </radialGradient>,
+                <radialGradient key={`starCorona-${suffix}`} id={`starCorona-${suffix}`}>
+                  <stop offset="0%" stopColor={star.color} stopOpacity="0.15" />
+                  <stop offset="100%" stopColor={star.color} stopOpacity="0" />
+                </radialGradient>,
+              ];
+            }).flat(),
             ...sys.bodies.map((b) => {
               const { color, secondaryColor } = getBodyColors(b);
               return (

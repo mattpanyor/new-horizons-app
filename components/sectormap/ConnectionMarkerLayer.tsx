@@ -107,43 +107,6 @@ export function ConnectionMarkerLayer({
               </g>
             )}
 
-            {marker.type === "anomaly" && (
-              <>
-                <defs>
-                  <radialGradient id={markerGradId}>
-                    <stop offset="0%" stopColor={markerColor} stopOpacity="0.8" />
-                    <stop offset="60%" stopColor={markerColor} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={markerColor} stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-                <circle r="12" fill={`url(#${markerGradId})`}
-                  style={{ filter: `drop-shadow(0 0 ${isActive ? 10 : 4}px ${markerColor})` }} />
-                <circle r="4" fill={markerColor} fillOpacity={isActive ? 0.9 : 0.6}
-                  stroke={markerColor} strokeOpacity={0.4} strokeWidth="0.5" />
-                <ellipse rx="8" ry="3" fill="none"
-                  stroke={markerColor} strokeOpacity={isActive ? 0.6 : 0.3}
-                  strokeWidth="0.6" strokeDasharray="2 3"
-                  transform="rotate(30)" />
-              </>
-            )}
-
-            {marker.type === "poi" && (
-              <>
-                <defs>
-                  <radialGradient id={markerGradId}>
-                    <stop offset="0%" stopColor={markerColor} stopOpacity="0.6" />
-                    <stop offset="100%" stopColor={markerColor} stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-                <circle r="10" fill={`url(#${markerGradId})`}
-                  style={{ filter: `drop-shadow(0 0 ${isActive ? 8 : 3}px ${markerColor})` }} />
-                <polygon points="0,-7 5,0 0,7 -5,0"
-                  fill={markerColor} fillOpacity={isActive ? 0.8 : 0.5}
-                  stroke={isActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)"}
-                  strokeWidth={isActive ? "1" : "0.5"} />
-                <circle r="1.5" fill="white" fillOpacity={isActive ? 0.8 : 0.5} />
-              </>
-            )}
           </g>
         );
       })}
@@ -191,7 +154,7 @@ export function ConnectionMarkerLayer({
                     {marker.name}
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {{ ship: "Ship", fleet: "Fleet", anomaly: "Anomaly", poi: "Point of Interest" }[marker.type] ?? marker.type}
+                    {marker.type === "ship" ? "Ship" : marker.type === "fleet" ? "Fleet" : marker.type}
                     {allegiance && (
                       <>
                         <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>

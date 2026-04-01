@@ -1,0 +1,171 @@
+{
+  "name": "Axiom System",
+  "published": true,
+  "star": {
+    "name": "Light",
+    "type": "Yellow Supergiant",
+    "color": "#F59E0B",
+    "secondaryColor": "#D97706"
+  },
+  "binaryAngle": 0,
+  "secondaryStar": {
+    "name": "Dark",
+    "type": "Red Dwarf",
+    "color": "#EF4444",
+    "secondaryColor": "#B91C1C"
+  },
+  "bodies": [
+    {
+      "id": "nexus-core-upper",
+      "name": "Feywild",
+      "type": "planet",
+      "orbitPosition": 70,
+      "orbitDistance": 0.8,
+      "labelPosition": "top"
+    },
+    {
+      "id": "nexus-core-middle",
+      "name": "Material Plane",
+      "type": "planet",
+      "orbitPosition": 70,
+      "orbitDistance": 0.8,
+      "labelPosition": "top"
+    },
+    {
+      "id": "nexus-core-lower",
+      "name": "Shadowfell",
+      "type": "planet",
+      "orbitPosition": 70,
+      "orbitDistance": 0.8,
+      "labelPosition": "bottom"
+    },
+    {
+      "id": "ward-01",
+      "name": "Elysium",
+      "type": "planet",
+      "biome": "continental",
+      "orbitPosition": 0,
+      "orbitDistance": 0.9
+    },
+    {
+      "id": "ward-02",
+      "name": "The Beastlands",
+      "type": "planet",
+      "biome": "jungle",
+      "orbitPosition": 22.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-03",
+      "name": "Arborea",
+      "type": "planet",
+      "biome": "tropical",
+      "orbitPosition": 45,
+      "orbitDistance": 0.4
+    },
+    {
+      "id": "ward-04",
+      "name": "Ysgard",
+      "type": "planet",
+      "biome": "alpine",
+      "orbitPosition": 67.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-05",
+      "name": "Limbo",
+      "type": "planet",
+      "biome": "gas-giant",
+      "orbitPosition": 90,
+      "orbitDistance": 0.9
+    },
+    {
+      "id": "ward-06",
+      "name": "Pandemonium",
+      "type": "planet",
+      "biome": "ash",
+      "orbitPosition": 112.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-07",
+      "name": "The Abyss",
+      "type": "planet",
+      "biome": "toxic",
+      "orbitPosition": 135,
+      "orbitDistance": 0.4
+    },
+    {
+      "id": "ward-08",
+      "name": "Carceri",
+      "type": "planet",
+      "biome": "arid",
+      "orbitPosition": 157.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-09",
+      "name": "Hades",
+      "type": "planet",
+      "biome": "ash",
+      "orbitPosition": 180,
+      "orbitDistance": 0.9
+    },
+    {
+      "id": "ward-10",
+      "name": "Gehenna",
+      "type": "planet",
+      "biome": "molten",
+      "orbitPosition": 202.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-11",
+      "name": "The Nine Hells",
+      "type": "planet",
+      "biome": "molten",
+      "orbitPosition": 225,
+      "orbitDistance": 0.4
+    },
+    {
+      "id": "ward-12",
+      "name": "Acheron",
+      "type": "planet",
+      "biome": "barren",
+      "orbitPosition": 247.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-13",
+      "name": "Mechanus",
+      "type": "planet",
+      "biome": "mining",
+      "orbitPosition": 270,
+      "orbitDistance": 0.9
+    },
+    {
+      "id": "ward-14",
+      "name": "Arcadia",
+      "type": "planet",
+      "biome": "savanna",
+      "orbitPosition": 292.5,
+      "orbitDistance": 0.65
+    },
+    {
+      "id": "ward-15",
+      "name": "Mount Celestia",
+      "type": "planet",
+      "biome": "arctic",
+      "orbitPosition": 315,
+      "orbitDistance": 0.4
+    },
+    {
+      "id": "ward-16",
+      "name": "Bytopia",
+      "type": "planet",
+      "biome": "continental",
+      "orbitPosition": 337.5,
+      "orbitDistance": 0.65
+    }
+  ]
+}
