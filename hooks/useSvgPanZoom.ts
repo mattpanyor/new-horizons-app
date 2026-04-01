@@ -5,6 +5,7 @@ interface ViewBox { x: number; y: number; w: number; h: number }
 interface UseSvgPanZoomOptions {
   width: number;
   height: number;
+  initialViewBox?: { x: number; y: number; w: number; h: number };
   minZoom?: number;
   maxZoom?: number;
   zoomStep?: number;
@@ -13,11 +14,12 @@ interface UseSvgPanZoomOptions {
 export function useSvgPanZoom({
   width,
   height,
+  initialViewBox,
   minZoom = 0.4,
   maxZoom = 10,
   zoomStep = 0.15,
 }: UseSvgPanZoomOptions) {
-  const defaultVb: ViewBox = { x: 0, y: 0, w: width, h: height };
+  const defaultVb: ViewBox = initialViewBox ?? { x: 0, y: 0, w: width, h: height };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);

@@ -7,6 +7,7 @@ import { useSvgTooltipTimer } from "@/hooks/useSvgTooltipTimer";
 import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
 import {
   FULL_W, FULL_H,
+  SECTOR_TERRITORY, TERRITORY_INNER_R, TERRITORY_OUTER_R,
   MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, FOCUS_ZOOM, AUTO_SELECT_ZOOM,
   SYS_MAX_R, SYS_SCALE,
   isInSectorTerritory,
@@ -37,11 +38,69 @@ interface SectorMapProps {
   staticSvgLayers: React.ReactNode;
 }
 
+function computeContentViewBox(sector: SectorMetadata): { x: number; y: number; w: number; h: number } {
+  const PADDING = 30;
+  const t = SECTOR_TERRITORY[sector.slug];
+  if (!t) return { x: 0, y: 0, w: FULL_W, h: FULL_H };
+
+  const { cx, cy, arcStart, arcEnd } = t;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  // Collect the 4 corner points of the annular sector
+  const pts = [
+    { x: cx + TERRITORY_INNER_R * Math.cos(toRad(arcStart)), y: cy + TERRITORY_INNER_R * Math.sin(toRad(arcStart)) },
+    { x: cx + TERRITORY_INNER_R * Math.cos(toRad(arcEnd)),   y: cy + TERRITORY_INNER_R * Math.sin(toRad(arcEnd)) },
+    { x: cx + TERRITORY_OUTER_R * Math.cos(toRad(arcStart)), y: cy + TERRITORY_OUTER_R * Math.sin(toRad(arcStart)) },
+    { x: cx + TERRITORY_OUTER_R * Math.cos(toRad(arcEnd)),   y: cy + TERRITORY_OUTER_R * Math.sin(toRad(arcEnd)) },
+  ];
+
+  // Also sample along the arc at key angles (every 45° within range, plus midpoint)
+  // to catch the arc bulge
+  const step = 45;
+  for (let deg = arcStart; deg <= arcEnd; deg += step) {
+    pts.push({ x: cx + TERRITORY_OUTER_R * Math.cos(toRad(deg)), y: cy + TERRITORY_OUTER_R * Math.sin(toRad(deg)) });
+    pts.push({ x: cx + TERRITORY_INNER_R * Math.cos(toRad(deg)), y: cy + TERRITORY_INNER_R * Math.sin(toRad(deg)) });
+  }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+
+  minX -= PADDING;
+  minY -= PADDING;
+  maxX += PADDING;
+  maxY += PADDING;
+
+  // Maintain 3:2 aspect ratio
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  const targetRatio = FULL_W / FULL_H;
+  const contentRatio = contentW / contentH;
+
+  let finalW = contentW, finalH = contentH;
+  if (contentRatio > targetRatio) {
+    finalH = contentW / targetRatio;
+  } else {
+    finalW = contentH * targetRatio;
+  }
+
+  const cxContent = (minX + maxX) / 2;
+  const cyContent = (minY + maxY) / 2;
+
+  return { x: cxContent - finalW / 2, y: cyContent - finalH / 2, w: finalW, h: finalH };
+}
+
 export default function SectorMap({ sector, systemsData = {}, onSystemChange, children, staticSvgLayers }: SectorMapProps) {
+  const initialViewBox = useMemo(() => computeContentViewBox(sector), [sector]);
+
   const {
     containerRef, svgRef, vb, zoom, cursorGrab, didDragRef,
     zoomIn, zoomOut, resetView: resetPanZoom, animateToVb, isAnimatingRef, handlers,
-  } = useSvgPanZoom({ width: FULL_W, height: FULL_H, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
+  } = useSvgPanZoom({ width: FULL_W, height: FULL_H, initialViewBox, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP });
 
   const isValidPlanningPoint = useCallback(
     (x: number, y: number) => isInSectorTerritory(x, y, sector.slug),
@@ -178,11 +237,11 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     setHoveredSlug(wasActive ? null : systemUnderCursor());
     hideBody();
     if (wasActive) {
-      animateToVb({ x: 0, y: 0, w: FULL_W, h: FULL_H }, 500);
+      animateToVb(initialViewBox, 500);
     } else {
       resetPanZoom();
     }
-  }, [activeSystemSlug, hideBody, resetPanZoom, animateToVb, systemUnderCursor]);
+  }, [activeSystemSlug, hideBody, resetPanZoom, animateToVb, initialViewBox, systemUnderCursor]);
 
   const focusSystem = useCallback((pin: SystemPin) => {
     setActiveSystemSlug(pin.slug);
@@ -197,8 +256,8 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     setActiveSystemSlug(null);
     setHoveredSlug(systemUnderCursor());
     hideBody();
-    animateToVb({ x: 0, y: 0, w: FULL_W, h: FULL_H }, 500);
-  }, [hideBody, animateToVb, systemUnderCursor]);
+    animateToVb(initialViewBox, 500);
+  }, [hideBody, animateToVb, initialViewBox, systemUnderCursor]);
 
   const focusBodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

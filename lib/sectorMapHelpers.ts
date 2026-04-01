@@ -10,6 +10,7 @@ export const SECTOR_TERRITORY: Record<string, { cx: number; cy: number; arcStart
   "denerum-sector": { cx: 80,   cy: 80,  arcStart: 0,   arcEnd: 90  },
   "castell-sector": { cx: 1120, cy: 80,  arcStart: 90,  arcEnd: 180 },
   "vintar-sector":  { cx: 1120, cy: 720, arcStart: 180, arcEnd: 270 },
+  "imperial-core":  { cx: 600,  cy: 400, arcStart: 0,   arcEnd: 360 },
 };
 
 export const TERRITORY_INNER_R = 260;
@@ -198,7 +199,9 @@ export function isInSectorTerritory(px: number, py: number, slug: string): boole
   const dx = px - cx;
   const dy = py - cy;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < TERRITORY_INNER_R || dist > TERRITORY_OUTER_R) return false;
+  const isFullCircle = arcEnd - arcStart >= 360;
+  if (!isFullCircle && dist < TERRITORY_INNER_R) return false;
+  if (dist > TERRITORY_OUTER_R) return false;
   const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
   const arcSpan = arcEnd - arcStart;
   const swept = (angle - arcStart + 360) % 360;
