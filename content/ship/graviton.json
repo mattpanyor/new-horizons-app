@@ -13,19 +13,19 @@
           "id": "noble-quarters",
           "name": "Noble Quarters",
           "description": "Lavish private suites reserved for high-ranking passengers. Each chamber features adaptive environment controls.",
-          "image": "/ship/graviton_noble_quarters.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_noble_quarters.png"
         },
         {
           "id": "lobby",
           "name": "Lobby",
           "description": "The main chamber of the ship featuring the emperor's statue.",
-          "image": "/ship/graviton_ship_upper_level.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_ship_upper_level.png"
         },
         {
           "id": "medbay",
           "name": "Medical Bay",
           "description": "State-of-the-art medical facility with regeneration chambers, rune-surgical suites.",
-          "image": "/ship/graviton_medical_room.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_medical_room.png"
         }
       ]
     },
@@ -39,19 +39,19 @@
           "id": "psychometric-chamber",
           "name": "Psychometric Chamber",
           "description": "A shielded sensory room designed for psyometric communication or memory rewiev. The walls are lined with void-field emitters to prevent interference.",
-          "image": "/ship/graviton_psychometric_chamber.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_psychometric_chamber.png"
         },
         {
           "id": "guest-quarters",
           "name": "Guest Quarters",
           "description": "Comfortable modular cabins for visiting diplomats, researchers, and allied personnel. Each pod includes personal gravity plating and climate control.",
-          "image": "/ship/graviton_guest_quarters.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_guest_quarters.png"
         },
         {
           "id": "bar",
           "name": "Lounge",
           "description": "An exclusive retreat for the passengers. Crystal decanters line the shelves, and the viewport spans the entire port wall.",
-          "image": "/ship/graviton_bar.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_bar.png"
         }
       ]
     },
@@ -65,19 +65,19 @@
           "id": "xenolab",
           "name": "Xenoscience Lab",
           "description": "A sealed research facility for analyzing alien artifacts, biological samples, and anomalous materials. Equipped with containment fields rated for Class-7 hazards.",
-          "image": "/ship/graviton_xenolab.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_xenolab.png"
         },
         {
           "id": "botanical",
           "name": "Xenoflora Laboratory",
           "description": "A sealed biocontainment facility for cultivating and studying alien flora. Specimens are kept under controlled atmospheric conditions for research and medicinal extraction.",
-          "image": "/ship/graviton_botanical.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_botanical.png"
         },
         {
           "id": "artificer-workshop",
           "name": "Artificer Workshop",
           "description": "A master craftsman's sanctum filled with arcane tools and enchanting stations. Here, weapons are forged, armor is reinforced, and magical artifacts are repaired or created.",
-          "image": "/ship/graviton_artificer_workshop.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_artificer_workshop.png"
         }
       ]
     },
@@ -91,19 +91,19 @@
           "id": "sparring-room",
           "name": "Sparring Room",
           "description": "A reinforced training arena with adaptive gravity fields and holographic opponents. Used for combat drills and recreational martial arts tournaments.",
-          "image": "/ship/graviton_sparring_room.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_sparring_room.png"
         },
         {
           "id": "storage",
           "name": "Storage Bay",
           "description": "Climate-controlled cargo vaults for sensitive equipment, personal effects, and mission-critical supplies. Organized by an automated inventory drone swarm.",
-          "image": "/ship/graviton_storage.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_storage.png"
         },
         {
           "id": "pool",
           "name": "Hydrotherapy Deck",
           "description": "A zero-gravity aquatic chamber used for crew rehabilitation and relaxation. The floor features a panoramic observation window looking out into open space. The water is maintained at precisely 28°C with mineral-enriched recycled reserves.",
-          "image": "/ship/graviton_pool.png"
+          "image": "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_pool.png"
         }
       ]
     }
