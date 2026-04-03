@@ -7,6 +7,13 @@
     "color": "#60A5FA",
     "secondaryColor": "#1D4ED8"
   },
+  "binaryAngle": 230,
+  "secondaryStar": {
+    "name": "Pernat Secundus",
+    "type": "Red Dwarf",
+    "color": "#EF4444",
+    "secondaryColor": "#B91C1C"
+  },
   "bodies": [
     {
       "id": "menlar-1",
