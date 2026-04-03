@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ShipBay } from "@/types/ship";
 
 interface ShipBayModalProps {
@@ -97,14 +97,10 @@ export default function ShipBayModal({
 
         {/* Image — full width, natural aspect ratio */}
         {bay.image && (
-          <img
-            src={bay.image}
-            alt={bay.name}
-            className="w-full h-auto block"
-          />
+          <BayImage key={bay.image} src={bay.image} alt={bay.name} accentColor={layerColor} />
         )}
 
-        {/* Close button */}
+        {/* Close button — must be AFTER image so it layers on top */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/30 transition-all cursor-pointer"
@@ -122,6 +118,40 @@ export default function ShipBayModal({
           </svg>
         </button>
       </div>
+    </div>
+  );
+}
+
+function BayImage({ src, alt, accentColor }: { src: string; alt: string; accentColor: string }) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="relative">
+      {/* Placeholder — fixed aspect ratio so the modal doesn't jump */}
+      {!loaded && (
+        <div
+          className="w-full flex items-center justify-center"
+          style={{ aspectRatio: "16 / 9", background: "rgba(255,255,255,0.03)" }}
+        >
+          {/* Pulsing ring loader */}
+          <div
+            className="w-8 h-8 rounded-full animate-pulse"
+            style={{
+              border: `2px solid ${accentColor}40`,
+              borderTopColor: accentColor,
+              animation: "spin 1s linear infinite",
+            }}
+          />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        onLoad={() => setLoaded(true)}
+        className="w-full h-auto block"
+        style={{ display: loaded ? "block" : "none" }}
+      />
     </div>
   );
 }
