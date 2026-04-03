@@ -135,10 +135,10 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
       >
         {/* Ship background image — top right */}
         <img
-          src="/ship/graviton_ship.png"
+          src="https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/ship/graviton_ship.png"
           alt=""
           className="absolute top-16 right-0 w-[50%] opacity-15 pointer-events-none select-none"
-          style={{ maskImage: "linear-gradient(to bottom, black 40%, transparent)", WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent)" }}
+          style={{ maskImage: "radial-gradient(ellipse 85% 75% at 65% 40%, black 50%, transparent 85%)", WebkitMaskImage: "radial-gradient(ellipse 85% 75% at 65% 40%, black 50%, transparent 85%)" }}
         />
 
         {/* Ship title */}
