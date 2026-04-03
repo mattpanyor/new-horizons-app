@@ -9,6 +9,7 @@ export interface Message {
   subject: string;
   body: string;
   sendToAll: boolean;
+  archived: boolean;
   createdAt: string;
 }
 
@@ -25,6 +26,7 @@ function rowToMessage(row: Record<string, unknown>): Message {
     subject: row.subject as string,
     body: row.body as string,
     sendToAll: row.send_to_all as boolean,
+    archived: (row.archived as boolean) ?? false,
     createdAt: row.created_at as string,
   };
 }
@@ -35,7 +37,7 @@ export async function getMessagesForUser(userId: number): Promise<MessageWithRea
     SELECT m.*, mr.is_read, mr.read_at
     FROM messages m
     JOIN message_recipients mr ON mr.message_id = m.id
-    WHERE mr.user_id = ${userId}
+    WHERE mr.user_id = ${userId} AND (m.archived = false OR m.archived IS NULL)
     ORDER BY m.created_at ASC
   `;
 
@@ -50,8 +52,9 @@ export async function getMessagesForUser(userId: number): Promise<MessageWithRea
 export async function getUnreadCount(userId: number): Promise<number> {
   const rows = await sql`
     SELECT COUNT(*) as count
-    FROM message_recipients
-    WHERE user_id = ${userId} AND is_read = false
+    FROM message_recipients mr
+    JOIN messages m ON m.id = mr.message_id
+    WHERE mr.user_id = ${userId} AND mr.is_read = false AND (m.archived = false OR m.archived IS NULL)
   `;
   return Number(rows[0].count);
 }
@@ -67,12 +70,28 @@ export async function markAsRead(messageId: number, userId: number): Promise<boo
   return rows.length > 0;
 }
 
-/** Get all messages (admin view), newest first */
+/** Get all active messages (admin view), newest first */
 export async function getAllMessages(): Promise<Message[]> {
   const rows = await sql`
-    SELECT * FROM messages ORDER BY created_at DESC
+    SELECT * FROM messages WHERE archived = false OR archived IS NULL ORDER BY created_at DESC
   `;
   return rows.map(rowToMessage);
+}
+
+/** Get all archived messages (admin view), newest first */
+export async function getArchivedMessages(): Promise<Message[]> {
+  const rows = await sql`
+    SELECT * FROM messages WHERE archived = true ORDER BY created_at DESC
+  `;
+  return rows.map(rowToMessage);
+}
+
+/** Archive or unarchive a message */
+export async function archiveMessage(id: number, archived: boolean): Promise<boolean> {
+  const rows = await sql`
+    UPDATE messages SET archived = ${archived} WHERE id = ${id} RETURNING id
+  `;
+  return rows.length > 0;
 }
 
 /** Get recipients for a message */

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername, getAllUsers } from "@/lib/db/users";
-import { getAllMessages, getMessageRecipients, getMessageReadByUserIds, createMessage, updateMessage, deleteMessage } from "@/lib/db/messages";
+import { getAllMessages, getArchivedMessages, getMessageRecipients, getMessageReadByUserIds, createMessage, updateMessage, deleteMessage, archiveMessage } from "@/lib/db/messages";
 
 async function requireAdmin() {
   const cookieStore = await cookies();
@@ -18,18 +18,22 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const messages = await getAllMessages();
+  const [messages, archived] = await Promise.all([getAllMessages(), getArchivedMessages()]);
 
-  // Include recipient user IDs for each message
-  const withRecipients = await Promise.all(
-    messages.map(async (msg) => ({
-      ...msg,
-      recipientUserIds: await getMessageRecipients(msg.id),
-      readByUserIds: await getMessageReadByUserIds(msg.id),
-    }))
-  );
+  async function enrichMessages(msgs: Awaited<ReturnType<typeof getAllMessages>>) {
+    return Promise.all(
+      msgs.map(async (msg) => ({
+        ...msg,
+        recipientUserIds: await getMessageRecipients(msg.id),
+        readByUserIds: await getMessageReadByUserIds(msg.id),
+      }))
+    );
+  }
 
-  return NextResponse.json(withRecipients);
+  return NextResponse.json({
+    messages: await enrichMessages(messages),
+    archived: await enrichMessages(archived),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -104,6 +108,25 @@ export async function PUT(req: NextRequest) {
   }
 
   return NextResponse.json(updated);
+}
+
+export async function PATCH(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id, archived } = await req.json();
+  if (!id || typeof archived !== "boolean") {
+    return NextResponse.json({ error: "Missing id or archived flag" }, { status: 400 });
+  }
+
+  const ok = await archiveMessage(id, archived);
+  if (!ok) {
+    return NextResponse.json({ error: "Message not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest) {

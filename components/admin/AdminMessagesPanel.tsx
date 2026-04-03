@@ -54,22 +54,31 @@ function isFullyRead(msg: MessageRow): boolean {
 
 export default function AdminMessagesPanel({ users }: { users: User[] }) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [archivedMessages, setArchivedMessages] = useState<MessageRow[]>([]);
   const [editing, setEditing] = useState<EditForm | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [fullyReadOpen, setFullyReadOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [kankaEntities, setKankaEntities] = useState<KankaEntity[]>([]);
   const [entitySearch, setEntitySearch] = useState("");
   const [entityDropdownOpen, setEntityDropdownOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const entityDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages
-  useEffect(() => {
+  const refreshMessages = useCallback(() => {
     fetch("/api/admin/messages")
       .then((r) => r.json())
-      .then(setMessages)
+      .then((data) => {
+        setMessages(data.messages);
+        setArchivedMessages(data.archived);
+      })
       .catch(() => {});
   }, []);
+
+  // Fetch messages
+  useEffect(() => {
+    refreshMessages();
+  }, [refreshMessages]);
 
   // Fetch kanka entities on mount
   useEffect(() => {
@@ -142,11 +151,9 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
       return;
     }
 
-    // Refresh list
-    const listRes = await fetch("/api/admin/messages");
-    if (listRes.ok) setMessages(await listRes.json());
+    refreshMessages();
     setEditing(null);
-  }, [editing]);
+  }, [editing, refreshMessages]);
 
   async function handleDelete(id: number) {
     const res = await fetch("/api/admin/messages", {
@@ -155,10 +162,18 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
       body: JSON.stringify({ id }),
     });
 
-    if (res.ok) {
-      setMessages((prev) => prev.filter((m) => m.id !== id));
-    }
+    if (res.ok) refreshMessages();
     setConfirmDeleteId(null);
+  }
+
+  async function handleArchive(id: number, archived: boolean) {
+    const res = await fetch("/api/admin/messages", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, archived }),
+    });
+
+    if (res.ok) refreshMessages();
   }
 
   function toggleRecipient(userId: number) {
@@ -180,7 +195,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
     return u?.character ?? u?.username ?? `#${uid}`;
   }
 
-  function renderMessageRow(msg: MessageRow) {
+  function renderMessageRow(msg: MessageRow, isArchived = false) {
     return (
       <div
         key={msg.id}
@@ -226,8 +241,8 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
             </div>
           </div>
         </button>
-        {/* Delete */}
-        <div className="px-2 sm:px-3 shrink-0">
+        {/* Actions */}
+        <div className="px-2 sm:px-3 shrink-0 flex items-center gap-1">
           {confirmDeleteId === msg.id ? (
             <div className="flex items-center gap-1.5 sm:gap-2">
               <button
@@ -244,16 +259,39 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setConfirmDeleteId(msg.id)}
-              className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-              title="Delete"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-            </button>
+            <>
+              <button
+                onClick={() => handleArchive(msg.id, !isArchived)}
+                className="p-1.5 rounded hover:bg-amber-500/20 text-white/40 hover:text-amber-400 transition-colors"
+                title={isArchived ? "Unarchive" : "Archive"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {isArchived ? (
+                    <>
+                      <polyline points="17 11 12 6 7 11" />
+                      <line x1="12" y1="6" x2="12" y2="18" />
+                      <rect x="3" y="18" width="18" height="4" rx="1" />
+                    </>
+                  ) : (
+                    <>
+                      <polyline points="21 8 21 21 3 21 3 8" />
+                      <rect x="1" y="3" width="22" height="5" rx="1" />
+                      <line x1="10" y1="12" x2="14" y2="12" />
+                    </>
+                  )}
+                </svg>
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(msg.id)}
+                className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
+                title="Delete"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -276,7 +314,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
         {activeMessages.length === 0 ? (
           <div className="px-4 py-8 text-center text-white/30 text-xs" style={cinzel}>No pending messages</div>
         ) : (
-          activeMessages.map(renderMessageRow)
+          activeMessages.map((msg) => renderMessageRow(msg))
         )}
       </div>
 
@@ -316,7 +354,38 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
           </button>
           {fullyReadOpen && (
             <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 backdrop-blur-sm opacity-60">
-              {fullyReadMessages.map(renderMessageRow)}
+              {fullyReadMessages.map((msg) => renderMessageRow(msg))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Archived messages (collapsible) */}
+      {archivedMessages.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setArchivedOpen(!archivedOpen)}
+            className="flex items-center gap-2 text-xs text-white/30 hover:text-white/50 transition-colors mb-2"
+            style={cinzel}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${archivedOpen ? "rotate-90" : ""}`}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <span className="tracking-[0.2em] uppercase">Archived ({archivedMessages.length})</span>
+          </button>
+          {archivedOpen && (
+            <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 backdrop-blur-sm opacity-60">
+              {archivedMessages.map((msg) => renderMessageRow(msg, true))}
             </div>
           )}
         </div>
