@@ -66,8 +66,9 @@ export default function LoginPage() {
                 id="username"
                 type="text"
                 autoComplete="username"
+                autoCapitalize="none"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
                 required
                 suppressHydrationWarning
                 className="bg-slate-900/60 border border-indigo-500/30 rounded px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400/60 transition-colors"

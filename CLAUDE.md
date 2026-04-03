@@ -80,26 +80,30 @@ Before completing any code modification task, verify:
 # New Horizons App
 
 Interactive galactic map companion for tabletop RPG campaigns.
-Next.js 16.1.6 + React 19 + TypeScript 5 + Tailwind CSS 4.
-JSON-driven content (no database). Cookie-based auth with in-memory presence.
+Next.js 16.2.1 + React 19 + TypeScript 5 + Tailwind CSS 4.
+Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image storage.
 
 ## Key Paths
 
 - `app/` - Next.js App Router pages and API routes
-- `components/` - React components (GalacticMap, SectorMap, Navbar, etc.)
-- `lib/` - Utilities (sectors.ts, starsystems.ts, bodyColors.ts)
-- `types/` - TypeScript types (sector.ts, starsystem.ts)
+- `components/` - React components (GalacticMap, SectorMap, Ship, Admin, Inbox, etc.)
+- `lib/` - Utilities (sectors.ts, starsystems.ts, bodyColors.ts, allegiances.ts, etc.)
+- `lib/db/` - Database layer (users.ts, messages.ts, kankaEntities.ts, schema.sql, seed.ts)
+- `types/` - TypeScript types (sector.ts, starsystem.ts, ship.ts)
 - `content/sectors/` - JSON sector and star system data
-- `data/users.json` - User accounts (demo credentials)
+- `content/ship/` - Ship layout data (graviton.json)
 
 ## Architecture
 
-- Server Components by default; `"use client"` only for interactive maps
+- Server Components by default; `"use client"` only for interactive maps/modals
 - Async params: always `await params` in pages (Next.js 16 requirement)
 - Static generation for sector pages via `generateStaticParams()`
-- API routes: POST `/api/auth/login`, POST `/api/auth/logout`, GET/POST `/api/presence`
+- Neon Postgres (serverless) for users, messages, and Kanka entities
+- Cookie-based auth: `nh_user` cookie stores username, validated against DB
+- Access levels: 0 (user), 66 (admin), 127 (superadmin)
 - In-memory presenceMap (volatile), 30s stale timeout, 5s client polling
 - SVG-based interactive maps with gradient patterns
+- Images served from Vercel Blob storage (faction logos, ship bay images)
 
 ## Routes
 
@@ -107,6 +111,28 @@ JSON-driven content (no database). Cookie-based auth with in-memory presence.
 - `/login` - LoginPage
 - `/sectors` - GalacticMap + PresenceCard
 - `/sectors/[slug]` - SectorMapWithPresence
+- `/ship` - Ship viewer with interactive deck layers and bay modals
+- `/admin/users` - User management (accessLevel >= 66)
+- `/admin/messages` - Message admin panel (accessLevel >= 127)
+- `/admin/kanka` - Kanka campaign sync (dev only)
+
+## API Routes
+
+- POST `/api/auth/login`, POST `/api/auth/logout` - Authentication
+- GET/POST `/api/presence` - Presence tracking
+- GET `/api/messages` - User messages (enriched with Kanka entity data)
+- GET `/api/messages/unread-count` - Unread message count
+- PATCH `/api/messages/read` - Mark message as read
+- POST/PUT/DELETE `/api/admin/messages` - Admin message CRUD
+- POST `/api/admin/users` - User management
+- POST `/api/admin/kanka/sync`, GET/POST `/api/admin/kanka/entities` - Kanka sync
+
+## Database
+
+- Neon Postgres via `@neondatabase/serverless`
+- Tables: `users`, `messages`, `message_recipients`, `kanka_entities`
+- Auth: bcryptjs password hashing
+- No migrations directory — schema changes are manual
 
 ## Development
 
@@ -119,7 +145,7 @@ JSON-driven content (no database). Cookie-based auth with in-memory presence.
 - Cinzel serif font for sci-fi headings, Geist for body text
 - Glassmorphism UI (backdrop-blur, opacity, translucent panels)
 - Tailwind for all styling, no CSS modules
-- Content = JSON files in `content/sectors/`
+- Map/sector content = JSON files in `content/sectors/`
 - New sectors/systems require `npm run build` to regenerate static pages
 
 ## Constraints
