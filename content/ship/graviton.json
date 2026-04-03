@@ -107,5 +107,37 @@
         }
       ]
     }
+  ],
+  "abilities": [
+    {
+      "name": "Graviton Lattice",
+      "description": "Detects gravitational pulses and shifts, then emits a counter-pulse to stabilize the vessel."
+    },
+    {
+      "name": "Automaton Core",
+      "description": "CODENAME: AEGIS [REDACTED INFORMATION]"
+    },
+    {
+      "name": "Phase Anchor",
+      "description": "Locks the ship's position in both space and time."
+    },
+    {
+      "name": "Chrono-gravitic Array",
+      "description": "Aligns both time and gravity to enable navigation through anomalies."
+    },
+    {
+      "name": "Graviton Lance",
+      "description": "Focused graviton beam that distorts enemy hull integrity."
+    },
+    {
+      "name": "Pulsar Swarm",
+      "description": "A volley of agile micro-missiles causing pinpoint energy bursts upon impact. Designed for rapid shield depletion."
+    }
+  ],
+  "cargo": [
+    { "name": "Lathanium Missiles", "quantity": 5 }
+  ],
+  "isolation": [
+    { "name": "Vereen Core", "quantity": 1 }
   ]
 }
