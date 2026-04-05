@@ -160,10 +160,13 @@ export default function ShipAbilitiesButton({ abilities, shipName, shipClass, ac
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ category: addingTo, ...fields }),
     });
-    if (res.ok) {
-      await fetchItems(addingTo);
-      setAddingTo(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error ?? "Failed to add item");
+      return;
     }
+    await fetchItems(addingTo);
+    setAddingTo(null);
   };
 
   const handleEditItem = async (fields: { name: string; quantity: number; description: string }) => {
@@ -173,28 +176,36 @@ export default function ShipAbilitiesButton({ abilities, shipName, shipClass, ac
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: editingItem.id,
-        category: editingItem.category,
         name: fields.name,
         quantity: fields.quantity,
         description: fields.description,
         imageUrl: editingItem.imageUrl,
       }),
     });
-    if (res.ok) {
-      await fetchItems(editingItem.category);
-      setEditingItem(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error ?? "Failed to update item");
+      return;
     }
+    await fetchItems(editingItem.category);
+    if (viewingItem?.id === editingItem.id) setViewingItem(null);
+    setEditingItem(null);
   };
 
   const handleDeleteItem = async (item: ShipItem) => {
+    if (!confirm(`Delete "${item.name}"?`)) return;
     const res = await fetch("/api/ship/items", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: item.id, category: item.category }),
+      body: JSON.stringify({ id: item.id }),
     });
-    if (res.ok) {
-      await fetchItems(item.category);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error ?? "Failed to delete item");
+      return;
     }
+    if (viewingItem?.id === item.id) setViewingItem(null);
+    await fetchItems(item.category);
   };
 
   function renderItemList(

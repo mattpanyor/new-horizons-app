@@ -33,6 +33,13 @@ export async function getShipItemsByCategory(
   return rows.map(rowToShipItem);
 }
 
+export async function getShipItemById(id: number): Promise<ShipItemRow | null> {
+  const rows = await sql`
+    SELECT * FROM ship_items WHERE id = ${id}
+  `;
+  return rows.length > 0 ? rowToShipItem(rows[0]) : null;
+}
+
 export async function createShipItem(fields: {
   category: "cargo" | "isolation";
   name: string;
