@@ -133,11 +133,5 @@
       "name": "Pulsar Swarm",
       "description": "A volley of agile micro-missiles causing pinpoint energy bursts upon impact. Designed for rapid shield depletion."
     }
-  ],
-  "cargo": [
-    { "name": "Lathanium Missiles", "quantity": 5 }
-  ],
-  "isolation": [
-    { "name": "Vereen Core", "quantity": 1 }
   ]
 }
