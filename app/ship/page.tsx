@@ -75,10 +75,9 @@ export default async function ShipPage() {
       </NavIcon>
       <ShipAbilitiesButton
         abilities={(shipData as ShipData).abilities ?? []}
-        cargo={(shipData as ShipData).cargo ?? []}
-        isolation={(shipData as ShipData).isolation ?? []}
         shipName={(shipData as ShipData).name}
         shipClass={(shipData as ShipData).class}
+        accessLevel={user.accessLevel}
       />
       <ShipViewer ship={shipData as ShipData} />
     </>

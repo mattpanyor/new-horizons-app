@@ -19,8 +19,12 @@ export interface ShipAbility {
 }
 
 export interface ShipItem {
+  id: number;
+  category: "cargo" | "isolation";
   name: string;
   quantity: number;
+  imageUrl: string | null;
+  description: string | null;
 }
 
 export interface ShipData {
@@ -29,6 +33,4 @@ export interface ShipData {
   description: string;
   layers: ShipLayer[];
   abilities?: ShipAbility[];
-  cargo?: ShipItem[];
-  isolation?: ShipItem[];
 }

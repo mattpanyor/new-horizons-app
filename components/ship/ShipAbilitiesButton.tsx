@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ShipAbility, ShipItem } from "@/types/ship";
 import ShipAbilitiesModal from "./ShipAbilitiesModal";
+import AddItemModal from "./AddItemModal";
+import ItemDetailModal from "./ItemDetailModal";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 const LIIX_LOGO = "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/liix_logo.jpeg";
@@ -37,37 +39,209 @@ const ITEM_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-function ItemTile({ item }: { item: ShipItem }) {
+function DefaultItemIcon() {
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded border border-white/8 bg-white/[0.02]">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function ItemTile({
+  item,
+  canEdit,
+  onEdit,
+  onDelete,
+  onClick,
+}: {
+  item: ShipItem;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClick: () => void;
+}) {
+  return (
+    <div className="group/tile flex items-center gap-3 px-3 py-2 rounded border border-white/8 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition-all cursor-pointer"
+      onClick={onClick}
+    >
       <div className="w-8 h-8 shrink-0 text-indigo-400/60">
-        {ITEM_ICONS[item.name] ?? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
-            <rect x="4" y="4" width="16" height="16" rx="2" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
+        {ITEM_ICONS[item.name] ?? <DefaultItemIcon />}
+      </div>
+      <div className="flex flex-col flex-1 min-w-0">
+        <span
+          className="text-[9px] sm:text-[10px] tracking-[0.15em] uppercase text-white/45"
+          style={cinzel}
+        >
+          {item.quantity > 1 ? `${item.quantity}x ` : ""}{item.name}
+        </span>
+        {item.description && (
+          <span className="text-[8px] text-white/25 mt-0.5 leading-tight truncate">
+            {item.description}
+          </span>
         )}
       </div>
-      <span
-        className="text-[9px] sm:text-[10px] tracking-[0.15em] uppercase text-white/45"
-        style={cinzel}
-      >
-        {item.quantity > 1 ? `${item.quantity}x ` : ""}{item.name}
-      </span>
+      {canEdit && (
+        <div className="flex items-center gap-1 opacity-0 group-hover/tile:opacity-100 transition-opacity shrink-0">
+          {/* Edit button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="p-1 rounded hover:bg-white/10 text-white/25 hover:text-indigo-400/80 transition-colors cursor-pointer"
+            title="Edit"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+          {/* Delete button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-1 rounded hover:bg-white/10 text-white/25 hover:text-red-400/80 transition-colors cursor-pointer"
+            title="Delete"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 interface ShipAbilitiesButtonProps {
   abilities: ShipAbility[];
-  cargo: ShipItem[];
-  isolation: ShipItem[];
   shipName: string;
   shipClass: string;
+  accessLevel: number;
 }
 
-export default function ShipAbilitiesButton({ abilities, cargo, isolation, shipName, shipClass }: ShipAbilitiesButtonProps) {
+export default function ShipAbilitiesButton({ abilities, shipName, shipClass, accessLevel }: ShipAbilitiesButtonProps) {
   const [openModal, setOpenModal] = useState<ModalId>(null);
+  const [addingTo, setAddingTo] = useState<"cargo" | "isolation" | null>(null);
+  const [editingItem, setEditingItem] = useState<ShipItem | null>(null);
+  const [viewingItem, setViewingItem] = useState<ShipItem | null>(null);
+  const [cargo, setCargo] = useState<ShipItem[]>([]);
+  const [isolation, setIsolation] = useState<ShipItem[]>([]);
+  const [loadingCargo, setLoadingCargo] = useState(false);
+  const [loadingIsolation, setLoadingIsolation] = useState(false);
+
+  const canEditCargo = accessLevel >= 0;
+  const canEditIsolation = accessLevel >= 1;
+
+  const fetchItems = useCallback(async (category: "cargo" | "isolation") => {
+    const setLoading = category === "cargo" ? setLoadingCargo : setLoadingIsolation;
+    const setItems = category === "cargo" ? setCargo : setIsolation;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ship/items?category=${category}`);
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.items);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchItems("cargo");
+    if (accessLevel >= 1) {
+      fetchItems("isolation");
+    }
+  }, [fetchItems, accessLevel]);
+
+  const handleAddItem = async (fields: { name: string; quantity: number; description: string }) => {
+    if (!addingTo) return;
+    const res = await fetch("/api/ship/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: addingTo, ...fields }),
+    });
+    if (res.ok) {
+      await fetchItems(addingTo);
+      setAddingTo(null);
+    }
+  };
+
+  const handleEditItem = async (fields: { name: string; quantity: number; description: string }) => {
+    if (!editingItem) return;
+    const res = await fetch("/api/ship/items", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editingItem.id,
+        category: editingItem.category,
+        name: fields.name,
+        quantity: fields.quantity,
+        description: fields.description,
+        imageUrl: editingItem.imageUrl,
+      }),
+    });
+    if (res.ok) {
+      await fetchItems(editingItem.category);
+      setEditingItem(null);
+    }
+  };
+
+  const handleDeleteItem = async (item: ShipItem) => {
+    const res = await fetch("/api/ship/items", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.id, category: item.category }),
+    });
+    if (res.ok) {
+      await fetchItems(item.category);
+    }
+  };
+
+  function renderItemList(
+    items: ShipItem[],
+    loading: boolean,
+    canEdit: boolean,
+    category: "cargo" | "isolation",
+    emptyLabel: string,
+  ) {
+    return (
+      <div className="flex flex-col gap-2 w-full max-w-xs">
+        {loading ? (
+          <p className="text-white/30 text-xs tracking-[0.2em] uppercase text-center" style={cinzel}>
+            Loading...
+          </p>
+        ) : items.length > 0 ? (
+          items.map((item) => (
+            <ItemTile
+              key={item.id}
+              item={item}
+              canEdit={canEdit}
+              onEdit={() => setEditingItem(item)}
+              onDelete={() => handleDeleteItem(item)}
+              onClick={() => setViewingItem(item)}
+            />
+          ))
+        ) : (
+          <p className="text-white/30 text-xs tracking-[0.2em] uppercase text-center" style={cinzel}>
+            {emptyLabel}
+          </p>
+        )}
+        {canEdit && (
+          <button
+            onClick={() => setAddingTo(category)}
+            className="mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded border border-indigo-400/20 text-indigo-400/50 hover:text-indigo-400/80 hover:border-indigo-400/40 hover:bg-indigo-400/5 transition-all cursor-pointer"
+            style={cinzel}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span className="text-[8px] tracking-[0.2em] uppercase">Add Item</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -82,19 +256,21 @@ export default function ShipAbilitiesButton({ abilities, cargo, isolation, shipN
           </span>
         </button>
 
-        <button onClick={() => setOpenModal("isolation")} className={btnClass} style={btnStyle}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-            <circle cx="12" cy="12" r="9" />
-            <circle cx="12" cy="12" r="4" />
-            <line x1="12" y1="3" x2="12" y2="1" />
-            <line x1="12" y1="23" x2="12" y2="21" />
-            <line x1="3" y1="12" x2="1" y2="12" />
-            <line x1="23" y1="12" x2="21" y2="12" />
-          </svg>
-          <span className="text-[8px] md:text-xs tracking-[0.2em] md:tracking-[0.35em] uppercase">
-            Isolation
-          </span>
-        </button>
+        {accessLevel >= 1 && (
+          <button onClick={() => setOpenModal("isolation")} className={btnClass} style={btnStyle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="12" r="4" />
+              <line x1="12" y1="3" x2="12" y2="1" />
+              <line x1="12" y1="23" x2="12" y2="21" />
+              <line x1="3" y1="12" x2="1" y2="12" />
+              <line x1="23" y1="12" x2="21" y2="12" />
+            </svg>
+            <span className="text-[8px] md:text-xs tracking-[0.2em] md:tracking-[0.35em] uppercase">
+              Isolation
+            </span>
+          </button>
+        )}
 
         <button onClick={() => setOpenModal("abilities")} className={btnClass} style={btnStyle}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -127,15 +303,7 @@ export default function ShipAbilitiesButton({ abilities, cargo, isolation, shipN
         statusLabel="Cargo Manifest"
         headerLabel="Cargo Hold"
       >
-        <div className="flex flex-col gap-2 w-full max-w-xs">
-          {cargo.length > 0 ? (
-            cargo.map((item) => <ItemTile key={item.name} item={item} />)
-          ) : (
-            <p className="text-white/30 text-xs tracking-[0.2em] uppercase text-center" style={cinzel}>
-              No cargo loaded
-            </p>
-          )}
-        </div>
+        {renderItemList(cargo, loadingCargo, canEditCargo, "cargo", "No cargo loaded")}
       </ShipAbilitiesModal>
 
       {/* Isolation modal */}
@@ -150,16 +318,32 @@ export default function ShipAbilitiesButton({ abilities, cargo, isolation, shipN
         statusLabel="L.I.I.X. Clearance"
         headerLabel="Xeno-specimen Storage"
       >
-        <div className="flex flex-col gap-2 w-full max-w-xs">
-          {isolation.length > 0 ? (
-            isolation.map((item) => <ItemTile key={item.name} item={item} />)
-          ) : (
-            <p className="text-white/30 text-xs tracking-[0.2em] uppercase text-center" style={cinzel}>
-              No specimens stored
-            </p>
-          )}
-        </div>
+        {renderItemList(isolation, loadingIsolation, canEditIsolation, "isolation", "No specimens stored")}
       </ShipAbilitiesModal>
+
+      {/* Add item modal */}
+      <AddItemModal
+        open={addingTo !== null}
+        category={addingTo}
+        onClose={() => setAddingTo(null)}
+        onSubmit={handleAddItem}
+      />
+
+      {/* Edit item modal */}
+      <AddItemModal
+        open={editingItem !== null}
+        category={editingItem?.category ?? null}
+        onClose={() => setEditingItem(null)}
+        onSubmit={handleEditItem}
+        editItem={editingItem}
+      />
+
+      {/* Detail modal */}
+      <ItemDetailModal
+        item={viewingItem}
+        onClose={() => setViewingItem(null)}
+        itemIcons={ITEM_ICONS}
+      />
     </>
   );
 }
