@@ -93,12 +93,18 @@ export async function PATCH(req: NextRequest) {
   const newPrefix = newTrimmed + "/";
 
   try {
-    // Phase 1: Collect all blobs to move
+    // Phase 1: Collect all blobs to move (including folder markers)
     const blobsToMove: { url: string; newPathname: string }[] = [];
+    let oldFolderMarkerUrl: string | null = null;
     let cursor: string | undefined;
     do {
       const result = await list({ prefix: oldPrefix, cursor, limit: 100 });
       for (const blob of result.blobs) {
+        // Folder markers have a pathname ending with "/" and zero size
+        if (blob.pathname === oldPrefix && blob.size === 0) {
+          oldFolderMarkerUrl = blob.url;
+          continue;
+        }
         const relativePath = blob.pathname.slice(oldPrefix.length);
         blobsToMove.push({ url: blob.url, newPathname: newPrefix + relativePath });
       }
@@ -123,10 +129,12 @@ export async function PATCH(req: NextRequest) {
 
     // Create new folder marker and clean up old one
     await createFolder(newPrefix);
-    try {
-      await del(oldPrefix);
-    } catch {
-      // Old folder marker may not exist as a blob
+    if (oldFolderMarkerUrl) {
+      try {
+        await del(oldFolderMarkerUrl);
+      } catch {
+        // Old folder marker cleanup is best-effort
+      }
     }
 
     return NextResponse.json({ success: true, moved: copied.length });
