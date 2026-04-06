@@ -85,7 +85,7 @@ export default function AddItemModal({ open, category, onClose, onSubmit, editIt
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       <div
-        className="relative w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto scifi-scroll"
         style={{
           background: "linear-gradient(145deg, rgba(8, 12, 28, 0.98), rgba(4, 6, 18, 0.98))",
           border: "1px solid rgba(99, 102, 241, 0.3)",
