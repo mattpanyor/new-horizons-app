@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { ShipAbility, ShipItem } from "@/types/ship";
+import type { ShipAbility, ShipItem, ShipItemType } from "@/types/ship";
 import ShipAbilitiesModal from "./ShipAbilitiesModal";
 import AddItemModal from "./AddItemModal";
 import ItemDetailModal from "./ItemDetailModal";
+import { ITEM_TYPE_ICONS } from "./itemTypeIcons";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 const LIIX_LOGO = "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/liix_logo.jpeg";
@@ -14,39 +15,6 @@ const btnClass =
 const btnStyle = { ...cinzel, backdropFilter: "blur(8px)", background: "rgba(10,10,30,0.5)" };
 
 type ModalId = "cargo" | "isolation" | "abilities" | null;
-
-const ITEM_ICONS: Record<string, React.ReactNode> = {
-  "Lathanium Missiles": (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <path d="M12 2 L14 8 L12 20 L10 8 Z" fill="currentColor" fillOpacity="0.1" />
-      <path d="M8 10 L12 20 L16 10" />
-      <line x1="12" y1="20" x2="12" y2="22" />
-      <line x1="9" y1="22" x2="15" y2="22" />
-      <circle cx="12" cy="6" r="1.5" fill="currentColor" fillOpacity="0.2" />
-    </svg>
-  ),
-  "Vereen Core": (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-full h-full">
-      <circle cx="12" cy="12" r="7" />
-      <circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.15" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" fillOpacity="0.4" />
-      <path d="M12 5 L12 2" />
-      <path d="M12 22 L12 19" />
-      <path d="M5 12 L2 12" />
-      <path d="M22 12 L19 12" />
-      <circle cx="12" cy="12" r="10" strokeDasharray="2 3" strokeOpacity="0.4" />
-    </svg>
-  ),
-};
-
-function DefaultItemIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
-      <rect x="4" y="4" width="16" height="16" rx="2" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
 
 function ItemTile({
   item,
@@ -66,7 +34,7 @@ function ItemTile({
       onClick={onClick}
     >
       <div className="w-8 h-8 shrink-0 text-indigo-400/60">
-        {ITEM_ICONS[item.name] ?? <DefaultItemIcon />}
+        {(() => { const Icon = ITEM_TYPE_ICONS[item.itemType]; return Icon ? <Icon /> : null; })()}
       </div>
       <div className="flex flex-col flex-1 min-w-0">
         <span
@@ -111,14 +79,14 @@ function ItemTile({
   );
 }
 
-interface ShipAbilitiesButtonProps {
+interface ShipControlsProps {
   abilities: ShipAbility[];
   shipName: string;
   shipClass: string;
   accessLevel: number;
 }
 
-export default function ShipAbilitiesButton({ abilities, shipName, shipClass, accessLevel }: ShipAbilitiesButtonProps) {
+export default function ShipControls({ abilities, shipName, shipClass, accessLevel }: ShipControlsProps) {
   const [openModal, setOpenModal] = useState<ModalId>(null);
   const [addingTo, setAddingTo] = useState<"cargo" | "isolation" | null>(null);
   const [editingItem, setEditingItem] = useState<ShipItem | null>(null);
@@ -153,33 +121,84 @@ export default function ShipAbilitiesButton({ abilities, shipName, shipClass, ac
     }
   }, [fetchItems, accessLevel]);
 
-  const handleAddItem = async (fields: { name: string; quantity: number; description: string }) => {
+  const uploadItemImage = async (
+    file: File,
+    itemId: number,
+    itemName: string,
+    category: "cargo" | "isolation",
+    oldUrl?: string | null,
+  ): Promise<string | null> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("category", category);
+    formData.append("itemId", String(itemId));
+    formData.append("itemName", itemName);
+    if (oldUrl) formData.append("oldUrl", oldUrl);
+    const res = await fetch("/api/ship/items/image", { method: "POST", body: formData });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.url ?? null;
+  };
+
+  const handleAddItem = async (fields: { name: string; quantity: number; description: string; itemType: ShipItemType; imageFile?: File | null }) => {
     if (!addingTo) return;
+    const { imageFile, ...rest } = fields;
     const res = await fetch("/api/ship/items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ category: addingTo, ...fields }),
+      body: JSON.stringify({ category: addingTo, ...rest }),
     });
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
       alert(data?.error ?? "Failed to add item");
       return;
     }
+    const item = data?.item;
+
+    // Upload image and update item with the URL
+    if (imageFile && item?.id) {
+      const imageUrl = await uploadItemImage(imageFile, item.id, fields.name, addingTo);
+      if (imageUrl) {
+        await fetch("/api/ship/items", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: item.id, itemType: item.itemType, name: item.name, quantity: item.quantity, description: item.description, imageUrl }),
+        });
+      }
+    }
+
     await fetchItems(addingTo);
     setAddingTo(null);
   };
 
-  const handleEditItem = async (fields: { name: string; quantity: number; description: string }) => {
+  const handleEditItem = async (fields: { name: string; quantity: number; description: string; itemType: ShipItemType; imageFile?: File | null }) => {
     if (!editingItem) return;
+    const { imageFile, ...rest } = fields;
+
+    let imageUrl = editingItem.imageUrl;
+
+    // Upload new image if provided
+    if (imageFile) {
+      const uploaded = await uploadItemImage(
+        imageFile,
+        editingItem.id,
+        fields.name,
+        editingItem.category,
+        editingItem.imageUrl,
+      );
+      if (uploaded) imageUrl = uploaded;
+    }
+
     const res = await fetch("/api/ship/items", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: editingItem.id,
-        name: fields.name,
-        quantity: fields.quantity,
-        description: fields.description,
-        imageUrl: editingItem.imageUrl,
+        itemType: rest.itemType,
+        name: rest.name,
+        quantity: rest.quantity,
+        description: rest.description,
+        imageUrl,
       }),
     });
     if (!res.ok) {
@@ -353,7 +372,6 @@ export default function ShipAbilitiesButton({ abilities, shipName, shipClass, ac
       <ItemDetailModal
         item={viewingItem}
         onClose={() => setViewingItem(null)}
-        itemIcons={ITEM_ICONS}
       />
     </>
   );

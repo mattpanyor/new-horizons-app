@@ -2,13 +2,19 @@
 
 import { useEffect } from "react";
 import type { ShipItem } from "@/types/ship";
+import { CARGO_TYPES, ISOLATION_TYPES } from "@/types/ship";
+import { ITEM_TYPE_ICONS } from "./itemTypeIcons";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
+
+const TYPE_LABELS: Record<string, string> = Object.fromEntries([
+  ...CARGO_TYPES.map((t) => [t.slug, t.label]),
+  ...ISOLATION_TYPES.map((t) => [t.slug, t.label]),
+]);
 
 interface ItemDetailModalProps {
   item: ShipItem | null;
   onClose: () => void;
-  itemIcons: Record<string, React.ReactNode>;
 }
 
 function PlaceholderImage() {
@@ -26,7 +32,7 @@ function PlaceholderImage() {
   );
 }
 
-export default function ItemDetailModal({ item, onClose, itemIcons }: ItemDetailModalProps) {
+export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps) {
   useEffect(() => {
     if (!item) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -39,6 +45,8 @@ export default function ItemDetailModal({ item, onClose, itemIcons }: ItemDetail
   if (!item) return null;
 
   const categoryLabel = item.category === "cargo" ? "Cargo" : "Isolation";
+  const typeLabel = TYPE_LABELS[item.itemType] ?? item.itemType;
+  const Icon = ITEM_TYPE_ICONS[item.itemType];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -98,12 +106,7 @@ export default function ItemDetailModal({ item, onClose, itemIcons }: ItemDetail
           {/* Icon + name */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 shrink-0 text-indigo-400/70">
-              {itemIcons[item.name] ?? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
-                  <rect x="4" y="4" width="16" height="16" rx="2" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
+              {Icon && <Icon />}
             </div>
             <div className="flex flex-col">
               <h2 className="text-base font-semibold text-white/90 tracking-wide" style={cinzel}>
@@ -112,6 +115,9 @@ export default function ItemDetailModal({ item, onClose, itemIcons }: ItemDetail
               <div className="flex items-center gap-3 mt-0.5">
                 <span className="text-[8px] tracking-[0.2em] uppercase text-indigo-400/40" style={cinzel}>
                   {categoryLabel}
+                </span>
+                <span className="text-[8px] tracking-[0.15em] uppercase text-white/30" style={cinzel}>
+                  {typeLabel}
                 </span>
                 <span className="text-[8px] tracking-[0.15em] uppercase text-white/25" style={cinzel}>
                   Qty: {item.quantity}

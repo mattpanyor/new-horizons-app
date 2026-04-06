@@ -2,9 +2,12 @@ import { neon } from "@neondatabase/serverless";
 
 const sql = neon(process.env.DATABASE_URL!);
 
+import type { ShipItemType } from "@/types/ship";
+
 export interface ShipItemRow {
   id: number;
   category: "cargo" | "isolation";
+  itemType: ShipItemType;
   name: string;
   quantity: number;
   imageUrl: string | null;
@@ -16,6 +19,7 @@ function rowToShipItem(row: Record<string, unknown>): ShipItemRow {
   return {
     id: row.id as number,
     category: row.category as "cargo" | "isolation",
+    itemType: row.item_type as ShipItemType,
     name: row.name as string,
     quantity: row.quantity as number,
     imageUrl: (row.image_url as string) ?? null,
@@ -42,14 +46,15 @@ export async function getShipItemById(id: number): Promise<ShipItemRow | null> {
 
 export async function createShipItem(fields: {
   category: "cargo" | "isolation";
+  itemType: ShipItemType;
   name: string;
   quantity?: number;
   imageUrl?: string;
   description?: string;
 }): Promise<ShipItemRow> {
   const rows = await sql`
-    INSERT INTO ship_items (category, name, quantity, image_url, description)
-    VALUES (${fields.category}, ${fields.name}, ${fields.quantity ?? 1}, ${fields.imageUrl ?? null}, ${fields.description ?? null})
+    INSERT INTO ship_items (category, item_type, name, quantity, image_url, description)
+    VALUES (${fields.category}, ${fields.itemType}, ${fields.name}, ${fields.quantity ?? 1}, ${fields.imageUrl ?? null}, ${fields.description ?? null})
     RETURNING *
   `;
   return rowToShipItem(rows[0]);
@@ -58,6 +63,7 @@ export async function createShipItem(fields: {
 export async function updateShipItem(
   id: number,
   fields: {
+    itemType: ShipItemType;
     name: string;
     quantity: number;
     imageUrl: string | null;
@@ -66,6 +72,7 @@ export async function updateShipItem(
 ): Promise<ShipItemRow | null> {
   const rows = await sql`
     UPDATE ship_items SET
+      item_type   = ${fields.itemType},
       name        = ${fields.name},
       quantity    = ${fields.quantity},
       image_url   = ${fields.imageUrl},

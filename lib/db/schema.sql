@@ -11,9 +11,23 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS ship_items (
   id          SERIAL PRIMARY KEY,
   category    VARCHAR(20) NOT NULL CHECK (category IN ('cargo', 'isolation')),
+  item_type   VARCHAR(30) NOT NULL CHECK (item_type IN (
+    'general', 'ordnance', 'precious', 'contraband', 'mission',
+    'biogenic-seed', 'live-specimen', 'cadaver', 'excised-tissue', 'phytosample'
+  )),
   name        VARCHAR(255) NOT NULL,
   quantity    INTEGER NOT NULL DEFAULT 1,
   image_url   TEXT,
   description TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration for existing tables:
+-- ALTER TABLE ship_items ADD COLUMN item_type VARCHAR(30);
+-- UPDATE ship_items SET item_type = 'general' WHERE category = 'cargo' AND item_type IS NULL;
+-- UPDATE ship_items SET item_type = 'live-specimen' WHERE category = 'isolation' AND item_type IS NULL;
+-- ALTER TABLE ship_items ALTER COLUMN item_type SET NOT NULL;
+-- ALTER TABLE ship_items ADD CONSTRAINT ship_items_item_type_check CHECK (item_type IN (
+--   'general', 'ordnance', 'precious', 'contraband', 'mission',
+--   'biogenic-seed', 'live-specimen', 'cadaver', 'excised-tissue', 'phytosample'
+-- ));

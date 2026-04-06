@@ -8,6 +8,18 @@ import {
   updateShipItem,
   deleteShipItem,
 } from "@/lib/db/shipItems";
+import { del } from "@vercel/blob";
+import { CARGO_TYPES, ISOLATION_TYPES } from "@/types/ship";
+import type { ShipItemType } from "@/types/ship";
+
+const VALID_CARGO_TYPES = new Set<string>(CARGO_TYPES.map((t) => t.slug));
+const VALID_ISOLATION_TYPES = new Set<string>(ISOLATION_TYPES.map((t) => t.slug));
+
+function isValidItemType(category: string, itemType: string): itemType is ShipItemType {
+  if (category === "cargo") return VALID_CARGO_TYPES.has(itemType);
+  if (category === "isolation") return VALID_ISOLATION_TYPES.has(itemType);
+  return false;
+}
 
 async function getUser() {
   const cookieStore = await cookies();
@@ -63,13 +75,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { category, name, quantity, description, imageUrl } = body;
+  const { category, itemType, name, quantity, description, imageUrl } = body;
 
   if (category !== "cargo" && category !== "isolation") {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
   if (!canAccess(user.accessLevel, category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!itemType || typeof itemType !== "string" || !isValidItemType(category, itemType)) {
+    return NextResponse.json({ error: "Invalid item type for this category" }, { status: 400 });
   }
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -83,6 +98,7 @@ export async function POST(req: NextRequest) {
 
   const item = await createShipItem({
     category,
+    itemType,
     name: name.trim(),
     quantity: typeof quantity === "number" && quantity >= 1 ? quantity : 1,
     imageUrl: typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : undefined,
@@ -103,7 +119,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, name, quantity, description, imageUrl } = body;
+  const { id, itemType, name, quantity, description, imageUrl } = body;
 
   if (!id || typeof id !== "number") {
     return NextResponse.json({ error: "Item id is required" }, { status: 400 });
@@ -117,6 +133,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const resolvedType = itemType ?? existing.itemType;
+  if (!isValidItemType(existing.category, resolvedType)) {
+    return NextResponse.json({ error: "Invalid item type for this category" }, { status: 400 });
+  }
+
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
@@ -128,6 +149,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const item = await updateShipItem(id, {
+    itemType: resolvedType,
     name: name.trim(),
     quantity: typeof quantity === "number" && quantity >= 1 ? quantity : 1,
     imageUrl: typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : null,
@@ -164,6 +186,14 @@ export async function DELETE(req: NextRequest) {
   }
   if (!canAccess(user.accessLevel, existing.category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (existing.imageUrl) {
+    try {
+      await del(existing.imageUrl);
+    } catch {
+      // Best-effort cleanup
+    }
   }
 
   await deleteShipItem(id);

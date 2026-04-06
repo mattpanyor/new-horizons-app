@@ -4,7 +4,7 @@ import { getUserByUsername } from "@/lib/db/users";
 import Navbar from "@/components/Navbar";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import ShipViewer from "@/components/ship/ShipViewer";
-import ShipAbilitiesButton from "@/components/ship/ShipAbilitiesButton";
+import ShipControls from "@/components/ship/ShipControls";
 import NavIcon from "@/components/NavIcon";
 import shipData from "@/content/ship/graviton.json";
 import type { ShipData } from "@/types/ship";
@@ -73,7 +73,7 @@ export default async function ShipPage() {
           <circle cx="76" cy="40" r="0.5" fill="currentColor" fillOpacity="0.35" stroke="none" />
         </svg>
       </NavIcon>
-      <ShipAbilitiesButton
+      <ShipControls
         abilities={(shipData as ShipData).abilities ?? []}
         shipName={(shipData as ShipData).name}
         shipClass={(shipData as ShipData).class}
