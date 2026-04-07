@@ -63,7 +63,7 @@
       "marker": {
         "type": "ship",
         "name": "Vanguard Wolf",
-        "position": 0.2,
+        "position": 0.4,
         "allegiance": "ashford"
       }
     },
@@ -75,7 +75,7 @@
       "marker": {
         "type": "ship",
         "name": "Arch of Laurel",
-        "position": 0.1,
+        "position": 0.3,
         "allegiance": "fairfield"
       }
     },
@@ -87,7 +87,7 @@
       "marker": {
         "type": "ship",
         "name": "Ray of Purity",
-        "position": 0.1,
+        "position": 0.4,
         "allegiance": "inquisitorium"
       }
     }
