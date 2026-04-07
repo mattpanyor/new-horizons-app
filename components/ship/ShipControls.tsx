@@ -279,7 +279,7 @@ export default function ShipControls({ abilities, shipName, shipClass, accessLev
 
   return (
     <>
-      <div className="fixed bottom-6 left-3 sm:left-6 md:left-10 z-40 flex flex-col gap-3">
+      <div className="fixed bottom-6 left-3 sm:left-6 md:left-10 z-[55] flex flex-col gap-3">
         <button onClick={() => setOpenModal("cargo")} className={btnClass} style={btnStyle}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <rect x="2" y="7" width="20" height="14" rx="2" />
