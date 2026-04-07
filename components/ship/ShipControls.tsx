@@ -29,9 +29,13 @@ function ItemTile({
   onDelete: () => void;
   onClick: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <div className="group/tile flex items-center gap-3 px-3 py-2 rounded border border-white/8 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition-all cursor-pointer"
+    <div
+      className="flex items-center gap-3 px-3 py-2 rounded border border-white/8 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition-all cursor-pointer"
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       <div className="w-8 h-8 shrink-0 text-indigo-400/60">
         {(() => { const Icon = ITEM_TYPE_ICONS[item.itemType]; return Icon ? <Icon /> : null; })()}
@@ -50,7 +54,7 @@ function ItemTile({
         )}
       </div>
       {canEdit && (
-        <div className="flex items-center gap-1 opacity-0 group-hover/tile:opacity-100 transition-opacity shrink-0">
+        <div className={`flex items-center gap-1 shrink-0 transition-opacity ${hovered ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
           {/* Edit button */}
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}

@@ -139,11 +139,16 @@ function FileCard({
   onRename: () => void;
   onCopyUrl: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   const type = getFileType(blob.pathname);
   const name = fileName(blob.pathname);
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-white/8 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition-all overflow-hidden">
+    <div
+      className="relative flex flex-col rounded-lg border border-white/8 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition-all overflow-hidden"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {/* Preview area */}
       <div className="aspect-square flex items-center justify-center p-3 relative overflow-hidden">
         {type === "image" ? (
@@ -163,7 +168,7 @@ function FileCard({
         )}
 
         {/* Hover actions */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+        <div className={`absolute inset-0 bg-black/60 flex items-center justify-center gap-2 transition-opacity ${hovered ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
           <button
             onClick={onCopyUrl}
             title="Copy URL"
@@ -221,12 +226,15 @@ function FolderCard({
   onRename: () => void;
   onDelete: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <div
-      className="group relative flex flex-col items-center justify-center rounded-lg border border-white/8 bg-white/[0.02] hover:border-indigo-400/25 hover:bg-white/[0.04] transition-all cursor-pointer aspect-square"
+      className="relative flex flex-col items-center justify-center rounded-lg border border-white/8 bg-white/[0.02] hover:border-indigo-400/25 hover:bg-white/[0.04] transition-all cursor-pointer aspect-square"
       onClick={onOpen}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <div className="text-indigo-400/30 group-hover:text-indigo-400/50 transition-colors mb-1">
+      <div className={`transition-colors mb-1 ${hovered ? "text-indigo-400/50" : "text-indigo-400/30"}`}>
         <FolderIcon className="w-10 h-10" />
       </div>
       <p className="text-[9px] sm:text-[10px] text-white/50 truncate max-w-[90%] text-center" title={name}>
@@ -234,7 +242,7 @@ function FolderCard({
       </p>
 
       {/* Hover actions */}
-      <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={`absolute top-1.5 right-1.5 flex items-center gap-1 transition-opacity ${hovered ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
         <button
           onClick={(e) => { e.stopPropagation(); onRename(); }}
           title="Rename folder"
