@@ -2,14 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername } from "@/lib/db/users";
 import { getGameSession, updateGameState } from "@/lib/db/games";
-import {
-  isValidMove,
-  applyMove,
-  checkWin,
-  getAiMove,
-  getValidMoves,
-} from "@/lib/games/stormQueensFolly";
-import type { GameMove, StormQueensFollyState, PieceOwner } from "@/types/game";
+import { handleStormQueensFollyMove } from "@/lib/games/stormQueensFolly";
+import { handleEngineeringChallengeMove } from "@/lib/games/engineeringChallenge";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -29,9 +23,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { sessionId, from, to, moveVersion } = body;
-  if (!sessionId || !from || !to) {
-    return NextResponse.json({ error: "sessionId, from, and to are required" }, { status: 400 });
+  const { sessionId } = body;
+  if (!sessionId) {
+    return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
   }
 
   const session = await getGameSession(sessionId);
@@ -47,57 +41,29 @@ export async function POST(req: NextRequest) {
   if (session.designatedPlayer !== username) {
     return NextResponse.json({ error: "Not your game" }, { status: 403 });
   }
-  if (session.state.turn !== "player") {
-    return NextResponse.json({ error: "Not your turn" }, { status: 400 });
+
+  // Dispatch to game-specific handler
+  let result: { state: unknown; winner: string | null; error?: string };
+
+  switch (session.gameType) {
+    case "storm-queens-folly":
+      result = handleStormQueensFollyMove(session, body);
+      break;
+    case "engineering-challenge":
+      result = handleEngineeringChallengeMove(session, body);
+      break;
+    default:
+      return NextResponse.json({ error: "Unknown game type" }, { status: 400 });
   }
 
-  // Version check — reject stale moves (e.g. double-click race)
-  if (typeof moveVersion === "number" && moveVersion !== session.state.moveHistory.length) {
-    return NextResponse.json({ error: "Stale move — board has changed" }, { status: 409 });
+  if (result.error) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  const move: GameMove = { from, to };
-  if (!isValidMove(session.state.board, move, "player")) {
-    return NextResponse.json({ error: "Invalid move" }, { status: 400 });
-  }
-
-  // Apply player move
-  let board = applyMove(session.state.board, move);
-  const history = [...session.state.moveHistory, move];
-  let winner: PieceOwner | "draw" | null = checkWin(board);
-  let turn: PieceOwner = "opponent";
-
-  // If player didn't win, run AI
-  if (!winner) {
-    const aiMove = getAiMove(board, session.config.challengeRate);
-    if (aiMove) {
-      board = applyMove(board, aiMove);
-      history.push(aiMove);
-      winner = checkWin(board);
-      turn = "player";
-
-      // After AI moves, check if player is now stuck
-      if (!winner && getValidMoves(board, "player").length === 0) {
-        winner = "draw";
-      }
-    } else {
-      // AI has no moves
-      const playerMoves = getValidMoves(board, "player");
-      winner = playerMoves.length === 0 ? "draw" : "draw"; // AI stuck = draw regardless
-      turn = "player";
-    }
-  }
-
-  const newState: StormQueensFollyState = {
-    board,
-    turn,
-    moveHistory: history,
-  };
-
-  await updateGameState(sessionId, newState, winner);
+  await updateGameState(sessionId, result.state as Record<string, unknown>, result.winner);
 
   return NextResponse.json({
-    state: newState,
-    winner,
+    state: result.state,
+    winner: result.winner,
   });
 }

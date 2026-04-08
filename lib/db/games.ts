@@ -2,9 +2,8 @@ import { neon } from "@neondatabase/serverless";
 import type {
   GameSession,
   GameType,
-  StormQueensFollyConfig,
-  StormQueensFollyState,
-  PieceOwner,
+  GameConfig,
+  GameState,
 } from "@/types/game";
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -14,10 +13,10 @@ function rowToSession(row: Record<string, unknown>): GameSession {
     id: row.id as number,
     gameType: row.game_type as GameType,
     status: row.status as GameSession["status"],
-    config: row.config as StormQueensFollyConfig,
-    state: row.state as StormQueensFollyState,
+    config: row.config as GameConfig,
+    state: row.state as GameState,
     designatedPlayer: (row.designated_player as string) ?? null,
-    winner: (row.winner as PieceOwner | "draw") ?? null,
+    winner: (row.winner as string) ?? null,
     createdAt: row.created_at as string,
     launchedAt: (row.launched_at as string) ?? null,
     finishedAt: (row.finished_at as string) ?? null,
@@ -47,8 +46,8 @@ export async function getActiveGame(): Promise<GameSession | null> {
 
 export async function createGameSession(fields: {
   gameType: GameType;
-  config: StormQueensFollyConfig;
-  state: StormQueensFollyState;
+  config: GameConfig;
+  state: GameState;
   designatedPlayer: string;
 }): Promise<GameSession> {
   const rows = await sql`
@@ -67,8 +66,8 @@ export async function createGameSession(fields: {
 export async function updateGameSession(
   id: number,
   fields: {
-    config: StormQueensFollyConfig;
-    state: StormQueensFollyState;
+    config: GameConfig;
+    state: GameState;
     designatedPlayer: string;
   }
 ): Promise<GameSession | null> {
@@ -119,8 +118,8 @@ export async function stopGameSession(id: number): Promise<GameSession | null> {
 
 export async function updateGameState(
   id: number,
-  state: StormQueensFollyState,
-  winner?: PieceOwner | "draw" | null
+  state: GameState,
+  winner?: string | null
 ): Promise<GameSession | null> {
   const rows = await sql`
     UPDATE game_sessions SET

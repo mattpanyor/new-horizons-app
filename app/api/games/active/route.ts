@@ -38,8 +38,11 @@ export async function GET() {
     }
   }
 
-  // Strip challengeRate from config (hidden from player)
-  const { challengeRate: _, ...safeConfig } = session.config;
+  // Strip sensitive config fields (e.g. challengeRate for Storm Queen's Folly)
+  const safeConfig = { ...session.config };
+  if ("challengeRate" in safeConfig) {
+    delete (safeConfig as Record<string, unknown>).challengeRate;
+  }
 
   return NextResponse.json({
     active: true,

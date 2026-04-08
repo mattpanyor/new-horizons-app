@@ -69,7 +69,7 @@ export default function GamePage({ username }: GamePageProps) {
   // Active game
   const { session, player, opponent } = data as ActiveGameResponse;
   const isDesignatedPlayer = username === session.designatedPlayer;
-  const isMyTurn = isDesignatedPlayer && session.state.turn === "player";
+  const isMyTurn = isDesignatedPlayer && "turn" in session.state && session.state.turn === "player";
 
   const BoardComponent = GAME_COMPONENTS[session.gameType as GameType];
   if (!BoardComponent) {

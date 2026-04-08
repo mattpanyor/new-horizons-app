@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { GameSession, GameType, Board, CellState } from "@/types/game";
+import type { GameSession, GameType, Board, CellState, StormQueensFollyConfig } from "@/types/game";
 import { GAME_REGISTRY, GAME_TYPES } from "@/lib/games/registry";
+import { getDefaultBoard } from "@/lib/games/stormQueensFolly";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -89,7 +90,10 @@ export default function GamesPanel() {
   const [formRate, setFormRate] = useState<1 | 2 | 3>(2);
   const [formPlayer, setFormPlayer] = useState("");
   const [formEntity, setFormEntity] = useState<number | null>(null);
-  const [formBoard, setFormBoard] = useState<Board>(GAME_REGISTRY[GAME_TYPES[0]].getDefaultBoard());
+  const [formBoard, setFormBoard] = useState<Board>(getDefaultBoard());
+  const [formWireCount, setFormWireCount] = useState(4);
+  const [formDifficulty, setFormDifficulty] = useState<"easy" | "normal" | "hard">("normal");
+  const [formTimeLimit, setFormTimeLimit] = useState(90);
   const [submitting, setSubmitting] = useState(false);
 
   // Player dropdown
@@ -156,13 +160,24 @@ export default function GamesPanel() {
     const res = await fetch("/api/admin/games", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        gameType: formGameType,
-        challengeRate: formRate,
-        designatedPlayer: formPlayer,
-        opponentEntityId: formEntity,
-        initialBoard: formBoard,
-      }),
+      body: JSON.stringify(
+        formGameType === "storm-queens-folly"
+          ? {
+              gameType: formGameType,
+              challengeRate: formRate,
+              designatedPlayer: formPlayer,
+              opponentEntityId: formEntity,
+              initialBoard: formBoard,
+            }
+          : {
+              gameType: formGameType,
+              designatedPlayer: formPlayer,
+              opponentEntityId: formEntity,
+              wireCount: formWireCount,
+              difficulty: formDifficulty,
+              timeLimit: formTimeLimit,
+            }
+      ),
     });
     setSubmitting(false);
     if (!res.ok) {
@@ -171,7 +186,7 @@ export default function GamesPanel() {
       return;
     }
     setCreating(false);
-    setFormBoard(GAME_REGISTRY[formGameType].getDefaultBoard());
+    setFormBoard(getDefaultBoard());
     await fetchData();
   };
 
@@ -257,7 +272,7 @@ export default function GamesPanel() {
                     type="button"
                     onClick={() => {
                       setFormGameType(t);
-                      setFormBoard(GAME_REGISTRY[t].getDefaultBoard());
+                      if (t === "storm-queens-folly") setFormBoard(getDefaultBoard());
                     }}
                     className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
                       formGameType === t
@@ -273,29 +288,103 @@ export default function GamesPanel() {
             </div>
           )}
 
-          {/* Challenge rate */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
-              Challenge Rate
-            </label>
-            <div className="flex gap-2">
-              {([1, 2, 3] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setFormRate(r)}
-                  className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
-                    formRate === r
-                      ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
-                      : "border-white/10 text-white/30 hover:border-white/20"
-                  }`}
-                  style={cinzel}
-                >
-                  {RATE_LABELS[r]}
-                </button>
-              ))}
+          {/* SQF: Challenge rate */}
+          {formGameType === "storm-queens-folly" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                Challenge Rate
+              </label>
+              <div className="flex gap-2">
+                {([1, 2, 3] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setFormRate(r)}
+                    className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
+                      formRate === r
+                        ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
+                        : "border-white/10 text-white/30 hover:border-white/20"
+                    }`}
+                    style={cinzel}
+                  >
+                    {RATE_LABELS[r]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* EC: Wire count + time limit */}
+          {formGameType === "engineering-challenge" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                  Wire Pairs
+                </label>
+                <div className="flex gap-2">
+                  {([3, 4, 5, 6] as const).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setFormWireCount(n)}
+                      className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
+                        formWireCount === n
+                          ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
+                          : "border-white/10 text-white/30 hover:border-white/20"
+                      }`}
+                      style={cinzel}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                  Difficulty
+                </label>
+                <div className="flex gap-2">
+                  {(["easy", "normal", "hard"] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setFormDifficulty(d)}
+                      className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
+                        formDifficulty === d
+                          ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
+                          : "border-white/10 text-white/30 hover:border-white/20"
+                      }`}
+                      style={cinzel}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                  Time Limit
+                </label>
+                <div className="flex gap-2">
+                  {([60, 90, 120, 0] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setFormTimeLimit(t)}
+                      className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
+                        formTimeLimit === t
+                          ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
+                          : "border-white/10 text-white/30 hover:border-white/20"
+                      }`}
+                      style={cinzel}
+                    >
+                      {t === 0 ? "None" : `${t}s`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Designated player */}
           <div className="flex flex-col gap-1">
@@ -412,13 +501,15 @@ export default function GamesPanel() {
             </div>
           </div>
 
-          {/* Board setup */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
-              Starting Board (click to cycle: empty → gold → purple)
-            </label>
-            <BoardEditor board={formBoard} onChange={setFormBoard} />
-          </div>
+          {/* SQF: Board setup */}
+          {formGameType === "storm-queens-folly" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                Starting Board (click to cycle: empty → gold → purple)
+              </label>
+              <BoardEditor board={formBoard} onChange={setFormBoard} />
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 mt-1">
@@ -473,7 +564,8 @@ export default function GamesPanel() {
                     Player: {player?.character ?? s.designatedPlayer}
                     {entity ? ` vs ${entity.name}` : ""}
                     {" · "}
-                    {RATE_LABELS[s.config.challengeRate]}
+                    {"challengeRate" in s.config && RATE_LABELS[(s.config as StormQueensFollyConfig).challengeRate]}
+                    {"wireCount" in s.config && `${(s.config as { wireCount: number }).wireCount} wires`}
                     {s.winner && ` · Winner: ${s.winner}`}
                   </span>
                 </div>

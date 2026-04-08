@@ -1,4 +1,4 @@
-import type { Board, Position, PieceOwner, GameMove, CellState } from "@/types/game";
+import type { Board, Position, PieceOwner, GameMove, CellState, GameSession, StormQueensFollyState, StormQueensFollyConfig } from "@/types/game";
 
 // ─── Adjacency map ───
 // Center connects to all 8, edges to 3, corners to center + 2 orthogonal neighbors
@@ -184,4 +184,56 @@ export function getAiMove(board: Board, challengeRate: number): GameMove | null 
   }
 
   return bestMove;
+}
+
+// ─── Move handler (called from API route) ───
+
+export function handleStormQueensFollyMove(
+  session: GameSession,
+  body: { from?: Position; to?: Position; moveVersion?: number }
+): { state: StormQueensFollyState; winner: string | null; error?: string } {
+  const state = session.state as StormQueensFollyState;
+  const config = session.config as StormQueensFollyConfig;
+  const { from, to, moveVersion } = body;
+
+  if (!from || !to) {
+    return { state, winner: null, error: "from and to are required" };
+  }
+  if (state.turn !== "player") {
+    return { state, winner: null, error: "Not your turn" };
+  }
+  if (typeof moveVersion === "number" && moveVersion !== state.moveHistory.length) {
+    return { state, winner: null, error: "Stale move — board has changed" };
+  }
+
+  const move: GameMove = { from, to };
+  if (!isValidMove(state.board, move, "player")) {
+    return { state, winner: null, error: "Invalid move" };
+  }
+
+  let board = applyMove(state.board, move);
+  const history = [...state.moveHistory, move];
+  let winner: string | null = checkWin(board);
+  let turn: PieceOwner = "opponent";
+
+  if (!winner) {
+    const aiMove = getAiMove(board, config.challengeRate);
+    if (aiMove) {
+      board = applyMove(board, aiMove);
+      history.push(aiMove);
+      winner = checkWin(board);
+      turn = "player";
+      if (!winner && getValidMoves(board, "player").length === 0) {
+        winner = "draw";
+      }
+    } else {
+      winner = "draw";
+      turn = "player";
+    }
+  }
+
+  return {
+    state: { board, turn, moveHistory: history },
+    winner,
+  };
 }

@@ -13,7 +13,8 @@ import {
 } from "@/lib/db/games";
 import { getAllKankaEntities } from "@/lib/db/kankaEntities";
 import { GAME_REGISTRY, GAME_TYPES } from "@/lib/games/registry";
-import type { Board, GameType, StormQueensFollyState } from "@/types/game";
+import { getRandomBoard } from "@/lib/games/engineeringChallenge";
+import type { GameType } from "@/types/game";
 
 async function requireAdmin() {
   const cookieStore = await cookies();
@@ -56,45 +57,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { gameType, challengeRate, designatedPlayer, opponentEntityId, initialBoard } = body;
+  const { gameType, designatedPlayer, ...gameConfig } = body;
 
   const resolvedType: GameType = GAME_TYPES.includes(gameType) ? gameType : GAME_TYPES[0];
   const gameDef = GAME_REGISTRY[resolvedType];
 
-  if (![1, 2, 3].includes(challengeRate)) {
-    return NextResponse.json({ error: "Challenge rate must be 1, 2, or 3" }, { status: 400 });
-  }
   if (!designatedPlayer || typeof designatedPlayer !== "string") {
     return NextResponse.json({ error: "Designated player is required" }, { status: 400 });
   }
 
-  let board: Board = gameDef.getDefaultBoard();
-  if (initialBoard) {
+  // Build config: merge defaults with provided overrides
+  const defaultConfig = gameDef.getDefaultConfig();
+  let config = { ...defaultConfig, ...gameConfig };
+  const state = gameDef.getDefaultState();
+
+  // For EC: pick a random board based on wireCount + difficulty
+  if (resolvedType === "engineering-challenge") {
+    const wc = gameConfig.wireCount ?? 4;
+    const diff = gameConfig.difficulty ?? "normal";
+    const board = getRandomBoard(wc, diff);
+    if (!board) {
+      return NextResponse.json({ error: `No boards available for ${wc} wires on ${diff}` }, { status: 400 });
+    }
+    config = { ...config, ...board, wireCount: wc, difficulty: diff };
+  }
+
+  // For SQF: apply initialBoard to state if provided
+  if (resolvedType === "storm-queens-folly" && gameConfig.initialBoard) {
+    const ib = gameConfig.initialBoard;
     if (
-      !Array.isArray(initialBoard) ||
-      initialBoard.length !== 3 ||
-      !initialBoard.every((row: unknown) =>
+      Array.isArray(ib) && ib.length === 3 &&
+      ib.every((row: unknown) =>
         Array.isArray(row) && row.length === 3 &&
         row.every((cell: unknown) => cell === null || cell === "player" || cell === "opponent")
       )
     ) {
-      return NextResponse.json({ error: "Invalid board layout" }, { status: 400 });
+      (state as Record<string, unknown>).board = ib;
+      (config as Record<string, unknown>).initialBoard = ib;
     }
-    board = initialBoard;
   }
-  const state: StormQueensFollyState = {
-    board,
-    turn: "player",
-    moveHistory: [],
-  };
 
   const session = await createGameSession({
     gameType: resolvedType,
-    config: {
-      challengeRate,
-      initialBoard: board,
-      opponentEntityId: opponentEntityId ?? null,
-    },
+    config,
     state,
     designatedPlayer,
   });
@@ -115,7 +120,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, challengeRate, designatedPlayer, opponentEntityId, initialBoard } = body;
+  const { id, designatedPlayer, ...configOverrides } = body;
 
   if (!id || typeof id !== "number") {
     return NextResponse.json({ error: "Session id is required" }, { status: 400 });
@@ -129,19 +134,12 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Can only edit configured games" }, { status: 400 });
   }
 
-  const board: Board = initialBoard ?? existing.config.initialBoard;
-  const state: StormQueensFollyState = {
-    board,
-    turn: "player",
-    moveHistory: [],
-  };
+  const gameDef = GAME_REGISTRY[existing.gameType as GameType];
+  const config = { ...existing.config, ...configOverrides };
+  const state = gameDef ? gameDef.getDefaultState() : existing.state;
 
   const updated = await updateGameSession(id, {
-    config: {
-      challengeRate: challengeRate ?? existing.config.challengeRate,
-      initialBoard: board,
-      opponentEntityId: opponentEntityId ?? existing.config.opponentEntityId,
-    },
+    config,
     state,
     designatedPlayer: designatedPlayer ?? existing.designatedPlayer ?? "",
   });
@@ -212,14 +210,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Another game is already launched" }, { status: 409 });
     }
 
-    // Reset state from config's initial board
+    // Reset state to defaults for the game type
+    const gameDef = GAME_REGISTRY[existing.gameType as GameType];
     await updateGameSession(id, {
       config: existing.config,
-      state: {
-        board: existing.config.initialBoard,
-        turn: "player",
-        moveHistory: [],
-      },
+      state: gameDef ? gameDef.getDefaultState() : {},
       designatedPlayer: existing.designatedPlayer ?? "",
     });
 

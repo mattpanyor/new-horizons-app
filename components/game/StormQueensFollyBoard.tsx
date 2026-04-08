@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Position, ActiveGameResponse, Board, GameMove, PieceOwner, CellState } from "@/types/game";
+import type { Position, Board, GameMove, PieceOwner, CellState, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
 import type { VictoryText } from "@/lib/games/registry";
+import type { GameBoardProps } from "./gameComponents";
 import GamePiece from "./GamePiece";
 import PlayerPortrait from "./PlayerPortrait";
 
@@ -102,16 +103,6 @@ function applyMoveToPieces(pieces: TrackedPiece[], move: GameMove): TrackedPiece
 const MOVE_ANIM_DURATION = 400; // ms per move animation
 const MOVE_STAGGER_DELAY = 800; // ms between player and AI move
 
-interface StormQueensFollyBoardProps {
-  session: ActiveGameResponse["session"];
-  player: ActiveGameResponse["player"];
-  opponent: ActiveGameResponse["opponent"];
-  isDesignatedPlayer: boolean;
-  isMyTurn: boolean;
-  username: string;
-  victoryText: VictoryText;
-}
-
 export default function StormQueensFollyBoard({
   session,
   player,
@@ -119,29 +110,32 @@ export default function StormQueensFollyBoard({
   isDesignatedPlayer,
   isMyTurn,
   victoryText,
-}: StormQueensFollyBoardProps) {
+}: GameBoardProps) {
+  const sqfConfig = session.config as StormQueensFollyConfig;
+  const sqfState = session.state as StormQueensFollyState;
+
   const [selectedPos, setSelectedPos] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Animation state
   const lastMoveCountRef = useRef<number>(0);
   const [displayPieces, setDisplayPieces] = useState<TrackedPiece[]>(() =>
-    buildPiecesFromBoard(session.config.initialBoard)
+    buildPiecesFromBoard(sqfConfig.initialBoard)
   );
-  const [displayBoard, setDisplayBoard] = useState<Board>(session.state.board);
+  const [displayBoard, setDisplayBoard] = useState<Board>(sqfState.board);
   const [animating, setAnimating] = useState(false);
   const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect new moves and animate them
   useEffect(() => {
-    const history = session.state.moveHistory;
+    const history = sqfState.moveHistory;
     const lastKnown = lastMoveCountRef.current;
     const newMoves = history.slice(lastKnown);
 
     if (newMoves.length === 0) return;
 
     // Build the board state at lastKnown
-    let boardAtLastKnown = session.config.initialBoard;
+    let boardAtLastKnown = sqfConfig.initialBoard;
     let piecesAtLastKnown = buildPiecesFromBoard(boardAtLastKnown);
     for (let i = 0; i < lastKnown; i++) {
       boardAtLastKnown = applyMoveToBoard(boardAtLastKnown, history[i]);
@@ -179,15 +173,15 @@ export default function StormQueensFollyBoard({
     return () => {
       if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
     };
-  }, [session.state.moveHistory, session.config.initialBoard]);
+  }, [sqfState.moveHistory, sqfConfig.initialBoard]);
 
   // Sync display when no animation is happening (e.g. initial load, game reset)
   useEffect(() => {
-    if (!animating && lastMoveCountRef.current === 0 && session.state.moveHistory.length === 0) {
-      setDisplayPieces(buildPiecesFromBoard(session.state.board));
-      setDisplayBoard(session.state.board);
+    if (!animating && lastMoveCountRef.current === 0 && sqfState.moveHistory.length === 0) {
+      setDisplayPieces(buildPiecesFromBoard(sqfState.board));
+      setDisplayBoard(sqfState.board);
     }
-  }, [session.state.board, session.state.moveHistory.length, animating]);
+  }, [sqfState.board, sqfState.moveHistory.length, animating]);
 
   const canInteract = isDesignatedPlayer && isMyTurn && !submitting && !session.winner && !animating;
 
@@ -227,7 +221,7 @@ export default function StormQueensFollyBoard({
             sessionId: session.id,
             from: [fromR, fromC] as Position,
             to: [r, c] as Position,
-            moveVersion: session.state.moveHistory.length,
+            moveVersion: sqfState.moveHistory.length,
           }),
         });
         if (!res.ok) {
@@ -241,7 +235,7 @@ export default function StormQueensFollyBoard({
     }
 
     setSelectedPos(null);
-  }, [canInteract, displayBoard, selectedPos, validDestinations, session.id, session.state.moveHistory.length]);
+  }, [canInteract, displayBoard, selectedPos, validDestinations, session.id, sqfState.moveHistory.length]);
 
   const showPortraits = !!(player.character || opponent);
 
@@ -253,7 +247,7 @@ export default function StormQueensFollyBoard({
   } else if (isDesignatedPlayer) {
     turnText = isMyTurn ? "Your Turn" : "Opponent's Turn";
   } else {
-    turnText = session.state.turn === "player" ? `${player.character ?? player.username}'s Turn` : "Opponent's Turn";
+    turnText = sqfState.turn === "player" ? `${player.character ?? player.username}'s Turn` : "Opponent's Turn";
   }
 
   return (
@@ -289,7 +283,9 @@ export default function StormQueensFollyBoard({
           <div className="absolute bottom-1 right-1 w-4 h-4 border-b border-r border-indigo-500/25" />
 
           <div className="p-6 sm:p-8">
-            {session.winner ? (() => {
+            <div className="relative">
+            {/* Victory overlay — on top of board */}
+            {session.winner && (() => {
               const playerWon = session.winner === "player";
               const isDraw = session.winner === "draw";
               let subtitle: string;
@@ -310,7 +306,7 @@ export default function StormQueensFollyBoard({
 
               return (
                 <div
-                  className="w-[280px] h-[280px] sm:w-[340px] sm:h-[340px] flex flex-col items-center justify-center gap-4"
+                  className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-black/60 backdrop-blur-[2px] rounded"
                   style={{ animation: "victoryIn 0.5s ease-out" }}
                 >
                   <style>{`@keyframes victoryIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }`}</style>
@@ -323,7 +319,9 @@ export default function StormQueensFollyBoard({
                   </p>
                 </div>
               );
-            })() : (
+            })()}
+            {/* Board always renders underneath */}
+            {(
               <div className="relative w-[280px] h-[280px] sm:w-[340px] sm:h-[340px]">
                 {/* SVG: lines and node dots only */}
                 <svg viewBox="0 0 300 300" className="absolute inset-0 w-full h-full">
@@ -401,6 +399,7 @@ export default function StormQueensFollyBoard({
                 })}
               </div>
             )}
+            </div>
           </div>
         </div>
 
