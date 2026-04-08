@@ -281,42 +281,121 @@ interface Edge {
 }
 
 function generateEdgePattern(): Edge[] {
-  // Build all possible edges between cardinal neighbors
-  const allEdges: Edge[] = [];
+  const dk = (x: number, y: number) => `${x},${y}`;
+
+  // Exclusion: 1 empty dot between lines = 2 * DOT_SPACING distance
+  const EXCLUSION = DOT_SPACING * 2;
+
+  // Directions: right or down only (straight lines, 90 degrees)
+  const DIRS = [
+    { dx: DOT_SPACING, dy: 0 },   // right
+    { dx: -DOT_SPACING, dy: 0 },  // left
+    { dx: 0, dy: DOT_SPACING },   // down
+    { dx: 0, dy: -DOT_SPACING },  // up
+  ];
+
+  const claimed = new Set<string>();
+
+  function claimDot(x: number, y: number) {
+    for (let ox = -EXCLUSION; ox <= EXCLUSION; ox += DOT_SPACING) {
+      for (let oy = -EXCLUSION; oy <= EXCLUSION; oy += DOT_SPACING) {
+        claimed.add(dk(x + ox, y + oy));
+      }
+    }
+  }
+
+  function isValid(x: number, y: number): boolean {
+    return x >= DOT_SPACING && x <= GRID_COLS * DOT_SPACING &&
+           y >= DOT_SPACING && y <= GRID_ROWS * DOT_SPACING &&
+           !claimed.has(dk(x, y));
+  }
+
+  // Pick a random perpendicular direction
+  function turnDir(cur: { dx: number; dy: number }): { dx: number; dy: number } {
+    if (cur.dx !== 0) {
+      // Was horizontal → go vertical
+      return Math.random() < 0.5 ? { dx: 0, dy: DOT_SPACING } : { dx: 0, dy: -DOT_SPACING };
+    }
+    // Was vertical → go horizontal
+    return Math.random() < 0.5 ? { dx: DOT_SPACING, dy: 0 } : { dx: -DOT_SPACING, dy: 0 };
+  }
+
+  const starts: { x: number; y: number }[] = [];
   for (let gx = 1; gx <= GRID_COLS; gx++) {
     for (let gy = 1; gy <= GRID_ROWS; gy++) {
-      const x = gx * DOT_SPACING;
-      const y = gy * DOT_SPACING;
-      // Right
-      if (gx < GRID_COLS) allEdges.push({ ax: x, ay: y, bx: x + DOT_SPACING, by: y });
-      // Down
-      if (gy < GRID_ROWS) allEdges.push({ ax: x, ay: y, bx: x, by: y + DOT_SPACING });
+      starts.push({ x: gx * DOT_SPACING, y: gy * DOT_SPACING });
     }
   }
-
-  // Shuffle
-  for (let i = allEdges.length - 1; i > 0; i--) {
+  for (let i = starts.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [allEdges[i], allEdges[j]] = [allEdges[j], allEdges[i]];
+    [starts[i], starts[j]] = [starts[j], starts[i]];
   }
 
-  // Greedily pick edges — each dot gets at most 2
-  const degreeMap = new Map<string, number>();
-  const dk = (x: number, y: number) => `${x},${y}`;
-  const getDeg = (x: number, y: number) => degreeMap.get(dk(x, y)) ?? 0;
+  const edges: Edge[] = [];
+  const SEGMENT_MIN = 2; // min dots before a turn
+  const SEGMENT_MAX = 4; // max dots before forced turn
+  const MAX_LINE_DOTS = 25;
 
-  const picked: Edge[] = [];
-  for (const e of allEdges) {
-    const da = getDeg(e.ax, e.ay);
-    const db = getDeg(e.bx, e.by);
-    if (da < 2 && db < 2) {
-      picked.push(e);
-      degreeMap.set(dk(e.ax, e.ay), da + 1);
-      degreeMap.set(dk(e.bx, e.by), db + 1);
+  for (const start of starts) {
+    if (claimed.has(dk(start.x, start.y))) continue;
+
+    let dir = DIRS[Math.floor(Math.random() * DIRS.length)];
+    const lineDots: { x: number; y: number }[] = [start];
+    let stepsInSegment = 0;
+    const segmentLen = SEGMENT_MIN + Math.floor(Math.random() * (SEGMENT_MAX - SEGMENT_MIN + 1));
+    let currentSegmentLen = segmentLen;
+
+    for (let total = 0; total < MAX_LINE_DOTS; total++) {
+      const last = lineDots[lineDots.length - 1];
+      const nx = last.x + dir.dx;
+      const ny = last.y + dir.dy;
+
+      stepsInSegment++;
+
+      // Force turn if segment length reached
+      if (stepsInSegment >= currentSegmentLen) {
+        const newDir = turnDir(dir);
+        const tnx = last.x + newDir.dx;
+        const tny = last.y + newDir.dy;
+        if (isValid(tnx, tny)) {
+          dir = newDir;
+          lineDots.push({ x: tnx, y: tny });
+          stepsInSegment = 0;
+          currentSegmentLen = SEGMENT_MIN + Math.floor(Math.random() * (SEGMENT_MAX - SEGMENT_MIN + 1));
+          continue;
+        }
+        // Can't turn, try opposite turn
+        const altDir = { dx: -newDir.dx, dy: -newDir.dy };
+        const anx = last.x + altDir.dx;
+        const any_ = last.y + altDir.dy;
+        if (isValid(anx, any_)) {
+          dir = altDir;
+          lineDots.push({ x: anx, y: any_ });
+          stepsInSegment = 0;
+          currentSegmentLen = SEGMENT_MIN + Math.floor(Math.random() * (SEGMENT_MAX - SEGMENT_MIN + 1));
+          continue;
+        }
+        // Can't turn either way, stop
+        break;
+      }
+
+      if (!isValid(nx, ny)) break;
+      lineDots.push({ x: nx, y: ny });
+    }
+
+    if (lineDots.length < 3) continue;
+
+    for (const d of lineDots) claimDot(d.x, d.y);
+
+    for (let i = 0; i < lineDots.length - 1; i++) {
+      edges.push({
+        ax: lineDots[i].x, ay: lineDots[i].y,
+        bx: lineDots[i + 1].x, by: lineDots[i + 1].y,
+      });
     }
   }
 
-  return picked;
+  return edges;
 }
 
 function useAnimType3(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
@@ -1148,9 +1227,619 @@ function useAnimType5(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   }, [canvasRef]);
 }
 
+// ─── Animation Type 6: Shattered glass ───
+
+interface Shard {
+  // Polygon vertices (pixel coords)
+  points: { x: number; y: number }[];
+  opacity: number; // base opacity 0.02–0.12
+}
+
+function generateShards(): Shard[] {
+  // Jittered grid of vertices, then split each quad into 2 triangles
+  const CELL = DOT_SPACING * 3;
+  const JITTER = CELL * 0.4;
+  const cols = Math.ceil(SIZE / CELL) + 1;
+  const rows = Math.ceil(SIZE / CELL) + 1;
+
+  // Generate jittered grid vertices
+  // vertices[row][col] = {x, y}
+  const vertices: { x: number; y: number }[][] = [];
+  for (let gy = 0; gy < rows; gy++) {
+    const row: { x: number; y: number }[] = [];
+    for (let gx = 0; gx < cols; gx++) {
+      // Pin edge vertices to prevent gaps at borders
+      const isEdgeX = gx === 0 || gx === cols - 1;
+      const isEdgeY = gy === 0 || gy === rows - 1;
+      row.push({
+        x: gx * CELL + (isEdgeX ? 0 : (Math.random() - 0.5) * JITTER),
+        y: gy * CELL + (isEdgeY ? 0 : (Math.random() - 0.5) * JITTER),
+      });
+    }
+    vertices.push(row);
+  }
+
+  const shards: Shard[] = [];
+
+  // For each cell in the grid, split the quad into 2 triangles
+  for (let gy = 0; gy < rows - 1; gy++) {
+    for (let gx = 0; gx < cols - 1; gx++) {
+      const tl = vertices[gy][gx];
+      const tr = vertices[gy][gx + 1];
+      const bl = vertices[gy + 1][gx];
+      const br = vertices[gy + 1][gx + 1];
+
+      // Randomly choose diagonal split direction
+      if (Math.random() < 0.5) {
+        // TL-BR diagonal
+        shards.push({ points: [tl, tr, br], opacity: 0.02 + Math.random() * 0.1 });
+        shards.push({ points: [tl, br, bl], opacity: 0.02 + Math.random() * 0.1 });
+      } else {
+        // TR-BL diagonal
+        shards.push({ points: [tl, tr, bl], opacity: 0.02 + Math.random() * 0.1 });
+        shards.push({ points: [tr, br, bl], opacity: 0.02 + Math.random() * 0.1 });
+      }
+    }
+  }
+
+  return shards;
+}
+
+function useAnimType6(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+  const animFrame = useRef<number>(0);
+  const spot = useRef<SpotState>(initSpot());
+  const shards = useRef<Shard[]>(generateShards());
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    ctx.scale(dpr, dpr);
+    pickSpotTarget(spot.current);
+
+    function draw() {
+      if (!ctx) return;
+      const s = spot.current;
+      stepSpot(s);
+      const cosA = Math.cos(-s.angle);
+      const sinA = Math.sin(-s.angle);
+
+      ctx.clearRect(0, 0, SIZE, SIZE);
+
+      // Draw shards
+      for (const shard of shards.current) {
+        if (shard.points.length < 3) continue;
+
+        // Get intensity at shard center
+        const cx = shard.points.reduce((a, p) => a + p.x, 0) / shard.points.length;
+        const cy = shard.points.reduce((a, p) => a + p.y, 0) / shard.points.length;
+        const intensity = getIntensity(cx, cy, s, cosA, sinA);
+
+        if (intensity < 0.02) continue;
+
+        // Fill shard
+        ctx.beginPath();
+        ctx.moveTo(shard.points[0].x, shard.points[0].y);
+        for (let i = 1; i < shard.points.length; i++) {
+          ctx.lineTo(shard.points[i].x, shard.points[i].y);
+        }
+        ctx.closePath();
+
+        const fillAlpha = shard.opacity * intensity * 3;
+        ctx.fillStyle = `rgba(140, 150, 160, ${Math.min(0.25, fillAlpha)})`;
+        ctx.fill();
+
+        // Stroke shard edges (crack lines)
+        ctx.strokeStyle = `rgba(180, 190, 200, ${intensity * 0.5})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      animFrame.current = requestAnimationFrame(draw);
+    }
+
+    animFrame.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animFrame.current);
+  }, [canvasRef]);
+}
+
+// ─── Animation Type 7: Hexagonal grid ───
+
+interface Hex {
+  cx: number; cy: number;
+  baseOpacity: number;
+  verts: { x: number; y: number }[];
+  // Each hex gets a random detach direction/rotation
+  driftX: number; driftY: number;
+  driftRot: number; // radians
+}
+
+function generateHexGrid(): Hex[] {
+  const HEX_R = 18;
+  const hexes: Hex[] = [];
+
+  const colW = HEX_R * 1.5;
+  const rowH = HEX_R * Math.sqrt(3);
+
+  for (let col = -1; col * colW < SIZE + HEX_R * 2; col++) {
+    const cx = col * colW;
+    const offsetY = col % 2 === 0 ? 0 : rowH / 2;
+    for (let row = -1; row * rowH + offsetY < SIZE + HEX_R * 2; row++) {
+      const cy = row * rowH + offsetY;
+      const verts: { x: number; y: number }[] = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i;
+        verts.push({
+          x: cx + HEX_R * Math.cos(angle),
+          y: cy + HEX_R * Math.sin(angle),
+        });
+      }
+      // Random drift direction (away from center-ish) + slight rotation
+      const driftAngle = Math.random() * Math.PI * 2;
+      const driftDist = 6 + Math.random() * 10;
+      hexes.push({
+        cx, cy,
+        baseOpacity: 0.02 + Math.random() * 0.08,
+        verts,
+        driftX: Math.cos(driftAngle) * driftDist,
+        driftY: Math.sin(driftAngle) * driftDist,
+        driftRot: (Math.random() - 0.5) * 0.4,
+      });
+    }
+  }
+
+  return hexes;
+}
+
+function useAnimType7(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+  const animFrame = useRef<number>(0);
+  const spot = useRef<SpotState>(initSpot());
+  const hexes = useRef<Hex[]>(generateHexGrid());
+  // 0 = fully detached/drifted, 1 = fully attached/snapped
+  const hexAttach = useRef<Float32Array>(new Float32Array(hexes.current.length));
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    ctx.scale(dpr, dpr);
+    pickSpotTarget(spot.current);
+
+    const attach = hexAttach.current;
+
+    function draw() {
+      if (!ctx) return;
+      const s = spot.current;
+      stepSpot(s);
+      const cosA = Math.cos(-s.angle);
+      const sinA = Math.sin(-s.angle);
+
+      ctx.clearRect(0, 0, SIZE, SIZE);
+
+      for (let i = 0; i < hexes.current.length; i++) {
+        const hex = hexes.current[i];
+        const intensity = getIntensity(hex.cx, hex.cy, s, cosA, sinA);
+
+        // Target: 1 (attached) when spotlight is strong, 0 (detached) when dim
+        const target = intensity > 0.3 ? 1 : 0;
+
+        // Ease: attach fast, detach slow
+        if (target > attach[i]) {
+          attach[i] += (target - attach[i]) * 0.12;
+        } else {
+          attach[i] += (target - attach[i]) * 0.03;
+        }
+
+        const t = attach[i]; // 0 = detached, 1 = attached
+        if (t < 0.01 && intensity < 0.01) continue;
+
+        // Compute drift: when detached (t→0), hex drifts away and rotates
+        const drift = 1 - t; // 0 = no drift, 1 = full drift
+        const offsetX = hex.driftX * drift;
+        const offsetY = hex.driftY * drift;
+        const rotation = hex.driftRot * drift;
+
+        // Alpha: combine spotlight intensity with attachment
+        const alpha = Math.max(intensity * 0.3, t) * intensity;
+        if (alpha < 0.01) continue;
+
+        ctx.save();
+        ctx.translate(hex.cx + offsetX, hex.cy + offsetY);
+        ctx.rotate(rotation);
+
+        // Draw hex centered at origin
+        ctx.beginPath();
+        ctx.moveTo(hex.verts[0].x - hex.cx, hex.verts[0].y - hex.cy);
+        for (let v = 1; v < 6; v++) {
+          ctx.lineTo(hex.verts[v].x - hex.cx, hex.verts[v].y - hex.cy);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = `rgba(130, 140, 160, ${alpha * hex.baseOpacity * 8})`;
+        ctx.fill();
+
+        ctx.strokeStyle = `rgba(160, 170, 190, ${alpha * 0.6})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      animFrame.current = requestAnimationFrame(draw);
+    }
+
+    animFrame.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animFrame.current);
+  }, [canvasRef]);
+}
+
+// ─── Animation Type 8: Hex waterfall waves ───
+
+interface Ripple {
+  cx: number; cy: number; // origin
+  radius: number;         // current radius
+  speed: number;          // expansion speed
+  maxRadius: number;      // dies at this radius
+  width: number;          // ring thickness
+}
+
+interface Flicker {
+  hexIdx: number;
+  life: number;    // 0→1, fades out
+  decay: number;   // how fast it decays per frame
+}
+
+function useAnimType8(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+  const animFrame = useRef<number>(0);
+  const hexes = useRef<Hex[]>(generateHexGrid());
+  const hexGlow = useRef<Float32Array>(new Float32Array(hexes.current.length));
+  const ripples = useRef<Ripple[]>([]);
+  const flickers = useRef<Flicker[]>([]);
+  const frameCount = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    ctx.scale(dpr, dpr);
+
+    const glow = hexGlow.current;
+    const hexArr = hexes.current;
+
+    function draw() {
+      if (!ctx) return;
+      frameCount.current++;
+
+      // Spawn ripples (rare)
+      if (Math.random() < 0.005) {
+        ripples.current.push({
+          cx: Math.random() * SIZE,
+          cy: Math.random() * SIZE,
+          radius: 0,
+          speed: 0.8 + Math.random() * 0.8,
+          maxRadius: SIZE * 0.16 + Math.random() * SIZE * 0.24,
+          width: SIZE * 0.05 + Math.random() * SIZE * 0.04,
+        });
+      }
+
+      // Spawn flickers (rare)
+      if (Math.random() < 0.04) {
+        const idx = Math.floor(Math.random() * hexArr.length);
+        flickers.current.push({
+          hexIdx: idx,
+          life: 0.6 + Math.random() * 0.4,
+          decay: 0.015 + Math.random() * 0.02,
+        });
+      }
+
+      // Advance ripples
+      for (let i = ripples.current.length - 1; i >= 0; i--) {
+        ripples.current[i].radius += ripples.current[i].speed;
+        if (ripples.current[i].radius > ripples.current[i].maxRadius) {
+          ripples.current.splice(i, 1);
+        }
+      }
+
+      // Advance flickers
+      for (let i = flickers.current.length - 1; i >= 0; i--) {
+        flickers.current[i].life -= flickers.current[i].decay;
+        if (flickers.current[i].life <= 0) {
+          flickers.current.splice(i, 1);
+        }
+      }
+
+      // Compute target glow per hex
+      for (let i = 0; i < hexArr.length; i++) {
+        const hex = hexArr[i];
+        let target = 0;
+
+        // Ripple contributions
+        for (const r of ripples.current) {
+          const dist = Math.hypot(hex.cx - r.cx, hex.cy - r.cy);
+          const distFromRing = Math.abs(dist - r.radius);
+          if (distFromRing < r.width) {
+            const ringIntensity = 1 - distFromRing / r.width;
+            // Fade as ripple expands
+            const ageFade = 1 - r.radius / r.maxRadius;
+            target = Math.max(target, ringIntensity * ageFade);
+          }
+        }
+
+        // Flicker contributions
+        for (const f of flickers.current) {
+          if (f.hexIdx === i) {
+            target = Math.max(target, f.life);
+          }
+        }
+
+        // Ease toward target
+        if (target > glow[i]) {
+          glow[i] += (target - glow[i]) * 0.3;  // flare up fast
+        } else {
+          glow[i] += (target - glow[i]) * 0.06;  // fade slow
+        }
+      }
+
+      ctx.clearRect(0, 0, SIZE, SIZE);
+
+      for (let i = 0; i < hexArr.length; i++) {
+        const hex = hexArr[i];
+        // Base visibility + glow
+        const baseAlpha = 0.04;
+        const glowAlpha = glow[i] * 0.7;
+        const alpha = baseAlpha + glowAlpha;
+        if (alpha < 0.01) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(hex.verts[0].x, hex.verts[0].y);
+        for (let v = 1; v < 6; v++) {
+          ctx.lineTo(hex.verts[v].x, hex.verts[v].y);
+        }
+        ctx.closePath();
+
+        // Fill
+        ctx.fillStyle = `rgba(210, 145, 50, ${glowAlpha * 0.3})`;
+        ctx.fill();
+
+        // Edges: only visible when glowing
+        if (glowAlpha > 0.02) {
+          ctx.strokeStyle = `rgba(240, 185, 85, ${glowAlpha * 0.7})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+
+      animFrame.current = requestAnimationFrame(draw);
+    }
+
+    animFrame.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animFrame.current);
+  }, [canvasRef]);
+}
+
+// ─── Animation Type 9: Particle Assembly ───
+
+function useAnimType9(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+  const animFrame = useRef<number>(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    ctx.scale(dpr, dpr);
+
+    const NUM_PARTICLES = 200;
+
+    interface Particle {
+      x: number; y: number;
+      vx: number; vy: number;
+      targetX: number; targetY: number;
+      size: number;
+    }
+
+    // Target patterns
+    const GRID_SPACING = 20;
+    const gridTargets: { x: number; y: number }[] = [];
+    for (let x = GRID_SPACING * 2; x < SIZE - GRID_SPACING; x += GRID_SPACING) {
+      for (let y = GRID_SPACING * 2; y < SIZE - GRID_SPACING; y += GRID_SPACING) {
+        gridTargets.push({ x, y });
+      }
+    }
+
+    const circleTargets: { x: number; y: number }[] = [];
+    const cr = SIZE * 0.35;
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      const a = (i / NUM_PARTICLES) * Math.PI * 2;
+      circleTargets.push({ x: SIZE / 2 + Math.cos(a) * cr, y: SIZE / 2 + Math.sin(a) * cr });
+    }
+
+    const hexTargets: { x: number; y: number }[] = [];
+    const hr = SIZE * 0.3;
+    // Compute 6 hex vertices first
+    const hexVerts: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      hexVerts.push({ x: SIZE / 2 + Math.cos(a) * hr, y: SIZE / 2 + Math.sin(a) * hr });
+    }
+    // Distribute particles evenly along the 6 edges
+    const perSide = Math.floor(NUM_PARTICLES / 6);
+    for (let i = 0; i < 6; i++) {
+      const v1 = hexVerts[i];
+      const v2 = hexVerts[(i + 1) % 6];
+      for (let s = 0; s < perSide; s++) {
+        const t = s / perSide;
+        hexTargets.push({
+          x: v1.x + (v2.x - v1.x) * t,
+          y: v1.y + (v2.y - v1.y) * t,
+        });
+      }
+    }
+
+    const diamondTargets: { x: number; y: number }[] = [];
+    const dr = SIZE * 0.35;
+    const diamondVerts = [
+      { x: SIZE / 2, y: SIZE / 2 - dr },     // top
+      { x: SIZE / 2 + dr, y: SIZE / 2 },     // right
+      { x: SIZE / 2, y: SIZE / 2 + dr },     // bottom
+      { x: SIZE / 2 - dr, y: SIZE / 2 },     // left
+    ];
+    const perDSide = Math.floor(NUM_PARTICLES / 4);
+    for (let i = 0; i < 4; i++) {
+      const v1 = diamondVerts[i];
+      const v2 = diamondVerts[(i + 1) % 4];
+      for (let s = 0; s < perDSide; s++) {
+        const t = s / perDSide;
+        diamondTargets.push({
+          x: v1.x + (v2.x - v1.x) * t,
+          y: v1.y + (v2.y - v1.y) * t,
+        });
+      }
+    }
+
+    const patterns = [circleTargets, hexTargets, diamondTargets];
+
+    const particles: Particle[] = [];
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      particles.push({
+        x: Math.random() * SIZE,
+        y: Math.random() * SIZE,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        targetX: 0, targetY: 0,
+        size: 1 + Math.random() * 1.5,
+      });
+    }
+
+    let phase: "scatter" | "assemble" = "scatter";
+    let phaseTimer = 0;
+    const SCATTER_DURATION = 180;
+    const ASSEMBLE_DURATION = 240;
+    let currentPattern = 0;
+
+    function assignTargets() {
+      const targets = patterns[currentPattern % patterns.length];
+      // Sort particles by angle from center, match to sorted targets
+      const cx = SIZE / 2, cy = SIZE / 2;
+      const indexed = particles.map((p, i) => ({
+        i,
+        angle: Math.atan2(p.y - cy, p.x - cx),
+      }));
+      indexed.sort((a, b) => a.angle - b.angle);
+
+      const sortedTargets = [...targets].sort((a, b) =>
+        Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx)
+      );
+
+      for (let j = 0; j < indexed.length; j++) {
+        const t = sortedTargets[j % sortedTargets.length];
+        particles[indexed[j].i].targetX = t.x;
+        particles[indexed[j].i].targetY = t.y;
+      }
+    }
+
+    assignTargets();
+
+    function draw() {
+      if (!ctx) return;
+      phaseTimer++;
+
+      if (phase === "scatter" && phaseTimer > SCATTER_DURATION) {
+        phase = "assemble";
+        phaseTimer = 0;
+        currentPattern++;
+        assignTargets();
+      } else if (phase === "assemble" && phaseTimer > ASSEMBLE_DURATION) {
+        phase = "scatter";
+        phaseTimer = 0;
+      }
+
+      ctx.clearRect(0, 0, SIZE, SIZE);
+
+      for (const p of particles) {
+        if (phase === "assemble") {
+          // Ease toward target
+          p.vx += (p.targetX - p.x) * 0.02;
+          p.vy += (p.targetY - p.y) * 0.02;
+          p.vx *= 0.9;
+          p.vy *= 0.9;
+        } else {
+          // Scatter: gentle random drift
+          p.vx += (Math.random() - 0.5) * 0.3;
+          p.vy += (Math.random() - 0.5) * 0.3;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Wrap
+        if (p.x < 0) p.x += SIZE;
+        if (p.x > SIZE) p.x -= SIZE;
+        if (p.y < 0) p.y += SIZE;
+        if (p.y > SIZE) p.y -= SIZE;
+
+        // Draw particle
+        const distToTarget = Math.hypot(p.x - p.targetX, p.y - p.targetY);
+        const lockedness = phase === "assemble" ? Math.max(0, 1 - distToTarget / 50) : 0;
+        const alpha = 0.2 + lockedness * 0.5;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(100, 180, 255, ${alpha})`;
+        ctx.fill();
+
+        // Draw connection lines when close to target (assembled)
+        if (lockedness > 0.5 && phase === "assemble") {
+          for (const p2 of particles) {
+            const d = Math.hypot(p.x - p2.x, p.y - p2.y);
+            if (d > 0 && d < GRID_SPACING * 1.5) {
+              const d2 = Math.hypot(p2.x - p2.targetX, p2.y - p2.targetY);
+              const lock2 = Math.max(0, 1 - d2 / 50);
+              if (lock2 > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = `rgba(100, 180, 255, ${lockedness * lock2 * 0.15})`;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+              }
+            }
+          }
+        }
+      }
+
+      animFrame.current = requestAnimationFrame(draw);
+    }
+
+    animFrame.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animFrame.current);
+  }, [canvasRef]);
+}
+
 // ─── Animation box components ───
 
-type AnimType = "spotlight" | "travelers" | "type3" | "type4" | "type5";
+type AnimType = "spotlight" | "travelers" | "type3" | "type4" | "type5" | "type6" | "type7" | "type8" | "type9";
 
 const ANIM_HOOKS: Record<AnimType, (ref: React.RefObject<HTMLCanvasElement | null>) => void> = {
   spotlight: useAnimSpotlight,
@@ -1158,6 +1847,10 @@ const ANIM_HOOKS: Record<AnimType, (ref: React.RefObject<HTMLCanvasElement | nul
   type3: useAnimType3,
   type4: useAnimType4,
   type5: useAnimType5,
+  type6: useAnimType6,
+  type7: useAnimType7,
+  type8: useAnimType8,
+  type9: useAnimType9,
 };
 
 const SHOW_LABEL = true;
@@ -1194,9 +1887,13 @@ const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 const TYPES: { id: AnimType; label: string }[] = [
   { id: "spotlight", label: "Spotlight" },
   { id: "travelers", label: "Travelers" },
-  { id: "type3", label: "Type 3" },
-  { id: "type4", label: "Type 4" },
-  { id: "type5", label: "Type 5" },
+  { id: "type3", label: "Circuits" },
+  { id: "type4", label: "Explorer" },
+  { id: "type5", label: "Fleet" },
+  { id: "type6", label: "Shattered" },
+  { id: "type7", label: "Honeycomb" },
+  { id: "type8", label: "Shield" },
+  { id: "type9", label: "Assembly" },
 ];
 
 export default function TestPage() {
