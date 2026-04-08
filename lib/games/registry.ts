@@ -1,0 +1,58 @@
+import type { GameType, GameConfig, GameState } from "@/types/game";
+
+export interface VictoryText {
+  playerWin: string;
+  playerLose: string;
+  spectatorWin: string;
+  spectatorLose: string;
+  draw: string;
+}
+
+export interface GameDefinition {
+  label: string;
+  getDefaultConfig: () => GameConfig;
+  getDefaultState: () => GameState;
+  victoryText: VictoryText;
+}
+
+// ─── Register games here ───
+
+import { getDefaultBoard } from "./stormQueensFolly";
+import { getDefaultConfig as ecDefaultConfig, getDefaultState as ecDefaultState } from "./engineeringChallenge";
+
+export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
+  "storm-queens-folly": {
+    label: "Storm Queen's Folly",
+    getDefaultConfig: () => ({
+      challengeRate: 2 as const,
+      initialBoard: getDefaultBoard(),
+      opponentEntityId: null,
+    }),
+    getDefaultState: () => ({
+      board: getDefaultBoard(),
+      turn: "player" as const,
+      moveHistory: [],
+    }),
+    victoryText: {
+      playerWin: "The Storm Queen's seal has been broken.",
+      playerLose: "The Storm Queen's seal remains unbroken.",
+      spectatorWin: "The challenger has triumphed.",
+      spectatorLose: "The Storm Queen's seal remains unbroken.",
+      draw: "Neither side prevails.",
+    },
+  },
+  "engineering-challenge": {
+    label: "Engineering Challenge",
+    getDefaultConfig: () => ecDefaultConfig(4),
+    getDefaultState: ecDefaultState,
+    victoryText: {
+      playerWin: "Power conduits restored.",
+      playerLose: "System failure — conduits incomplete.",
+      spectatorWin: "The engineer has succeeded.",
+      spectatorLose: "The system remains offline.",
+      draw: "Time expired.",
+    },
+  },
+};
+
+export const GAME_TYPES = Object.keys(GAME_REGISTRY) as GameType[];

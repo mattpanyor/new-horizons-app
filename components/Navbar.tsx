@@ -17,6 +17,7 @@ const adminPages = [
   { label: "Home", href: "/sectors" },
   { label: "User Management", href: "/admin/users" },
   { label: "Messages", href: "/admin/messages" },
+  { label: "Games", href: "/admin/games" },
   { label: "CDN Manager", href: "/admin/cdn" },
   { label: "Kanka Sync", href: "/admin/kanka" },
 ];

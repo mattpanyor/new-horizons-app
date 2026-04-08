@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getUserByUsername } from "@/lib/db/users";
 import Navbar from "@/components/Navbar";
 import StarSystemBackground from "@/components/StarSystemBackground";
-import DotGridAnimation from "@/components/DotGridAnimation";
+import HexShieldAnimation from "@/components/HexShieldAnimation";
 import ShipViewer from "@/components/ship/ShipViewer";
 import ShipControls from "@/components/ship/ShipControls";
 import NavIcon from "@/components/NavIcon";
@@ -29,7 +29,7 @@ export default async function ShipPage() {
         accessLevel={user.accessLevel}
       />
       <StarSystemBackground />
-      <DotGridAnimation />
+      <HexShieldAnimation />
       <NavIcon href="/sectors" label="Galaxy">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
           {/* Outer halo */}
@@ -75,6 +75,33 @@ export default async function ShipPage() {
           <circle cx="76" cy="40" r="0.5" fill="currentColor" fillOpacity="0.35" stroke="none" />
         </svg>
       </NavIcon>
+      <a
+        href="/game"
+        title="Psychometric Room"
+        className="fixed bottom-6 right-3 sm:right-6 md:right-10 z-40 flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-lg border border-white/10 md:border-white/20 text-white/40 md:text-white/60 hover:text-white/70 md:hover:text-white/90 hover:border-white/25 md:hover:border-white/40 hover:bg-white/5 md:hover:bg-white/10 transition-all"
+        style={{ backdropFilter: "blur(8px)", background: "rgba(10,10,30,0.5)" }}
+      >
+        <svg width="32" height="32" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+          {/* Brain/psychometric symbol — eye with radiating waves */}
+          <circle cx="24" cy="24" r="8" strokeOpacity="0.6" />
+          <circle cx="24" cy="24" r="3" fill="currentColor" fillOpacity="0.2" strokeOpacity="0.7" />
+          <circle cx="24" cy="24" r="1" fill="currentColor" fillOpacity="0.5" stroke="none" />
+          {/* Radiating arcs */}
+          <path d="M12 24 A12 12 0 0 1 24 12" strokeOpacity="0.3" strokeDasharray="2 3" />
+          <path d="M36 24 A12 12 0 0 1 24 36" strokeOpacity="0.3" strokeDasharray="2 3" />
+          <path d="M8 24 A16 16 0 0 1 24 8" strokeOpacity="0.15" strokeDasharray="2 4" />
+          <path d="M40 24 A16 16 0 0 1 24 40" strokeOpacity="0.15" strokeDasharray="2 4" />
+          {/* Top and bottom pulses */}
+          <line x1="24" y1="4" x2="24" y2="10" strokeOpacity="0.25" />
+          <line x1="24" y1="38" x2="24" y2="44" strokeOpacity="0.25" />
+        </svg>
+        <span
+          className="text-[6px] md:text-[8px] tracking-[0.15em] md:tracking-[0.2em] uppercase"
+          style={{ fontFamily: "var(--font-cinzel), serif" }}
+        >
+          Psychometric Room
+        </span>
+      </a>
       <ShipControls
         abilities={(shipData as ShipData).abilities ?? []}
         shipName={(shipData as ShipData).name}

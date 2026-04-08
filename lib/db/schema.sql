@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   "group"    VARCHAR(100) NOT NULL,
   role       VARCHAR(100),
   character  VARCHAR(100),
-  access_level INTEGER NOT NULL DEFAULT 0
+  access_level INTEGER NOT NULL DEFAULT 0,
+  image_url    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ship_items (
@@ -20,6 +21,20 @@ CREATE TABLE IF NOT EXISTS ship_items (
   image_url   TEXT,
   description TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS game_sessions (
+  id                SERIAL PRIMARY KEY,
+  game_type         VARCHAR(50) NOT NULL DEFAULT 'storm-queens-folly',
+  status            VARCHAR(20) NOT NULL DEFAULT 'configured'
+                    CHECK (status IN ('configured', 'launched', 'finished')),
+  config            JSONB NOT NULL DEFAULT '{}',
+  state             JSONB NOT NULL DEFAULT '{}',
+  designated_player VARCHAR(50),
+  winner            VARCHAR(20),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  launched_at       TIMESTAMPTZ,
+  finished_at       TIMESTAMPTZ
 );
 
 -- Migration for existing tables:
