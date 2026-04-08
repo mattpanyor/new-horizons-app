@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import type { Position, ActiveGameResponse } from "@/types/game";
+import { useState, useCallback, useRef, useEffect } from "react";
+import type { Position, ActiveGameResponse, Board, GameMove, PieceOwner, CellState } from "@/types/game";
 import type { VictoryText } from "@/lib/games/registry";
 import GamePiece from "./GamePiece";
 import PlayerPortrait from "./PlayerPortrait";
@@ -9,8 +9,21 @@ import PlayerPortrait from "./PlayerPortrait";
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
 // Board layout: 9 nodes on a 3x3 grid
-// Positions in SVG coordinates (300x300 viewbox)
-const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
+// Positions as percentages of the board container
+const NODE_PCT: Record<string, { x: number; y: number }> = {
+  "0,0": { x: 16.67, y: 16.67 },
+  "0,1": { x: 50, y: 16.67 },
+  "0,2": { x: 83.33, y: 16.67 },
+  "1,0": { x: 16.67, y: 50 },
+  "1,1": { x: 50, y: 50 },
+  "1,2": { x: 83.33, y: 50 },
+  "2,0": { x: 16.67, y: 83.33 },
+  "2,1": { x: 50, y: 83.33 },
+  "2,2": { x: 83.33, y: 83.33 },
+};
+
+// SVG coordinates for lines (300x300 viewbox)
+const NODE_SVG: Record<string, { x: number; y: number }> = {
   "0,0": { x: 50, y: 50 },
   "0,1": { x: 150, y: 50 },
   "0,2": { x: 250, y: 50 },
@@ -22,22 +35,17 @@ const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   "2,2": { x: 250, y: 250 },
 };
 
-// Connection lines (adjacency)
 const CONNECTIONS: [string, string][] = [
-  // Rows
   ["0,0", "0,1"], ["0,1", "0,2"],
   ["1,0", "1,1"], ["1,1", "1,2"],
   ["2,0", "2,1"], ["2,1", "2,2"],
-  // Columns
   ["0,0", "1,0"], ["1,0", "2,0"],
   ["0,1", "1,1"], ["1,1", "2,1"],
   ["0,2", "1,2"], ["1,2", "2,2"],
-  // Diagonals through center
   ["0,0", "1,1"], ["1,1", "2,2"],
   ["0,2", "1,1"], ["1,1", "2,0"],
 ];
 
-// Adjacency for move validation on client (mirrors server)
 const ADJACENCY: Record<string, string[]> = {
   "0,0": ["0,1", "1,0", "1,1"],
   "0,1": ["0,0", "0,2", "1,1"],
@@ -53,6 +61,46 @@ const ADJACENCY: Record<string, string[]> = {
 function posKey(r: number, c: number): string {
   return `${r},${c}`;
 }
+
+// ─── Piece tracking with stable IDs ───
+
+interface TrackedPiece {
+  id: string;
+  owner: PieceOwner;
+  pos: string; // "r,c"
+}
+
+function buildPiecesFromBoard(board: Board): TrackedPiece[] {
+  const pieces: TrackedPiece[] = [];
+  let pi = 0, oi = 0;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const cell = board[r][c];
+      if (cell === "player") pieces.push({ id: `p${pi++}`, owner: "player", pos: posKey(r, c) });
+      else if (cell === "opponent") pieces.push({ id: `o${oi++}`, owner: "opponent", pos: posKey(r, c) });
+    }
+  }
+  return pieces;
+}
+
+function applyMoveToBoard(board: Board, move: GameMove): Board {
+  const newBoard: Board = board.map((row) => [...row]);
+  const piece = newBoard[move.from[0]][move.from[1]];
+  newBoard[move.from[0]][move.from[1]] = null;
+  newBoard[move.to[0]][move.to[1]] = piece;
+  return newBoard;
+}
+
+function applyMoveToPieces(pieces: TrackedPiece[], move: GameMove): TrackedPiece[] {
+  const fromKey = posKey(move.from[0], move.from[1]);
+  const toKey = posKey(move.to[0], move.to[1]);
+  return pieces.map((p) => p.pos === fromKey ? { ...p, pos: toKey } : p);
+}
+
+// ─── Component ───
+
+const MOVE_ANIM_DURATION = 400; // ms per move animation
+const MOVE_STAGGER_DELAY = 800; // ms between player and AI move
 
 interface StormQueensFollyBoardProps {
   session: ActiveGameResponse["session"];
@@ -75,16 +123,81 @@ export default function StormQueensFollyBoard({
   const [selectedPos, setSelectedPos] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const board = session.state.board;
-  const canInteract = isDesignatedPlayer && isMyTurn && !submitting && !session.winner;
+  // Animation state
+  const lastMoveCountRef = useRef<number>(0);
+  const [displayPieces, setDisplayPieces] = useState<TrackedPiece[]>(() =>
+    buildPiecesFromBoard(session.config.initialBoard)
+  );
+  const [displayBoard, setDisplayBoard] = useState<Board>(session.state.board);
+  const [animating, setAnimating] = useState(false);
+  const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Get valid destinations for selected piece
+  // Detect new moves and animate them
+  useEffect(() => {
+    const history = session.state.moveHistory;
+    const lastKnown = lastMoveCountRef.current;
+    const newMoves = history.slice(lastKnown);
+
+    if (newMoves.length === 0) return;
+
+    // Build the board state at lastKnown
+    let boardAtLastKnown = session.config.initialBoard;
+    let piecesAtLastKnown = buildPiecesFromBoard(boardAtLastKnown);
+    for (let i = 0; i < lastKnown; i++) {
+      boardAtLastKnown = applyMoveToBoard(boardAtLastKnown, history[i]);
+      piecesAtLastKnown = applyMoveToPieces(piecesAtLastKnown, history[i]);
+    }
+
+    setAnimating(true);
+
+    // Replay new moves one by one with stagger
+    let currentBoard = boardAtLastKnown;
+    let currentPieces = piecesAtLastKnown;
+
+    newMoves.forEach((move, idx) => {
+      const delay = idx * MOVE_STAGGER_DELAY;
+
+      animTimeoutRef.current = setTimeout(() => {
+        currentPieces = applyMoveToPieces(currentPieces, move);
+        currentBoard = applyMoveToBoard(currentBoard, move);
+        setDisplayPieces([...currentPieces]);
+        setDisplayBoard(currentBoard.map((row) => [...row]));
+
+        // After last move animation completes
+        if (idx === newMoves.length - 1) {
+          setTimeout(() => {
+            setAnimating(false);
+            lastMoveCountRef.current = history.length;
+          }, MOVE_ANIM_DURATION);
+        }
+      }, delay);
+    });
+
+    // Update lastMoveCount immediately to prevent re-triggering
+    lastMoveCountRef.current = history.length;
+
+    return () => {
+      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+    };
+  }, [session.state.moveHistory, session.config.initialBoard]);
+
+  // Sync display when no animation is happening (e.g. initial load, game reset)
+  useEffect(() => {
+    if (!animating && lastMoveCountRef.current === 0 && session.state.moveHistory.length === 0) {
+      setDisplayPieces(buildPiecesFromBoard(session.state.board));
+      setDisplayBoard(session.state.board);
+    }
+  }, [session.state.board, session.state.moveHistory.length, animating]);
+
+  const canInteract = isDesignatedPlayer && isMyTurn && !submitting && !session.winner && !animating;
+
+  // Valid destinations for selected piece (use displayBoard for current visual state)
   const validDestinations: Set<string> = new Set();
   if (selectedPos && canInteract) {
     const adj = ADJACENCY[selectedPos] ?? [];
     for (const key of adj) {
       const [r, c] = key.split(",").map(Number);
-      if (board[r][c] === null) {
+      if (displayBoard[r][c] === null) {
         validDestinations.add(key);
       }
     }
@@ -94,15 +207,13 @@ export default function StormQueensFollyBoard({
     if (!canInteract) return;
 
     const key = posKey(r, c);
-    const cell = board[r][c];
+    const cell = displayBoard[r][c];
 
-    // Clicking own piece — select it
     if (cell === "player") {
       setSelectedPos(selectedPos === key ? null : key);
       return;
     }
 
-    // Clicking empty cell with a piece selected — try to move
     if (cell === null && selectedPos && validDestinations.has(key)) {
       const [fromR, fromC] = selectedPos.split(",").map(Number);
       setSubmitting(true);
@@ -129,15 +240,15 @@ export default function StormQueensFollyBoard({
       return;
     }
 
-    // Clicking elsewhere — deselect
     setSelectedPos(null);
-  }, [canInteract, board, selectedPos, validDestinations, session.id]);
+  }, [canInteract, displayBoard, selectedPos, validDestinations, session.id, session.state.moveHistory.length]);
 
   const showPortraits = !!(player.character || opponent);
 
-  // Turn indicator
   let turnText = "";
   if (session.winner) {
+    turnText = "";
+  } else if (animating) {
     turnText = "";
   } else if (isDesignatedPlayer) {
     turnText = isMyTurn ? "Your Turn" : "Opponent's Turn";
@@ -147,7 +258,6 @@ export default function StormQueensFollyBoard({
 
   return (
     <div className="flex items-center gap-12 xl:gap-20">
-      {/* Left portrait */}
       {showPortraits && (
         <PlayerPortrait
           name={player.character}
@@ -158,14 +268,11 @@ export default function StormQueensFollyBoard({
         />
       )}
 
-      {/* Board */}
       <div className="flex flex-col items-center gap-4">
-        {/* Title */}
         <p className="text-xs tracking-[0.4em] uppercase text-white/20" style={cinzel}>
           Storm Queen&apos;s Folly
         </p>
 
-        {/* Board card */}
         <div
           className="relative"
           style={{
@@ -176,7 +283,6 @@ export default function StormQueensFollyBoard({
             backdropFilter: "blur(12px)",
           }}
         >
-          {/* Corner brackets */}
           <div className="absolute top-1 left-1 w-4 h-4 border-t border-l border-indigo-500/25" />
           <div className="absolute top-1 right-1 w-4 h-4 border-t border-r border-indigo-500/25" />
           <div className="absolute bottom-1 left-1 w-4 h-4 border-b border-l border-indigo-500/25" />
@@ -208,10 +314,7 @@ export default function StormQueensFollyBoard({
                   style={{ animation: "victoryIn 0.5s ease-out" }}
                 >
                   <style>{`@keyframes victoryIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }`}</style>
-                  <h2
-                    className={`text-2xl sm:text-3xl font-semibold tracking-[0.3em] ${titleColor}`}
-                    style={cinzel}
-                  >
+                  <h2 className={`text-2xl sm:text-3xl font-semibold tracking-[0.3em] ${titleColor}`} style={cinzel}>
                     {title}
                   </h2>
                   <div className="w-24 h-px" style={{ background: `linear-gradient(to right, transparent, ${lineColor}, transparent)` }} />
@@ -221,86 +324,86 @@ export default function StormQueensFollyBoard({
                 </div>
               );
             })() : (
-            <svg
-              viewBox="0 0 300 300"
-              className="w-[280px] h-[280px] sm:w-[340px] sm:h-[340px]"
-            >
-              {/* Connection lines */}
-              {CONNECTIONS.map(([a, b]) => {
-                const pa = NODE_POSITIONS[a];
-                const pb = NODE_POSITIONS[b];
-                return (
-                  <line
-                    key={`${a}-${b}`}
-                    x1={pa.x} y1={pa.y}
-                    x2={pb.x} y2={pb.y}
-                    stroke="rgba(255,255,255,0.12)"
-                    strokeWidth="1.5"
-                  />
-                );
-              })}
-
-              {/* Nodes + pieces */}
-              {[0, 1, 2].map((r) =>
-                [0, 1, 2].map((c) => {
-                  const key = posKey(r, c);
-                  const pos = NODE_POSITIONS[key];
-                  const cell = board[r][c];
-                  const isSelected = selectedPos === key;
-                  const isValidDest = validDestinations.has(key);
-
-                  return (
-                    <g key={key}>
-                      {/* Node circle */}
-                      <circle
-                        cx={pos.x}
-                        cy={pos.y}
-                        r={isValidDest ? 12 : 6}
-                        fill={isValidDest ? "rgba(99, 102, 241, 0.15)" : "rgba(255,255,255,0.05)"}
-                        stroke={isValidDest ? "rgba(99, 102, 241, 0.4)" : "rgba(255,255,255,0.1)"}
-                        strokeWidth="1"
-                        className={isValidDest && canInteract ? "cursor-pointer" : ""}
-                        onClick={() => handleNodeClick(r, c)}
+              <div className="relative w-[280px] h-[280px] sm:w-[340px] sm:h-[340px]">
+                {/* SVG: lines and node dots only */}
+                <svg viewBox="0 0 300 300" className="absolute inset-0 w-full h-full">
+                  {CONNECTIONS.map(([a, b]) => {
+                    const pa = NODE_SVG[a];
+                    const pb = NODE_SVG[b];
+                    return (
+                      <line
+                        key={`${a}-${b}`}
+                        x1={pa.x} y1={pa.y}
+                        x2={pb.x} y2={pb.y}
+                        stroke="rgba(255,255,255,0.12)"
+                        strokeWidth="1.5"
                       />
+                    );
+                  })}
 
-                      {/* Valid destination indicator */}
-                      {isValidDest && canInteract && (
-                        <circle
-                          cx={pos.x}
-                          cy={pos.y}
-                          r="4"
-                          fill="rgba(99, 102, 241, 0.5)"
-                          className="cursor-pointer"
-                          onClick={() => handleNodeClick(r, c)}
-                        />
-                      )}
-
-                      {/* Piece */}
-                      {cell && (
-                        <foreignObject
-                          x={pos.x - 30}
-                          y={pos.y - 30}
-                          width="60"
-                          height="60"
-                          onClick={() => handleNodeClick(r, c)}
-                        >
-                          <GamePiece
-                            owner={cell}
-                            selected={isSelected}
-                            interactive={canInteract && cell === "player"}
+                  {[0, 1, 2].map((r) =>
+                    [0, 1, 2].map((c) => {
+                      const key = posKey(r, c);
+                      const pos = NODE_SVG[key];
+                      const isValidDest = validDestinations.has(key);
+                      return (
+                        <g key={key}>
+                          <circle
+                            cx={pos.x} cy={pos.y}
+                            r={isValidDest ? 12 : 6}
+                            fill={isValidDest ? "rgba(99, 102, 241, 0.15)" : "rgba(255,255,255,0.05)"}
+                            stroke={isValidDest ? "rgba(99, 102, 241, 0.4)" : "rgba(255,255,255,0.1)"}
+                            strokeWidth="1"
+                            className={isValidDest && canInteract ? "cursor-pointer" : ""}
+                            onClick={() => handleNodeClick(r, c)}
                           />
-                        </foreignObject>
-                      )}
-                    </g>
+                          {isValidDest && canInteract && (
+                            <circle
+                              cx={pos.x} cy={pos.y} r="4"
+                              fill="rgba(99, 102, 241, 0.5)"
+                              className="cursor-pointer"
+                              onClick={() => handleNodeClick(r, c)}
+                            />
+                          )}
+                        </g>
+                      );
+                    })
+                  )}
+                </svg>
+
+                {/* Pieces: absolutely positioned divs with CSS transitions */}
+                {displayPieces.map((piece) => {
+                  const pct = NODE_PCT[piece.pos];
+                  if (!pct) return null;
+                  const isSelected = selectedPos === piece.pos;
+                  return (
+                    <div
+                      key={piece.id}
+                      className="absolute w-[60px] h-[60px] -translate-x-1/2 -translate-y-1/2"
+                      style={{
+                        left: `${pct.x}%`,
+                        top: `${pct.y}%`,
+                        transition: `left ${MOVE_ANIM_DURATION}ms ease-in-out, top ${MOVE_ANIM_DURATION}ms ease-in-out`,
+                        zIndex: isSelected ? 10 : 1,
+                      }}
+                      onClick={() => {
+                        const [r, c] = piece.pos.split(",").map(Number);
+                        handleNodeClick(r, c);
+                      }}
+                    >
+                      <GamePiece
+                        owner={piece.owner}
+                        selected={isSelected}
+                        interactive={canInteract && piece.owner === "player"}
+                      />
+                    </div>
                   );
-                })
-              )}
-            </svg>
+                })}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Turn indicator */}
         {turnText && (
           <p
             className={`text-[9px] tracking-[0.25em] uppercase ${
@@ -313,7 +416,6 @@ export default function StormQueensFollyBoard({
         )}
       </div>
 
-      {/* Right portrait */}
       {showPortraits && opponent && (
         <PlayerPortrait
           name={opponent.name}
