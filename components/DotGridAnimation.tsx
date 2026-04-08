@@ -26,7 +26,6 @@ function randomShipName(): string {
 interface SpotState {
   x: number; y: number;
   rx: number; ry: number;
-  angle: number;
 }
 
 interface JumpFx {
@@ -68,8 +67,6 @@ function getIntensity(x: number, y: number, s: SpotState): number {
   return intensity * intensity;
 }
 
-// ─── Types ───
-
 export interface ExclusionZone {
   /** Percentage-based position and size (0-100) relative to the container */
   x: number;      // left edge %
@@ -88,6 +85,20 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
+  const [hidden, setHidden] = useState(false);
+  const hiddenRef = useRef(false);
+  const zonesKey = JSON.stringify(exclusionZones);
+
+  // Listen for ship spread events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const spread = !!(e as CustomEvent).detail?.spread;
+      hiddenRef.current = spread;
+      setHidden(spread);
+    };
+    window.addEventListener("ship-spread", handler);
+    return () => window.removeEventListener("ship-spread", handler);
+  }, []);
 
   // Observe container size
   useEffect(() => {
@@ -141,13 +152,9 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
     const inBounds = (x: number, y: number) =>
       x >= MIN_X && x <= MAX_X && y >= MIN_Y && y <= MAX_Y && !inExclusionZone(x, y);
 
-    const GRID_COLS = Math.floor((W - DOT_SPACING) / DOT_SPACING);
-    const GRID_ROWS = Math.floor((H - DOT_SPACING) / DOT_SPACING);
-
     const spot: SpotState = {
       x: W / 2, y: H / 2,
       rx: SPOT_SIZE, ry: SPOT_SIZE,
-      angle: 0,
     };
 
     const traveler: TravelerState = {
@@ -181,41 +188,31 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
       traveler.targetY = pick.y;
     }
 
+    // Pre-build list of valid jump destinations
+    const validDots: { x: number; y: number }[] = [];
+    for (let x = DOT_SPACING; x < W; x += DOT_SPACING) {
+      for (let y = DOT_SPACING; y < H; y += DOT_SPACING) {
+        if (inBounds(x, y)) validDots.push({ x, y });
+      }
+    }
+
     function startJump() {
       const streaks: number[] = [];
       const numStreaks = 6 + Math.floor(Math.random() * 4);
       for (let i = 0; i < numStreaks; i++) streaks.push(Math.random() * Math.PI * 2);
       jumpFx = { x: traveler.x, y: traveler.y, frame: 0, maxFrames: 60, streaks, rippleSpeed: 3 };
 
-      const areaW = MAX_X - MIN_X;
-      const areaH = MAX_Y - MIN_Y;
-      const angle = Math.random() * Math.PI * 2;
-      let rawX = traveler.x + Math.cos(angle) * areaW * 0.5;
-      let rawY = traveler.y + Math.sin(angle) * areaH * 0.5;
+      // Pick from valid dots, preferring ~50% of area away
+      const areaSize = Math.min(MAX_X - MIN_X, MAX_Y - MIN_Y);
+      const idealDist = areaSize * 0.5;
+      const candidates = validDots.filter((d) =>
+        Math.hypot(d.x - traveler.x, d.y - traveler.y) > idealDist * 0.5
+      );
+      const pool = candidates.length > 0 ? candidates : validDots;
+      const pick = pool[Math.floor(Math.random() * pool.length)];
 
-      const wrap = (v: number, min: number, max: number) => {
-        const range = max - min;
-        let r = ((v - min) % range);
-        if (r < 0) r += range;
-        return min + r;
-      };
-      rawX = wrap(rawX, MIN_X, MAX_X);
-      rawY = wrap(rawY, MIN_Y, MAX_Y);
-
-      let destX = Math.max(MIN_X, Math.min(MAX_X, Math.round(rawX / DOT_SPACING) * DOT_SPACING));
-      let destY = Math.max(MIN_Y, Math.min(MAX_Y, Math.round(rawY / DOT_SPACING) * DOT_SPACING));
-
-      // If destination lands in an exclusion zone, nudge it out
-      let attempts = 0;
-      while (inExclusionZone(destX, destY) && attempts < 20) {
-        destX += DOT_SPACING;
-        if (destX > MAX_X) { destX = MIN_X; destY += DOT_SPACING; }
-        if (destY > MAX_Y) destY = MIN_Y;
-        attempts++;
-      }
-
-      traveler.destX = destX;
-      traveler.destY = destY;
+      traveler.destX = pick.x;
+      traveler.destY = pick.y;
       traveler.jumpOriginX = traveler.x;
       traveler.jumpOriginY = traveler.y;
       traveler.visible = false;
@@ -256,6 +253,13 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
 
     function draw() {
       if (!ctx) return;
+
+      // Skip all computation when hidden
+      if (hiddenRef.current) {
+        animFrame = requestAnimationFrame(draw);
+        return;
+      }
+
       const t = traveler;
       const s = spot;
       const fx = jumpFx;
@@ -414,9 +418,7 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
             ctx.font = '7px "Cinzel", serif';
             ctx.textAlign = "center";
             ctx.fillStyle = `rgba(255, 255, 255, ${hI * 0.6})`;
-            ctx.letterSpacing = "2px";
             ctx.fillText(t.shipName.toUpperCase(), t.x, t.y - 8);
-            ctx.letterSpacing = "0px";
           }
         }
       }
@@ -462,10 +464,14 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
 
     animFrame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animFrame);
-  }, [dims, exclusionZones]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dims, zonesKey]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0 pointer-events-none">
+    <div
+      ref={containerRef}
+      className={`absolute inset-0 pointer-events-none transition-opacity duration-500 ${hidden ? "opacity-0" : "opacity-100"}`}
+    >
       <canvas
         ref={canvasRef}
         style={{ width: dims.w, height: dims.h }}

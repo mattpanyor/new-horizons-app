@@ -53,6 +53,7 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
     (target: 0 | 1) => {
       if (targetRef.current === target) return; // already heading there
       targetRef.current = target;
+      window.dispatchEvent(new CustomEvent("ship-spread", { detail: { spread: target === 1 } }));
       animStartRef.current = {
         time: performance.now(),
         from: progressRef.current,
