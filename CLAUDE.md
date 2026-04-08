@@ -127,10 +127,14 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 - POST `/api/admin/users` - User management
 - POST `/api/admin/kanka/sync`, GET/POST `/api/admin/kanka/entities` - Kanka sync
 
+## Review Later
+
+- **Game polling bandwidth**: `/api/games/active` returns the full game session (~1-2KB) every 2s to every user on `/game`. Fine for 5-10 players but if player count grows, consider: ETag/304 responses, sending only a version hash and fetching full state on change, or reducing poll frequency when it's not the player's turn.
+
 ## Database
 
 - Neon Postgres via `@neondatabase/serverless`
-- Tables: `users`, `messages`, `message_recipients`, `kanka_entities`
+- Tables: `users`, `messages`, `message_recipients`, `kanka_entities`, `game_sessions`
 - Auth: bcryptjs password hashing
 - No migrations directory — schema changes are manual
 
