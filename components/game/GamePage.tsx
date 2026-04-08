@@ -28,26 +28,25 @@ export default function GamePage({ username }: GamePageProps) {
 
   const gameNav = (
     <Link
-      href="/sectors"
-      title="Galaxy"
+      href="/ship"
+      title="Ship"
       className="fixed top-20 right-3 sm:right-6 z-40 flex flex-col items-center gap-1 px-2 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all"
       style={{ backdropFilter: "blur(8px)", background: "rgba(10,10,30,0.5)" }}
     >
-      <svg width="32" height="32" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        {/* Chess piece — king/queen silhouette */}
-        <circle cx="24" cy="12" r="4" fill="currentColor" fillOpacity="0.1" />
-        <path d="M20 16 L28 16 L30 28 L18 28 Z" fill="currentColor" fillOpacity="0.06" />
-        <line x1="24" y1="8" x2="24" y2="6" strokeOpacity="0.6" />
-        <line x1="22" y1="7" x2="26" y2="7" strokeOpacity="0.4" />
-        <path d="M16 28 L16 32 Q16 34 18 34 L30 34 Q32 34 32 32 L32 28" fill="currentColor" fillOpacity="0.08" />
-        <line x1="16" y1="34" x2="32" y2="34" strokeOpacity="0.5" />
-        <path d="M14 34 L14 38 L34 38 L34 34" fill="currentColor" fillOpacity="0.05" />
+      <svg width="32" height="32" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+        {/* Simple spaceship */}
+        <path d="M24 8 L28 20 L26 24 L22 24 L20 20 Z" fill="currentColor" fillOpacity="0.08" strokeOpacity="0.6" />
+        <line x1="24" y1="8" x2="24" y2="24" strokeWidth="0.6" strokeOpacity="0.3" />
+        <line x1="21" y1="24" x2="19" y2="27" strokeOpacity="0.4" />
+        <line x1="27" y1="24" x2="29" y2="27" strokeOpacity="0.4" />
+        {/* Orbit line below */}
+        <ellipse cx="24" cy="36" rx="16" ry="5" strokeOpacity="0.3" strokeDasharray="2 3" />
       </svg>
       <span
         className="text-[7px] tracking-[0.15em] uppercase"
         style={cinzel}
       >
-        Galaxy
+        Ship
       </span>
     </Link>
   );
@@ -59,8 +58,8 @@ export default function GamePage({ username }: GamePageProps) {
         {gameNav}
         <DotGridAnimation />
         <div className="h-[calc(100dvh-4rem)] flex items-center justify-center">
-          <p className="text-white/15 text-xs tracking-[0.3em] uppercase" style={cinzel}>
-            Awaiting Orders
+          <p className="text-white/30 text-lg tracking-[0.4em] uppercase" style={cinzel}>
+            Awaiting Transmission
           </p>
         </div>
       </>
