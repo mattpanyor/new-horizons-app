@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getUserByUsername } from "@/lib/db/users";
 import Navbar from "@/components/Navbar";
 import StarSystemBackground from "@/components/StarSystemBackground";
+import DotGridAnimation from "@/components/DotGridAnimation";
 import ShipViewer from "@/components/ship/ShipViewer";
 import ShipControls from "@/components/ship/ShipControls";
 import NavIcon from "@/components/NavIcon";
@@ -28,6 +29,7 @@ export default async function ShipPage() {
         accessLevel={user.accessLevel}
       />
       <StarSystemBackground />
+      <DotGridAnimation />
       <NavIcon href="/sectors" label="Galaxy">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
           {/* Outer halo */}

@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import StarSystemBackground from "@/components/StarSystemBackground";
+import DotGridAnimation from "@/components/DotGridAnimation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function LoginPage() {
   return (
     <>
       <StarSystemBackground />
+      <DotGridAnimation exclusionZones={[{ x: 30, y: 25, width: 40, height: 50 }]} />
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           {/* Title */}
