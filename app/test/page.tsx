@@ -817,7 +817,7 @@ function useAnimType5(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
 
     const SPEED = 0.7;
     const TRAIL_MAX = Math.ceil((DOT_SPACING * 1.5) / SPEED);
-    const MARGIN = SIZE * 0.125;
+    const MARGIN = SIZE * 0.075;
     const MIN_BOUND = MARGIN;
     const MAX_BOUND = SIZE - MARGIN;
 

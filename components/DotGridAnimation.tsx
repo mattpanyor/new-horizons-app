@@ -118,8 +118,8 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
 
     const SPEED = 0.7;
     const TRAIL_MAX = Math.ceil((DOT_SPACING * 1.5) / SPEED);
-    const MARGIN_X = W * 0.125;
-    const MARGIN_Y = H * 0.125;
+    const MARGIN_X = W * 0.075;
+    const MARGIN_Y = H * 0.075;
     const MIN_X = MARGIN_X;
     const MAX_X = W - MARGIN_X;
     const MIN_Y = MARGIN_Y;
