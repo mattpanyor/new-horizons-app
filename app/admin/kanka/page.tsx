@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getUserByUsername } from "@/lib/db/users";
 import KankaSyncPanel from "@/components/admin/KankaSyncPanel";
 
@@ -24,7 +25,7 @@ export default async function AdminKankaPage() {
           <p className="text-sm text-white/40 leading-relaxed" style={cinzel}>
             Kanka sync can only be run from a local development server. Start the app with <span className="text-white/60">npm run dev</span> and access this page from there.
           </p>
-          <a
+          <Link
             href="/sectors"
             className="mt-4 px-6 py-2.5 text-xs tracking-[0.3em] uppercase rounded transition-colors"
             style={{
@@ -35,7 +36,7 @@ export default async function AdminKankaPage() {
             }}
           >
             Return to Galactic Map
-          </a>
+          </Link>
         </div>
       </main>
     );

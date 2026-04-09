@@ -68,7 +68,6 @@ export function ConnectionMarkerLayer({
         const markerGradId = `conn-marker-${connIdx}`;
         const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
         const colors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
-        const markerColor = allegiance?.color ?? colors.color;
         const shipSecondary = allegiance?.color ?? SHIP_COLORS.secondaryColor;
 
         return (

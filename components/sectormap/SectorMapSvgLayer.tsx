@@ -5,7 +5,6 @@
 import type { SectorMetadata } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
-import { SYS_MAX_R } from "@/lib/sectorMapHelpers";
 import { SectorArcLayer } from "./SectorArcLayer";
 import { TerritoryLayer } from "./TerritoryLayer";
 

@@ -29,7 +29,8 @@ import type { VortexPin, LayerSlug } from "@/types/sector";
 import { MAP_LAYERS } from "@/types/sector";
 
 const noop = () => {};
-const noopStr = (_s: string | null) => {};
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const noopStr = (_: string | null) => {};
 
 interface SectorMapProps {
   sector: SectorMetadata;
@@ -190,7 +191,7 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
       if (planning.handlers.onMouseMove(e)) return;
       handlers.onMouseMove(e);
     },
-    onMouseUp: (e: React.MouseEvent) => {
+    onMouseUp: () => {
       if (planning.handlers.onMouseUp()) return;
       handlers.onMouseUp();
     },

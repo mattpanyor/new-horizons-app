@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
 export default function AdminRestricted() {
@@ -15,7 +17,7 @@ export default function AdminRestricted() {
         <p className="text-sm text-white/40 leading-relaxed" style={cinzel}>
           This section is reserved for the Dungeon Master and contains story content that you cannot access at the moment.
         </p>
-        <a
+        <Link
           href="/sectors"
           className="mt-4 px-6 py-2.5 text-xs tracking-[0.3em] uppercase rounded transition-colors"
           style={{
@@ -26,7 +28,7 @@ export default function AdminRestricted() {
           }}
         >
           Return to Galactic Map
-        </a>
+        </Link>
       </div>
     </main>
   );

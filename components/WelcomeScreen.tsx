@@ -14,7 +14,7 @@ interface Props {
   group: string;
 }
 
-export default function WelcomeScreen({ username, character, role, group }: Props) {
+export default function WelcomeScreen({ character, role, group }: Props) {
   const router = useRouter();
   const handleComplete = useCallback(() => router.push("/sectors"), [router]);
   const { count, progress } = useCountdown(DELAY, handleComplete);

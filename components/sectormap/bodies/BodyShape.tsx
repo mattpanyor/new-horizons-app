@@ -18,6 +18,7 @@ interface BodyShapeProps {
 
 export function BodyShape({
   bodyId, bodyType, posX, posY, pinSlug, sectorSlug,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   bodyColor, isBodyActive, isActive,
 }: BodyShapeProps) {
   const fillId = `url(#body-${pinSlug}-${bodyId})`;

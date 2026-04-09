@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { usePresence, type UserPresence } from "@/hooks/usePresence";
+import { usePresence } from "@/hooks/usePresence";
 
 export default function PresenceCard({ position }: { position: string }) {
   const { users, currentUser } = usePresence(position);

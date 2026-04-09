@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Position, Board, GameMove, PieceOwner, CellState, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
-import type { VictoryText } from "@/lib/games/registry";
+import type { Position, Board, GameMove, PieceOwner, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
 import type { GameBoardProps } from "./gameComponents";
 import GamePiece from "./GamePiece";
 import PlayerPortrait from "./PlayerPortrait";
