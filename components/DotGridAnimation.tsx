@@ -157,9 +157,10 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
       rx: SPOT_SIZE, ry: SPOT_SIZE,
     };
 
+    const initSteps = 12 + Math.floor(Math.random() * 5);
     const traveler: TravelerState = {
       x: W / 2, y: H / 2, targetX: W / 2, targetY: H / 2,
-      trail: [], stepsLeft: 5, stepsTotal: 5, visited: new Set(),
+      trail: [], stepsLeft: initSteps, stepsTotal: initSteps, visited: new Set(),
       phase: "trailing", destX: W / 2, destY: H / 2,
       jumpInX: W / 2, jumpInY: H / 2,
       jumpOriginX: W / 2, jumpOriginY: H / 2,
@@ -234,7 +235,7 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
       traveler.y = traveler.jumpInY;
       traveler.targetX = traveler.destX;
       traveler.targetY = traveler.destY;
-      traveler.stepsTotal = 8 + Math.floor(Math.random() * 3);
+      traveler.stepsTotal = 12 + Math.floor(Math.random() * 5);
       traveler.stepsLeft = traveler.stepsTotal;
       const backX = traveler.destX + (traveler.destX - traveler.jumpInX);
       const backY = traveler.destY + (traveler.destY - traveler.jumpInY);
@@ -244,8 +245,6 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
     }
 
     // Init
-    traveler.stepsTotal = 8 + Math.floor(Math.random() * 3);
-    traveler.stepsLeft = traveler.stepsTotal;
     pickNeighbor();
 
     const JUMP_IN_SPEED = SPEED * 8;
