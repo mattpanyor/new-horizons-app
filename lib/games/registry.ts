@@ -19,6 +19,7 @@ export interface GameDefinition {
 
 import { getDefaultBoard } from "./stormQueensFolly";
 import { getDefaultConfig as ecDefaultConfig, getDefaultState as ecDefaultState } from "./engineeringChallenge";
+import { getDefaultConfig as rpDefaultConfig, getDefaultState as rpDefaultState } from "./runePoker";
 
 export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
   "storm-queens-folly": {
@@ -51,6 +52,18 @@ export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
       spectatorWin: "The engineer has succeeded.",
       spectatorLose: "The system remains offline.",
       draw: "Time expired.",
+    },
+  },
+  "rune-poker": {
+    label: "Rune Poker",
+    getDefaultConfig: rpDefaultConfig,
+    getDefaultState: rpDefaultState,
+    victoryText: {
+      playerWin: "The runes have spoken in your favor.",
+      playerLose: "The runes turn against you.",
+      spectatorWin: "The challenger reads the runes true.",
+      spectatorLose: "The runes deny the challenger.",
+      draw: "The runes are silent.",
     },
   },
 };
