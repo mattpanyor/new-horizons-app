@@ -4,6 +4,7 @@ import { getUserByUsername } from "@/lib/db/users";
 import { getGameSession, updateGameState } from "@/lib/db/games";
 import { handleStormQueensFollyMove } from "@/lib/games/stormQueensFolly";
 import { handleEngineeringChallengeMove } from "@/lib/games/engineeringChallenge";
+import { handleRunePokerMove } from "@/lib/games/runePoker";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
       break;
     case "engineering-challenge":
       result = handleEngineeringChallengeMove(session, body);
+      break;
+    case "rune-poker":
+      result = handleRunePokerMove(session, body);
       break;
     default:
       return NextResponse.json({ error: "Unknown game type" }, { status: 400 });

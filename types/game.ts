@@ -53,16 +53,52 @@ export interface EngineeringChallengeState {
   completed: boolean;       // all wires connected
 }
 
+// ─── Rune Poker config & state ───
+
+export type Sigil = "flame" | "void" | "storm" | "earth" | "star" | "crown";
+
+export type HandRank =
+  | "nothing"
+  | "one-pair"
+  | "two-pair"
+  | "three-of-a-kind"
+  | "full-house"
+  | "four-of-a-kind"
+  | "straight"
+  | "five-of-a-kind";
+
+export type RunePokerPhase = "casting" | "keeping" | "showdown" | "round-end";
+
+export interface RunePokerConfig {
+  challengeRate: 1 | 2 | 3;
+  roundCount: 1 | 3 | 5;
+  opponentEntityId: number | null;
+}
+
+export interface RunePokerState {
+  round: number;
+  playerWins: number;
+  opponentWins: number;
+  phase: RunePokerPhase;
+  castsRemaining: number;
+  playerCoins: Sigil[];
+  opponentCoins: Sigil[];
+  lockedCoins: boolean[];
+  opponentLockedCoins: boolean[];
+  playerHand: HandRank | null;
+  opponentHand: HandRank | null;
+}
+
 // ─── Session ───
 
-export type GameType = "storm-queens-folly" | "engineering-challenge";
+export type GameType = "storm-queens-folly" | "engineering-challenge" | "rune-poker";
 export type GameStatus = "configured" | "launched" | "finished";
 
 // Generic config/state — the DB stores these as JSONB
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type GameConfig = StormQueensFollyConfig | EngineeringChallengeConfig | Record<string, any>;
+export type GameConfig = StormQueensFollyConfig | EngineeringChallengeConfig | RunePokerConfig | Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type GameState = StormQueensFollyState | EngineeringChallengeState | Record<string, any>;
+export type GameState = StormQueensFollyState | EngineeringChallengeState | RunePokerState | Record<string, any>;
 
 export type WinnerValue = PieceOwner | "draw" | "player" | "timeout" | null;
 

@@ -94,6 +94,7 @@ export default function GamesPanel() {
   const [formWireCount, setFormWireCount] = useState(4);
   const [formDifficulty, setFormDifficulty] = useState<"easy" | "normal" | "hard">("normal");
   const [formTimeLimit, setFormTimeLimit] = useState(90);
+  const [formRoundCount, setFormRoundCount] = useState<1 | 3 | 5>(3);
   const [submitting, setSubmitting] = useState(false);
 
   // Player dropdown
@@ -168,6 +169,14 @@ export default function GamesPanel() {
               designatedPlayer: formPlayer,
               opponentEntityId: formEntity,
               initialBoard: formBoard,
+            }
+          : formGameType === "rune-poker"
+          ? {
+              gameType: formGameType,
+              challengeRate: formRate,
+              roundCount: formRoundCount,
+              designatedPlayer: formPlayer,
+              opponentEntityId: formEntity,
             }
           : {
               gameType: formGameType,
@@ -288,8 +297,8 @@ export default function GamesPanel() {
             </div>
           )}
 
-          {/* SQF: Challenge rate */}
-          {formGameType === "storm-queens-folly" && (
+          {/* Challenge rate (SQF + Rune Poker) */}
+          {(formGameType === "storm-queens-folly" || formGameType === "rune-poker") && (
             <div className="flex flex-col gap-1">
               <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
                 Challenge Rate
@@ -384,6 +393,32 @@ export default function GamesPanel() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* Rune Poker: Round count */}
+          {formGameType === "rune-poker" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                Round Count
+              </label>
+              <div className="flex gap-2">
+                {([1, 3, 5] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setFormRoundCount(n)}
+                    className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
+                      formRoundCount === n
+                        ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
+                        : "border-white/10 text-white/30 hover:border-white/20"
+                    }`}
+                    style={cinzel}
+                  >
+                    {n === 1 ? "Single" : `Best of ${n}`}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Designated player */}
@@ -566,6 +601,7 @@ export default function GamesPanel() {
                     {" · "}
                     {"challengeRate" in s.config && RATE_LABELS[(s.config as StormQueensFollyConfig).challengeRate]}
                     {"wireCount" in s.config && `${(s.config as { wireCount: number }).wireCount} wires`}
+                    {"roundCount" in s.config && ` · Best of ${(s.config as { roundCount: number }).roundCount}`}
                     {s.winner && ` · Winner: ${s.winner}`}
                   </span>
                 </div>
