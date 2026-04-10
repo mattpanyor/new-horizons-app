@@ -113,17 +113,42 @@ export default function StormQueensFollyBoard({
   const sqfConfig = session.config as StormQueensFollyConfig;
   const sqfState = session.state as StormQueensFollyState;
 
+  // The board the move history replays from. Prefer the configured initialBoard,
+  // but fall back to the current state.board if it's missing — that way the
+  // animator and the backend always agree on the starting position.
+  const replayBoard: Board = sqfConfig.initialBoard ?? sqfState.board;
+
   const [selectedPos, setSelectedPos] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Animation state
   const lastMoveCountRef = useRef<number>(0);
-  const [displayPieces, setDisplayPieces] = useState<TrackedPiece[]>(() =>
-    buildPiecesFromBoard(sqfConfig.initialBoard)
-  );
-  const [displayBoard, setDisplayBoard] = useState<Board>(sqfState.board);
+  const [displayPieces, setDisplayPieces] = useState<TrackedPiece[]>(() => {
+    // Seed both display states from the same source: replay initialBoard + history
+    let board = replayBoard;
+    let pieces = buildPiecesFromBoard(board);
+    for (const move of sqfState.moveHistory) {
+      pieces = applyMoveToPieces(pieces, move);
+      board = applyMoveToBoard(board, move);
+    }
+    return pieces;
+  });
+  const [displayBoard, setDisplayBoard] = useState<Board>(() => {
+    let board = replayBoard;
+    for (const move of sqfState.moveHistory) {
+      board = applyMoveToBoard(board, move);
+    }
+    return board;
+  });
   const [animating, setAnimating] = useState(false);
-  const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Initialize lastMoveCountRef to current history length on first mount,
+  // so that already-played moves aren't re-animated when joining mid-game.
+  useEffect(() => {
+    lastMoveCountRef.current = sqfState.moveHistory.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Detect new moves and animate them
   useEffect(() => {
@@ -133,8 +158,12 @@ export default function StormQueensFollyBoard({
 
     if (newMoves.length === 0) return;
 
-    // Build the board state at lastKnown
-    let boardAtLastKnown = sqfConfig.initialBoard;
+    // Cancel any in-flight animation timers from a prior effect run
+    animTimeoutsRef.current.forEach((t) => clearTimeout(t));
+    animTimeoutsRef.current = [];
+
+    // Build the board state at lastKnown by replaying from initialBoard
+    let boardAtLastKnown = replayBoard;
     let piecesAtLastKnown = buildPiecesFromBoard(boardAtLastKnown);
     for (let i = 0; i < lastKnown; i++) {
       boardAtLastKnown = applyMoveToBoard(boardAtLastKnown, history[i]);
@@ -150,7 +179,7 @@ export default function StormQueensFollyBoard({
     newMoves.forEach((move, idx) => {
       const delay = idx * MOVE_STAGGER_DELAY;
 
-      animTimeoutRef.current = setTimeout(() => {
+      const timer = setTimeout(() => {
         currentPieces = applyMoveToPieces(currentPieces, move);
         currentBoard = applyMoveToBoard(currentBoard, move);
         setDisplayPieces([...currentPieces]);
@@ -158,21 +187,23 @@ export default function StormQueensFollyBoard({
 
         // After last move animation completes
         if (idx === newMoves.length - 1) {
-          setTimeout(() => {
+          const finalTimer = setTimeout(() => {
             setAnimating(false);
-            lastMoveCountRef.current = history.length;
           }, MOVE_ANIM_DURATION);
+          animTimeoutsRef.current.push(finalTimer);
         }
       }, delay);
+      animTimeoutsRef.current.push(timer);
     });
 
     // Update lastMoveCount immediately to prevent re-triggering
     lastMoveCountRef.current = history.length;
 
     return () => {
-      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+      animTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      animTimeoutsRef.current = [];
     };
-  }, [sqfState.moveHistory, sqfConfig.initialBoard]);
+  }, [sqfState.moveHistory, replayBoard]);
 
   // Sync display when no animation is happening (e.g. initial load, game reset)
   useEffect(() => {

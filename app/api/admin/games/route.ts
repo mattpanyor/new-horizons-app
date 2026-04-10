@@ -14,7 +14,7 @@ import {
 import { getAllKankaEntities } from "@/lib/db/kankaEntities";
 import { GAME_REGISTRY, GAME_TYPES } from "@/lib/games/registry";
 import { getRandomBoard } from "@/lib/games/engineeringChallenge";
-import type { GameType } from "@/types/game";
+import type { GameType, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
 
 async function requireAdmin() {
   const cookieStore = await cookies();
@@ -210,11 +210,17 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Another game is already launched" }, { status: 409 });
     }
 
-    // Reset state to defaults for the game type
+    // Reset state to defaults for the game type, preserving custom starting board for SQF
     const gameDef = GAME_REGISTRY[existing.gameType as GameType];
+    const freshState = gameDef ? gameDef.getDefaultState() : {};
+    if (existing.gameType === "storm-queens-folly") {
+      const ib = (existing.config as StormQueensFollyConfig).initialBoard;
+      if (ib) (freshState as StormQueensFollyState).board = ib;
+    }
+
     await updateGameSession(id, {
       config: existing.config,
-      state: gameDef ? gameDef.getDefaultState() : {},
+      state: freshState,
       designatedPlayer: existing.designatedPlayer ?? "",
     });
 
