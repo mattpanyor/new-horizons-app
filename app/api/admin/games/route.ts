@@ -14,7 +14,13 @@ import {
 import { getAllKankaEntities } from "@/lib/db/kankaEntities";
 import { GAME_REGISTRY, GAME_TYPES } from "@/lib/games/registry";
 import { getRandomBoard } from "@/lib/games/engineeringChallenge";
-import type { GameType, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
+import { getDefaultState as getArcaneCardDefaultState } from "@/lib/games/arcaneCard";
+import type {
+  GameType,
+  StormQueensFollyConfig,
+  StormQueensFollyState,
+  ArcaneCardConfig,
+} from "@/types/game";
 
 async function requireAdmin() {
   const cookieStore = await cookies();
@@ -69,7 +75,7 @@ export async function POST(req: NextRequest) {
   // Build config: merge defaults with provided overrides
   const defaultConfig = gameDef.getDefaultConfig();
   let config = { ...defaultConfig, ...gameConfig };
-  const state = gameDef.getDefaultState();
+  let state = gameDef.getDefaultState();
 
   // For EC: pick a random board based on wireCount + difficulty
   if (resolvedType === "engineering-challenge") {
@@ -80,6 +86,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `No boards available for ${wc} wires on ${diff}` }, { status: 400 });
     }
     config = { ...config, ...board, wireCount: wc, difficulty: diff };
+  }
+
+  // For Arcane Card: deal both hands with negative-card guarantees based on rate
+  if (resolvedType === "arcane-card") {
+    const rate = (config as ArcaneCardConfig).challengeRate ?? 2;
+    state = getArcaneCardDefaultState(rate);
   }
 
   // For SQF: apply initialBoard to state if provided
@@ -136,7 +148,13 @@ export async function PUT(req: NextRequest) {
 
   const gameDef = GAME_REGISTRY[existing.gameType as GameType];
   const config = { ...existing.config, ...configOverrides };
-  const state = gameDef ? gameDef.getDefaultState() : existing.state;
+  let state = gameDef ? gameDef.getDefaultState() : existing.state;
+
+  // For Arcane Card: re-deal using the current (possibly updated) challengeRate
+  if (existing.gameType === "arcane-card") {
+    const rate = (config as ArcaneCardConfig).challengeRate ?? 2;
+    state = getArcaneCardDefaultState(rate);
+  }
 
   const updated = await updateGameSession(id, {
     config,
@@ -211,11 +229,16 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Reset state to defaults for the game type, preserving custom starting board for SQF
+    // and applying the configured challengeRate for Arcane Card
     const gameDef = GAME_REGISTRY[existing.gameType as GameType];
-    const freshState = gameDef ? gameDef.getDefaultState() : {};
+    let freshState = gameDef ? gameDef.getDefaultState() : {};
     if (existing.gameType === "storm-queens-folly") {
       const ib = (existing.config as StormQueensFollyConfig).initialBoard;
       if (ib) (freshState as StormQueensFollyState).board = ib;
+    }
+    if (existing.gameType === "arcane-card") {
+      const rate = (existing.config as ArcaneCardConfig).challengeRate ?? 2;
+      freshState = getArcaneCardDefaultState(rate);
     }
 
     await updateGameSession(id, {

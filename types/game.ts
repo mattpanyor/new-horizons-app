@@ -89,16 +89,49 @@ export interface RunePokerState {
   opponentHand: HandRank | null;
 }
 
+// ─── Arcane Card config & state ───
+
+export type SideCardKind = "positive" | "negative" | "mixed";
+
+export interface SideCard {
+  id: string;                                       // unique within match, e.g. "s0".."s9"
+  kind: SideCardKind;
+  value: number;                                    // 1..6, magnitude
+}
+
+export type PlayedCard =
+  | { kind: "main"; value: number }                                                   // 1..10
+  | { kind: "side"; card: SideCard; playedAs: "positive" | "negative" };
+
+export interface ArcaneCardPlayerState {
+  mainDeck: number[];                               // remaining cards, top = index 0
+  hand: SideCard[];                                 // current hand (0..4)
+  played: PlayedCard[];                             // ordered committed cards
+  standing: boolean;
+}
+
+export interface ArcaneCardConfig {
+  challengeRate: 1 | 2 | 3;
+  opponentEntityId: number | null;
+}
+
+export interface ArcaneCardState {
+  player: ArcaneCardPlayerState;
+  opponent: ArcaneCardPlayerState;
+  turn: "player" | "opponent";
+  moveCount: number;                                // strictly increasing, used for moveVersion staleness check
+}
+
 // ─── Session ───
 
-export type GameType = "storm-queens-folly" | "engineering-challenge" | "rune-poker";
+export type GameType = "storm-queens-folly" | "engineering-challenge" | "rune-poker" | "arcane-card";
 export type GameStatus = "configured" | "launched" | "finished";
 
 // Generic config/state — the DB stores these as JSONB
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type GameConfig = StormQueensFollyConfig | EngineeringChallengeConfig | RunePokerConfig | Record<string, any>;
+export type GameConfig = StormQueensFollyConfig | EngineeringChallengeConfig | RunePokerConfig | ArcaneCardConfig | Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type GameState = StormQueensFollyState | EngineeringChallengeState | RunePokerState | Record<string, any>;
+export type GameState = StormQueensFollyState | EngineeringChallengeState | RunePokerState | ArcaneCardState | Record<string, any>;
 
 export type WinnerValue = PieceOwner | "draw" | "player" | "timeout" | null;
 

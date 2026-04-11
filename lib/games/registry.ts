@@ -20,6 +20,7 @@ export interface GameDefinition {
 import { getDefaultBoard } from "./stormQueensFolly";
 import { getDefaultConfig as ecDefaultConfig, getDefaultState as ecDefaultState } from "./engineeringChallenge";
 import { getDefaultConfig as rpDefaultConfig, getDefaultState as rpDefaultState } from "./runePoker";
+import { getDefaultConfig as acDefaultConfig, getDefaultState as acDefaultState } from "./arcaneCard";
 
 export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
   "storm-queens-folly": {
@@ -64,6 +65,18 @@ export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
       spectatorWin: "The challenger reads the runes true.",
       spectatorLose: "The runes deny the challenger.",
       draw: "The runes are silent.",
+    },
+  },
+  "arcane-card": {
+    label: "Arcane Card",
+    getDefaultConfig: acDefaultConfig,
+    getDefaultState: acDefaultState,
+    victoryText: {
+      playerWin: "The deck bows to your hand.",
+      playerLose: "The arcane favors another.",
+      spectatorWin: "The challenger claims the hand.",
+      spectatorLose: "The hand is lost.",
+      draw: "The cards fall silent.",
     },
   },
 };

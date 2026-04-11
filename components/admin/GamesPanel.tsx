@@ -178,6 +178,13 @@ export default function GamesPanel() {
               designatedPlayer: formPlayer,
               opponentEntityId: formEntity,
             }
+          : formGameType === "arcane-card"
+          ? {
+              gameType: formGameType,
+              challengeRate: formRate,
+              designatedPlayer: formPlayer,
+              opponentEntityId: formEntity,
+            }
           : {
               gameType: formGameType,
               designatedPlayer: formPlayer,
@@ -297,8 +304,8 @@ export default function GamesPanel() {
             </div>
           )}
 
-          {/* Challenge rate (SQF + Rune Poker) */}
-          {(formGameType === "storm-queens-folly" || formGameType === "rune-poker") && (
+          {/* Challenge rate (SQF + Rune Poker + Arcane Card) */}
+          {(formGameType === "storm-queens-folly" || formGameType === "rune-poker" || formGameType === "arcane-card") && (
             <div className="flex flex-col gap-1">
               <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
                 Challenge Rate

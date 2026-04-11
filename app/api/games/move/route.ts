@@ -5,6 +5,12 @@ import { getGameSession, updateGameState } from "@/lib/db/games";
 import { handleStormQueensFollyMove } from "@/lib/games/stormQueensFolly";
 import { handleEngineeringChallengeMove } from "@/lib/games/engineeringChallenge";
 import { handleRunePokerMove } from "@/lib/games/runePoker";
+import {
+  handleArcaneCardMove,
+  getDefaultState as getArcaneCardDefaultState,
+  sanitizeStateForClient as sanitizeArcaneCardState,
+} from "@/lib/games/arcaneCard";
+import type { ArcaneCardConfig, ArcaneCardState } from "@/types/game";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -36,11 +42,37 @@ export async function POST(req: NextRequest) {
   if (session.status !== "launched") {
     return NextResponse.json({ error: "Game is not active" }, { status: 400 });
   }
-  if (session.winner) {
-    return NextResponse.json({ error: "Game is already finished" }, { status: 400 });
-  }
   if (session.designatedPlayer !== username) {
     return NextResponse.json({ error: "Not your game" }, { status: 403 });
+  }
+
+  // Arcane Card: automatic rematch after a stalemate
+  if (session.gameType === "arcane-card" && body?.action === "rematch") {
+    if (session.winner !== "draw") {
+      return NextResponse.json({ error: "Rematch only allowed after a draw" }, { status: 400 });
+    }
+    const rate = (session.config as ArcaneCardConfig).challengeRate ?? 2;
+    const freshState = getArcaneCardDefaultState(rate);
+    // Bump moveCount past the stalemated game's so the client's animation driver
+    // recognizes it as a new state and swaps in the fresh shuffled decks.
+    const oldMoveCount = (session.state as ArcaneCardState).moveCount ?? 0;
+    freshState.moveCount = oldMoveCount + 1;
+    const updated = await updateGameState(
+      sessionId,
+      freshState as unknown as Record<string, unknown>,
+      null
+    );
+    if (!updated) {
+      return NextResponse.json({ error: "Rematch failed" }, { status: 500 });
+    }
+    return NextResponse.json({
+      state: sanitizeArcaneCardState(freshState),
+      winner: null,
+    });
+  }
+
+  if (session.winner) {
+    return NextResponse.json({ error: "Game is already finished" }, { status: 400 });
   }
 
   // Dispatch to game-specific handler
@@ -56,6 +88,9 @@ export async function POST(req: NextRequest) {
     case "rune-poker":
       result = handleRunePokerMove(session, body);
       break;
+    case "arcane-card":
+      result = handleArcaneCardMove(session, body);
+      break;
     default:
       return NextResponse.json({ error: "Unknown game type" }, { status: 400 });
   }
@@ -66,8 +101,14 @@ export async function POST(req: NextRequest) {
 
   await updateGameState(sessionId, result.state as Record<string, unknown>, result.winner);
 
+  // Sanitize game-specific state for the client (hide opponent private info)
+  let clientState = result.state;
+  if (session.gameType === "arcane-card") {
+    clientState = sanitizeArcaneCardState(result.state as ArcaneCardState);
+  }
+
   return NextResponse.json({
-    state: result.state,
+    state: clientState,
     winner: result.winner,
   });
 }
