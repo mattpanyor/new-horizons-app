@@ -10,7 +10,12 @@ import {
   getDefaultState as getArcaneCardDefaultState,
   sanitizeStateForClient as sanitizeArcaneCardState,
 } from "@/lib/games/arcaneCard";
-import type { ArcaneCardConfig, ArcaneCardState } from "@/types/game";
+import { handleIsolationProtocolMove } from "@/lib/games/isolationProtocol";
+import type {
+  ArcaneCardConfig,
+  ArcaneCardState,
+  IsolationProtocolState,
+} from "@/types/game";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -92,6 +97,9 @@ export async function POST(req: NextRequest) {
     case "arcane-card":
       result = handleArcaneCardMove(session, body);
       break;
+    case "isolation-protocol":
+      result = handleIsolationProtocolMove(session, body);
+      break;
     default:
       return NextResponse.json({ error: "Unknown game type" }, { status: 400 });
   }
@@ -106,6 +114,8 @@ export async function POST(req: NextRequest) {
   const expectedMoveCount =
     session.gameType === "arcane-card"
       ? (session.state as ArcaneCardState).moveCount
+      : session.gameType === "isolation-protocol"
+      ? (session.state as IsolationProtocolState).moveCount
       : undefined;
   const updated = await updateGameState(
     sessionId,

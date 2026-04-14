@@ -21,6 +21,10 @@ import { getDefaultBoard } from "./stormQueensFolly";
 import { getDefaultConfig as ecDefaultConfig, getDefaultState as ecDefaultState } from "./engineeringChallenge";
 import { getDefaultConfig as rpDefaultConfig, getDefaultState as rpDefaultState } from "./runePoker";
 import { getDefaultConfig as acDefaultConfig, getDefaultState as acDefaultState } from "./arcaneCard";
+import {
+  getDefaultConfig as ipDefaultConfig,
+  getDefaultState as ipDefaultState,
+} from "./isolationProtocol";
 
 export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
   "storm-queens-folly": {
@@ -77,6 +81,18 @@ export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
       spectatorWin: "The challenger claims the hand.",
       spectatorLose: "The hand is lost.",
       draw: "The cards fall silent.",
+    },
+  },
+  "isolation-protocol": {
+    label: "Isolation Protocol",
+    getDefaultConfig: ipDefaultConfig,
+    getDefaultState: () => ipDefaultState(),
+    victoryText: {
+      playerWin: "The quarry is cornered.",
+      playerLose: "The quarry has slipped the cordon.",
+      spectatorWin: "The cordon holds.",
+      spectatorLose: "The cordon has broken.",
+      draw: "The hunt is inconclusive.",
     },
   },
 };

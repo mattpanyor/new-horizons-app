@@ -122,16 +122,68 @@ export interface ArcaneCardState {
   moveCount: number;                                // strictly increasing, used for moveVersion staleness check
 }
 
+// ─── Isolation Protocol config & state ───
+
+export type IsolationShape = "hexagonal" | "wide" | "triangular";
+
+export interface HexCoord {
+  q: number;
+  r: number;
+}
+
+export interface IsolationProtocolConfig {
+  shape: IsolationShape;
+  initialShields: HexCoord[];
+  opponentEntityId: number | null;
+}
+
+// One complete move event (one player POST): the shield placed plus, if the
+// enemy had a legal response, its hop. Bounded ring buffer on the state so
+// spectators polling at 2s can replay any steps they missed.
+export interface IsolationMoveEvent {
+  moveCount: number;               // moveCount AFTER this event was applied
+  shield: HexCoord;
+  enemyFrom: HexCoord | null;      // null when the player's shield surrounded the enemy
+  enemyTo: HexCoord | null;
+}
+
+export interface IsolationProtocolState {
+  enemy: HexCoord;
+  shields: HexCoord[];             // all shields: pre-placed + player-placed
+  turn: "player" | "opponent";
+  moveCount: number;
+  lastEnemyMove: HexCoord | null;  // previous enemy position, for single-step animation
+  recentMoves: IsolationMoveEvent[]; // last ~8 events, oldest first — for spectator replay
+}
+
 // ─── Session ───
 
-export type GameType = "storm-queens-folly" | "engineering-challenge" | "rune-poker" | "arcane-card";
+export type GameType =
+  | "storm-queens-folly"
+  | "engineering-challenge"
+  | "rune-poker"
+  | "arcane-card"
+  | "isolation-protocol";
 export type GameStatus = "configured" | "launched" | "finished";
 
 // Generic config/state — the DB stores these as JSONB
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type GameConfig = StormQueensFollyConfig | EngineeringChallengeConfig | RunePokerConfig | ArcaneCardConfig | Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type GameState = StormQueensFollyState | EngineeringChallengeState | RunePokerState | ArcaneCardState | Record<string, any>;
+export type GameConfig =
+  | StormQueensFollyConfig
+  | EngineeringChallengeConfig
+  | RunePokerConfig
+  | ArcaneCardConfig
+  | IsolationProtocolConfig
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | Record<string, any>;
+export type GameState =
+  | StormQueensFollyState
+  | EngineeringChallengeState
+  | RunePokerState
+  | ArcaneCardState
+  | IsolationProtocolState
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | Record<string, any>;
 
 export type WinnerValue = PieceOwner | "draw" | "player" | "timeout" | null;
 
