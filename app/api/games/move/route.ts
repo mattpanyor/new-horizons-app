@@ -60,10 +60,11 @@ export async function POST(req: NextRequest) {
     const updated = await updateGameState(
       sessionId,
       freshState as unknown as Record<string, unknown>,
-      null
+      null,
+      oldMoveCount
     );
     if (!updated) {
-      return NextResponse.json({ error: "Rematch failed" }, { status: 500 });
+      return NextResponse.json({ error: "Rematch already in progress" }, { status: 409 });
     }
     return NextResponse.json({
       state: sanitizeArcaneCardState(freshState),
@@ -99,7 +100,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  await updateGameState(sessionId, result.state as Record<string, unknown>, result.winner);
+  // For arcane-card, use optimistic-concurrency guard on moveCount to prevent
+  // two concurrent POSTs from both passing the in-memory moveVersion check and
+  // clobbering each other's writes.
+  const expectedMoveCount =
+    session.gameType === "arcane-card"
+      ? (session.state as ArcaneCardState).moveCount
+      : undefined;
+  const updated = await updateGameState(
+    sessionId,
+    result.state as Record<string, unknown>,
+    result.winner,
+    expectedMoveCount
+  );
+  if (!updated) {
+    return NextResponse.json(
+      { error: "Stale move — game has advanced" },
+      { status: 409 }
+    );
+  }
 
   // Sanitize game-specific state for the client (hide opponent private info)
   let clientState = result.state;

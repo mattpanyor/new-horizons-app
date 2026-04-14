@@ -20,6 +20,7 @@ import type {
   StormQueensFollyConfig,
   StormQueensFollyState,
   ArcaneCardConfig,
+  ArcaneCardState,
 } from "@/types/game";
 
 async function requireAdmin() {
@@ -239,6 +240,12 @@ export async function PATCH(req: NextRequest) {
     if (existing.gameType === "arcane-card") {
       const rate = (existing.config as ArcaneCardConfig).challengeRate ?? 2;
       freshState = getArcaneCardDefaultState(rate);
+      // Bump moveCount past the previous session's so clients still polling on
+      // /game ingest the fresh state (their animation driver only accepts
+      // strictly-increasing moveCounts).
+      const prevMoveCount =
+        (existing.state as Partial<ArcaneCardState>)?.moveCount ?? 0;
+      (freshState as ArcaneCardState).moveCount = prevMoveCount + 1;
     }
 
     await updateGameSession(id, {

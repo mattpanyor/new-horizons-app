@@ -242,6 +242,10 @@ export default function ArcaneCardBoard({
   const [animating, setAnimating] = useState(false);
   const lastAnimatedMoveCountRef = useRef<number>(sessionState.moveCount);
   const animTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Records "sessionId:moveCount" pairs we've already fired a rematch POST for,
+  // so effect re-runs (e.g. on session object identity change from polling)
+  // don't queue a duplicate trigger.
+  const rematchFiredForRef = useRef<string | null>(null);
 
   // Ingest polling updates into latestState when they're newer
   useEffect(() => {
@@ -412,9 +416,13 @@ export default function ArcaneCardBoard({
       setTimeout(() => setRematchCountdown(0), 3000),
     ];
 
+    const stalemateKey = `${session.id}:${sessionState.moveCount}`;
     let triggerTimer: ReturnType<typeof setTimeout> | null = null;
-    if (isDesignatedPlayer) {
+    if (isDesignatedPlayer && rematchFiredForRef.current !== stalemateKey) {
       triggerTimer = setTimeout(async () => {
+        // Mark as fired immediately when the timer actually runs — the server
+        // guard (409) handles the case where another tab beat us to it.
+        rematchFiredForRef.current = stalemateKey;
         try {
           const res = await fetch("/api/games/move", {
             method: "POST",
@@ -443,7 +451,7 @@ export default function ArcaneCardBoard({
       ticks.forEach(clearTimeout);
       if (triggerTimer) clearTimeout(triggerTimer);
     };
-  }, [isDraw, isDesignatedPlayer, session.id]);
+  }, [isDraw, isDesignatedPlayer, session.id, sessionState.moveCount]);
 
   return (
     <div className="flex flex-col items-center gap-3 w-full">

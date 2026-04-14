@@ -119,14 +119,26 @@ export async function stopGameSession(id: number): Promise<GameSession | null> {
 export async function updateGameState(
   id: number,
   state: GameState,
-  winner?: string | null
+  winner?: string | null,
+  expectedMoveCount?: number
 ): Promise<GameSession | null> {
-  const rows = await sql`
-    UPDATE game_sessions SET
-      state = ${JSON.stringify(state)},
-      winner = ${winner ?? null}
-    WHERE id = ${id} AND status = 'launched'
-    RETURNING *
-  `;
+  const rows =
+    typeof expectedMoveCount === "number"
+      ? await sql`
+          UPDATE game_sessions SET
+            state = ${JSON.stringify(state)},
+            winner = ${winner ?? null}
+          WHERE id = ${id}
+            AND status = 'launched'
+            AND (state->>'moveCount')::int = ${expectedMoveCount}
+          RETURNING *
+        `
+      : await sql`
+          UPDATE game_sessions SET
+            state = ${JSON.stringify(state)},
+            winner = ${winner ?? null}
+          WHERE id = ${id} AND status = 'launched'
+          RETURNING *
+        `;
   return rows.length > 0 ? rowToSession(rows[0]) : null;
 }

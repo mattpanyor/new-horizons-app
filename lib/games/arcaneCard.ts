@@ -236,44 +236,36 @@ function resolveWinner(state: ArcaneCardState): "player" | "opponent" | "draw" |
 }
 
 // ─── AI ───
+//
+// Design principles:
+//   1. Side cards are a finite resource (starting hand of 4). The AI should only
+//      spend one when it changes the expected outcome — never to "pad" the total
+//      early when free main-deck draws will get there safely.
+//   2. Positive cards are used to (a) reach a hold-worthy total when drawing
+//      further would be too risky, or (b) clinch a win over a locked opponent.
+//   3. Negative cards are bust insurance — only played when the AI has busted
+//      (or after a negative-guaranteed bad hand needs clearing once busted).
+//   4. Difficulty (challengeRate) tunes how aggressive the AI is: easier rates
+//      hold sooner and accept more bust risk before spending cards.
 
-// Enumerate all legal (optional side play + terminal) decisions for a player's current state.
-// The draw has already been applied when this is called.
 interface AiDecision {
   playSide?: { cardId: string; playAs: "positive" | "negative" };
   terminal: "end-turn" | "hold";
 }
 
-function enumerateLegalPlays(player: ArcaneCardPlayerState): AiDecision[] {
-  const decisions: AiDecision[] = [
-    { terminal: "end-turn" },
-    { terminal: "hold" },
-  ];
-  for (const card of player.hand) {
-    if (card.kind === "positive" || card.kind === "mixed") {
-      decisions.push({ playSide: { cardId: card.id, playAs: "positive" }, terminal: "end-turn" });
-      decisions.push({ playSide: { cardId: card.id, playAs: "positive" }, terminal: "hold" });
-    }
-    if (card.kind === "negative" || card.kind === "mixed") {
-      decisions.push({ playSide: { cardId: card.id, playAs: "negative" }, terminal: "end-turn" });
-      decisions.push({ playSide: { cardId: card.id, playAs: "negative" }, terminal: "hold" });
-    }
-  }
-  return decisions;
+interface DifficultyParams {
+  // AI holds automatically at or above this total (assuming not trying to beat a locked opponent).
+  holdAt: number;
+  // Bust probability above which the AI stops drawing and either spends a positive or holds.
+  safeBustThreshold: number;
+  // Bust probability above which the AI just holds rather than drawing at all.
+  panicBustThreshold: number;
 }
 
-// Simulate applying a decision to a player's post-draw state and return the resulting played cards.
-function simulateDecision(player: ArcaneCardPlayerState, decision: AiDecision): PlayedCard[] {
-  if (!decision.playSide) return player.played;
-  const { cardId, playAs } = decision.playSide;
-  const card = player.hand.find((c) => c.id === cardId);
-  if (!card) return player.played;
-  return [...player.played, { kind: "side", card, playedAs: playAs }];
-}
-
-function expectedDrawValue(deck: number[]): number {
-  if (deck.length === 0) return 0;
-  return deck.reduce((a, b) => a + b, 0) / deck.length;
+function paramsForRate(rate: 1 | 2 | 3): DifficultyParams {
+  if (rate === 1) return { holdAt: 17, safeBustThreshold: 0.5, panicBustThreshold: 0.75 };
+  if (rate === 2) return { holdAt: 18, safeBustThreshold: 0.35, panicBustThreshold: 0.65 };
+  return { holdAt: 19, safeBustThreshold: 0.25, panicBustThreshold: 0.55 };
 }
 
 function bustProbability(currentTotal: number, deck: number[]): number {
@@ -282,72 +274,133 @@ function bustProbability(currentTotal: number, deck: number[]): number {
   return busting / deck.length;
 }
 
+function positivesInHand(player: ArcaneCardPlayerState): SideCard[] {
+  return player.hand.filter((c) => c.kind === "positive" || c.kind === "mixed");
+}
+
+function negativesInHand(player: ArcaneCardPlayerState): SideCard[] {
+  return player.hand.filter((c) => c.kind === "negative" || c.kind === "mixed");
+}
+
+// Find the SMALLEST positive card whose magnitude lifts `fromTotal` into
+// [minTarget, BUST_TOTAL]. Returns null if none qualify. Picking the smallest
+// preserves the bigger positives for later, tighter spots.
+function findSmallestPositiveReaching(
+  positives: SideCard[],
+  fromTotal: number,
+  minTarget: number
+): SideCard | null {
+  const sorted = [...positives].sort((a, b) => a.value - b.value);
+  for (const c of sorted) {
+    const after = fromTotal + c.value;
+    if (after >= minTarget && after <= BUST_TOTAL) return c;
+  }
+  return null;
+}
+
+// Find the negative card that best un-busts the player — resulting total
+// must be ≤ 20, and among qualifying we pick the one that leaves the total
+// CLOSEST to 20 (highest resulting total). Returns null if none save us.
+function findBestUnbustNegative(
+  negatives: SideCard[],
+  fromTotal: number
+): SideCard | null {
+  let best: SideCard | null = null;
+  let bestAfter = -Infinity;
+  for (const c of negatives) {
+    const after = fromTotal - c.value;
+    if (after <= BUST_TOTAL && after > bestAfter) {
+      bestAfter = after;
+      best = c;
+    }
+  }
+  return best;
+}
+
 // AI entry point. `player` is the opponent's state AFTER their turn-start draw.
 function decideAiMove(
   player: ArcaneCardPlayerState,
   opponent: ArcaneCardPlayerState,
   rate: 1 | 2 | 3
 ): AiDecision {
-  const decisions = enumerateLegalPlays(player);
+  const params = paramsForRate(rate);
+  const total = totalOf(player.played);
   const opponentLocked = opponent.standing;
   const opponentTotal = totalOf(opponent.played);
   const opponentBust = opponentTotal > BUST_TOTAL;
+  const positives = positivesInHand(player);
+  const negatives = negativesInHand(player);
 
-  const scoreDecision = (d: AiDecision): number => {
-    const resulting = simulateDecision(player, d);
-    const total = totalOf(resulting);
-
-    // Hard penalty for busting
-    if (total > BUST_TOTAL) return -1000 - (total - BUST_TOTAL);
-
-    // If opponent already lost (busted), just hold at any legal total
-    if (opponentLocked && opponentBust) {
-      return d.terminal === "hold" ? 500 : -500;
+  // ── Case 1: the turn-start draw busted us. Try to un-bust with a negative.
+  if (total > BUST_TOTAL) {
+    const save = findBestUnbustNegative(negatives, total);
+    if (save) {
+      return {
+        playSide: { cardId: save.id, playAs: "negative" },
+        terminal: "hold",
+      };
     }
-
-    // If opponent is locked at a known total, aim to beat it
-    if (opponentLocked) {
-      if (d.terminal === "hold") {
-        if (total > opponentTotal) return 800 + total; // winning hold
-        if (total === opponentTotal) return 200 + total; // tie hold
-        return -200 + total; // losing hold (still better than busting)
-      }
-      // end-turn: keep drawing. Value based on expected total after next draw
-      // and bust probability.
-      const eNext = expectedDrawValue(player.mainDeck);
-      const pBust = bustProbability(total, player.mainDeck);
-      const expectedFinal = total + eNext;
-      const bustPenalty = rate === 1 ? 300 : rate === 2 ? 600 : 900;
-      return expectedFinal * 10 - pBust * bustPenalty + (total > opponentTotal ? 50 : 0);
-    }
-
-    // Opponent still playing. Balance expected final total against bust risk.
-    if (d.terminal === "hold") {
-      // Reward holding at strong totals
-      if (total >= 18) return 500 + total * 5;
-      if (total >= 17 && rate === 1) return 400 + total * 5;
-      if (total >= 19 && rate === 3) return 550 + total * 5;
-      return total * 3; // weak hold, probably not picked
-    }
-
-    // end-turn: keep drawing
-    const eNext = expectedDrawValue(player.mainDeck);
-    const pBust = bustProbability(total, player.mainDeck);
-    const expectedFinal = total + eNext;
-    const bustPenalty = rate === 1 ? 250 : rate === 2 ? 500 : 800;
-    return expectedFinal * 10 - pBust * bustPenalty;
-  };
-
-  let best = decisions[0];
-  let bestScore = -Infinity;
-  for (const d of decisions) {
-    const s = scoreDecision(d);
-    if (s > bestScore) {
-      bestScore = s;
-      best = d;
-    }
+    // No save available — hold and hope the player also busts.
+    return { terminal: "hold" };
   }
-  return best;
+
+  // ── Case 2: opponent has already locked in their final total.
+  if (opponentLocked) {
+    // If the opponent busted, any legal total wins — lock in now.
+    if (opponentBust) return { terminal: "hold" };
+
+    // Already winning — lock in.
+    if (total > opponentTotal) return { terminal: "hold" };
+
+    // Try to clinch a win with the smallest positive that beats the opponent.
+    const clincher = findSmallestPositiveReaching(positives, total, opponentTotal + 1);
+    if (clincher) {
+      return {
+        playSide: { cardId: clincher.id, playAs: "positive" },
+        terminal: "hold",
+      };
+    }
+
+    // No card wins it outright. If we can draw without certainty of busting,
+    // keep drawing — we're losing anyway if we hold.
+    if (player.mainDeck.length > 0 && bustProbability(total, player.mainDeck) < 1) {
+      return { terminal: "end-turn" };
+    }
+
+    // Forced hold (losing).
+    return { terminal: "hold" };
+  }
+
+  // ── Case 3: open game. Both players are still active.
+
+  // Already in hold zone — lock it in. Drawing further is -EV.
+  if (total >= params.holdAt) return { terminal: "hold" };
+
+  const pBust = bustProbability(total, player.mainDeck);
+
+  // Drawing is safe enough — conserve cards and keep drawing.
+  if (pBust <= params.safeBustThreshold) {
+    return { terminal: "end-turn" };
+  }
+
+  // Drawing is risky. If a positive card can lift us into the hold zone,
+  // spending it here is worth more than a coin-flip draw.
+  const booster = findSmallestPositiveReaching(positives, total, params.holdAt);
+  if (booster) {
+    return {
+      playSide: { cardId: booster.id, playAs: "positive" },
+      terminal: "hold",
+    };
+  }
+
+  // No booster reaches hold zone. If bust risk is severe, hold where we are;
+  // a weak hold beats a probable bust.
+  if (pBust >= params.panicBustThreshold) {
+    return { terminal: "hold" };
+  }
+
+  // Middle ground — accept the draw. Still better than a sub-holdAt hold.
+  return { terminal: "end-turn" };
 }
 
 // ─── Move handler ───
@@ -403,6 +456,17 @@ export function handleArcaneCardMove(
     let opponentAfter = nextState.opponent;
 
     if (aiTurnsThisHandler > 0) {
+      // If the AI is taking a solo turn but has no cards left to draw, it
+      // cannot advance — force-stand to avoid an infinite loop.
+      if (opponentAfter.mainDeck.length === 0) {
+        nextState = {
+          ...nextState,
+          opponent: { ...opponentAfter, standing: true },
+          moveCount: nextState.moveCount + 1,
+        };
+        winner = resolveWinner(nextState);
+        break;
+      }
       opponentAfter = drawMainCard(opponentAfter);
     }
     aiTurnsThisHandler++;
