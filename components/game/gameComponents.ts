@@ -4,6 +4,8 @@ import type { VictoryText } from "@/lib/games/registry";
 import StormQueensFollyBoard from "./StormQueensFollyBoard";
 import EngineeringChallengeBoard from "./EngineeringChallengeBoard";
 import RunePokerBoard from "./RunePokerBoard";
+import ArcaneCardBoard from "./ArcaneCardBoard";
+import IsolationProtocolBoard from "./IsolationProtocolBoard";
 
 export interface GameBoardProps {
   session: ActiveGameResponse["session"];
@@ -21,4 +23,6 @@ export const GAME_COMPONENTS: Record<GameType, ComponentType<GameBoardProps>> = 
   "storm-queens-folly": StormQueensFollyBoard,
   "engineering-challenge": EngineeringChallengeBoard,
   "rune-poker": RunePokerBoard,
+  "arcane-card": ArcaneCardBoard,
+  "isolation-protocol": IsolationProtocolBoard,
 };

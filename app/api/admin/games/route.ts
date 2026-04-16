@@ -14,7 +14,55 @@ import {
 import { getAllKankaEntities } from "@/lib/db/kankaEntities";
 import { GAME_REGISTRY, GAME_TYPES } from "@/lib/games/registry";
 import { getRandomBoard } from "@/lib/games/engineeringChallenge";
-import type { GameType, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
+import { getDefaultState as getArcaneCardDefaultState } from "@/lib/games/arcaneCard";
+import {
+  getDefaultState as getIsolationDefaultState,
+  getShapeData as getIsolationShapeData,
+} from "@/lib/games/isolationProtocol";
+import type {
+  GameType,
+  StormQueensFollyConfig,
+  StormQueensFollyState,
+  ArcaneCardConfig,
+  ArcaneCardState,
+  IsolationProtocolConfig,
+  IsolationProtocolState,
+  IsolationShape,
+  HexCoord,
+} from "@/types/game";
+
+const ISOLATION_SHAPES: IsolationShape[] = ["hexagonal", "wide", "triangular"];
+
+// Parse + sanitize an admin-provided isolation-protocol config. Keeps only
+// valid shield coords (on the board, not on the enemy start, no duplicates).
+function sanitizeIsolationConfig(
+  rawShape: unknown,
+  rawShields: unknown
+): { shape: IsolationShape; shields: HexCoord[] } {
+  const shape: IsolationShape =
+    typeof rawShape === "string" && (ISOLATION_SHAPES as string[]).includes(rawShape)
+      ? (rawShape as IsolationShape)
+      : "hexagonal";
+  const shapeData = getIsolationShapeData(shape);
+  const shields: HexCoord[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(rawShields)) {
+    for (const s of rawShields) {
+      if (!s || typeof s !== "object") continue;
+      const q = (s as { q?: unknown }).q;
+      const r = (s as { r?: unknown }).r;
+      if (typeof q !== "number" || typeof r !== "number") continue;
+      if (!Number.isInteger(q) || !Number.isInteger(r)) continue;
+      const key = `${q},${r}`;
+      if (seen.has(key)) continue;
+      if (!shapeData.cellSet.has(key)) continue;
+      if (q === shapeData.center.q && r === shapeData.center.r) continue;
+      seen.add(key);
+      shields.push({ q, r });
+    }
+  }
+  return { shape, shields };
+}
 
 async function requireAdmin() {
   const cookieStore = await cookies();
@@ -69,7 +117,7 @@ export async function POST(req: NextRequest) {
   // Build config: merge defaults with provided overrides
   const defaultConfig = gameDef.getDefaultConfig();
   let config = { ...defaultConfig, ...gameConfig };
-  const state = gameDef.getDefaultState();
+  let state = gameDef.getDefaultState();
 
   // For EC: pick a random board based on wireCount + difficulty
   if (resolvedType === "engineering-challenge") {
@@ -80,6 +128,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `No boards available for ${wc} wires on ${diff}` }, { status: 400 });
     }
     config = { ...config, ...board, wireCount: wc, difficulty: diff };
+  }
+
+  // For Arcane Card: deal both hands with negative-card guarantees based on rate
+  if (resolvedType === "arcane-card") {
+    const rate = (config as ArcaneCardConfig).challengeRate ?? 2;
+    state = getArcaneCardDefaultState(rate);
+  }
+
+  // For Isolation Protocol: validate shape + initial shields and generate state.
+  if (resolvedType === "isolation-protocol") {
+    const { shape, shields } = sanitizeIsolationConfig(
+      gameConfig.shape,
+      gameConfig.initialShields
+    );
+    config = {
+      ...config,
+      shape,
+      initialShields: shields,
+    } as IsolationProtocolConfig;
+    state = getIsolationDefaultState({ shape, initialShields: shields });
   }
 
   // For SQF: apply initialBoard to state if provided
@@ -135,8 +203,22 @@ export async function PUT(req: NextRequest) {
   }
 
   const gameDef = GAME_REGISTRY[existing.gameType as GameType];
-  const config = { ...existing.config, ...configOverrides };
-  const state = gameDef ? gameDef.getDefaultState() : existing.state;
+  let config = { ...existing.config, ...configOverrides };
+  let state = gameDef ? gameDef.getDefaultState() : existing.state;
+
+  // For Arcane Card: re-deal using the current (possibly updated) challengeRate
+  if (existing.gameType === "arcane-card") {
+    const rate = (config as ArcaneCardConfig).challengeRate ?? 2;
+    state = getArcaneCardDefaultState(rate);
+  }
+
+  // For Isolation Protocol: re-sanitize shape + shields from the update payload.
+  if (existing.gameType === "isolation-protocol") {
+    const merged = config as IsolationProtocolConfig;
+    const { shape, shields } = sanitizeIsolationConfig(merged.shape, merged.initialShields);
+    config = { ...config, shape, initialShields: shields };
+    state = getIsolationDefaultState({ shape, initialShields: shields });
+  }
 
   const updated = await updateGameSession(id, {
     config,
@@ -211,11 +293,34 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Reset state to defaults for the game type, preserving custom starting board for SQF
+    // and applying the configured challengeRate for Arcane Card
     const gameDef = GAME_REGISTRY[existing.gameType as GameType];
-    const freshState = gameDef ? gameDef.getDefaultState() : {};
+    let freshState = gameDef ? gameDef.getDefaultState() : {};
     if (existing.gameType === "storm-queens-folly") {
       const ib = (existing.config as StormQueensFollyConfig).initialBoard;
       if (ib) (freshState as StormQueensFollyState).board = ib;
+    }
+    if (existing.gameType === "arcane-card") {
+      const rate = (existing.config as ArcaneCardConfig).challengeRate ?? 2;
+      freshState = getArcaneCardDefaultState(rate);
+      // Bump moveCount past the previous session's so clients still polling on
+      // /game ingest the fresh state (their animation driver only accepts
+      // strictly-increasing moveCounts).
+      const prevMoveCount =
+        (existing.state as Partial<ArcaneCardState>)?.moveCount ?? 0;
+      (freshState as ArcaneCardState).moveCount = prevMoveCount + 1;
+    }
+    if (existing.gameType === "isolation-protocol") {
+      const cfg = existing.config as IsolationProtocolConfig;
+      freshState = getIsolationDefaultState({
+        shape: cfg.shape,
+        initialShields: cfg.initialShields,
+      });
+      // Same rationale as Arcane Card — keep moveCount strictly increasing so
+      // polling clients swap to the new state.
+      const prevMoveCount =
+        (existing.state as Partial<IsolationProtocolState>)?.moveCount ?? 0;
+      (freshState as IsolationProtocolState).moveCount = prevMoveCount + 1;
     }
 
     await updateGameSession(id, {

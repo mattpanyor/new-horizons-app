@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { GameSession, GameType, Board, CellState, StormQueensFollyConfig } from "@/types/game";
+import type {
+  GameSession,
+  GameType,
+  Board,
+  CellState,
+  StormQueensFollyConfig,
+  IsolationShape,
+  HexCoord,
+} from "@/types/game";
 import { GAME_REGISTRY, GAME_TYPES } from "@/lib/games/registry";
 import { getDefaultBoard } from "@/lib/games/stormQueensFolly";
+import { getShapeData as getIsolationShapeData } from "@/lib/games/isolationProtocol";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -75,6 +84,101 @@ function BoardEditor({
   );
 }
 
+// ─── Isolation Protocol shape + shield picker ───
+
+const IP_HEX_SIZE = 14;
+const IP_SQRT3 = Math.sqrt(3);
+
+function ipAxialToPixel(c: HexCoord): { x: number; y: number } {
+  return {
+    x: IP_HEX_SIZE * (IP_SQRT3 * c.q + (IP_SQRT3 / 2) * c.r),
+    y: IP_HEX_SIZE * (1.5 * c.r),
+  };
+}
+
+function ipHexPath(size: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i - 30);
+    pts.push(`${(size * Math.cos(angle)).toFixed(3)},${(size * Math.sin(angle)).toFixed(3)}`);
+  }
+  return `M${pts.join("L")}Z`;
+}
+
+function IsolationShieldPicker({
+  shape,
+  shields,
+  onChange,
+}: {
+  shape: IsolationShape;
+  shields: HexCoord[];
+  onChange: (next: HexCoord[]) => void;
+}) {
+  const data = getIsolationShapeData(shape);
+  const shieldSet = new Set(shields.map((s) => `${s.q},${s.r}`));
+
+  const pixels = data.cells.map((c) => ({ c, ...ipAxialToPixel(c) }));
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of pixels) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const pad = IP_HEX_SIZE + 4;
+  const viewBox = `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`;
+
+  const toggle = (c: HexCoord) => {
+    if (c.q === data.center.q && c.r === data.center.r) return; // can't shield center
+    const k = `${c.q},${c.r}`;
+    if (shieldSet.has(k)) {
+      onChange(shields.filter((s) => `${s.q},${s.r}` !== k));
+    } else {
+      onChange([...shields, { q: c.q, r: c.r }]);
+    }
+  };
+
+  return (
+    <svg
+      viewBox={viewBox}
+      style={{ width: "100%", maxWidth: 340, height: "auto" }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {pixels.map(({ c, x, y }) => {
+        const k = `${c.q},${c.r}`;
+        const isCenter = c.q === data.center.q && c.r === data.center.r;
+        const isShield = shieldSet.has(k);
+        const isBorder = data.borderSet.has(k);
+        const fill = isShield
+          ? "rgba(99, 102, 241, 0.45)"
+          : isCenter
+          ? "rgba(239, 68, 68, 0.35)"
+          : isBorder
+          ? "rgba(245, 158, 11, 0.12)"
+          : "rgba(255, 255, 255, 0.04)";
+        const stroke = isShield
+          ? "rgba(99, 102, 241, 0.8)"
+          : isCenter
+          ? "rgba(239, 68, 68, 0.6)"
+          : isBorder
+          ? "rgba(245, 158, 11, 0.3)"
+          : "rgba(255, 255, 255, 0.12)";
+        return (
+          <g
+            key={k}
+            transform={`translate(${x}, ${y})`}
+            style={{ cursor: isCenter ? "not-allowed" : "pointer" }}
+            onClick={() => toggle(c)}
+          >
+            <path d={ipHexPath(IP_HEX_SIZE - 0.8)} fill={fill} stroke={stroke} strokeWidth={1} />
+            {isCenter && <circle r={IP_HEX_SIZE * 0.3} fill="rgba(239, 68, 68, 0.8)" />}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ─── Main panel ───
 
 export default function GamesPanel() {
@@ -95,6 +199,8 @@ export default function GamesPanel() {
   const [formDifficulty, setFormDifficulty] = useState<"easy" | "normal" | "hard">("normal");
   const [formTimeLimit, setFormTimeLimit] = useState(90);
   const [formRoundCount, setFormRoundCount] = useState<1 | 3 | 5>(3);
+  const [formIPShape, setFormIPShape] = useState<IsolationShape>("hexagonal");
+  const [formIPShields, setFormIPShields] = useState<HexCoord[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Player dropdown
@@ -178,6 +284,21 @@ export default function GamesPanel() {
               designatedPlayer: formPlayer,
               opponentEntityId: formEntity,
             }
+          : formGameType === "arcane-card"
+          ? {
+              gameType: formGameType,
+              challengeRate: formRate,
+              designatedPlayer: formPlayer,
+              opponentEntityId: formEntity,
+            }
+          : formGameType === "isolation-protocol"
+          ? {
+              gameType: formGameType,
+              designatedPlayer: formPlayer,
+              opponentEntityId: formEntity,
+              shape: formIPShape,
+              initialShields: formIPShields,
+            }
           : {
               gameType: formGameType,
               designatedPlayer: formPlayer,
@@ -196,6 +317,7 @@ export default function GamesPanel() {
     }
     setCreating(false);
     setFormBoard(getDefaultBoard());
+    setFormIPShields([]);
     await fetchData();
   };
 
@@ -282,6 +404,10 @@ export default function GamesPanel() {
                     onClick={() => {
                       setFormGameType(t);
                       if (t === "storm-queens-folly") setFormBoard(getDefaultBoard());
+                      if (t === "isolation-protocol") {
+                        setFormIPShape("hexagonal");
+                        setFormIPShields([]);
+                      }
                     }}
                     className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
                       formGameType === t
@@ -297,8 +423,8 @@ export default function GamesPanel() {
             </div>
           )}
 
-          {/* Challenge rate (SQF + Rune Poker) */}
-          {(formGameType === "storm-queens-folly" || formGameType === "rune-poker") && (
+          {/* Challenge rate (SQF + Rune Poker + Arcane Card) */}
+          {(formGameType === "storm-queens-folly" || formGameType === "rune-poker" || formGameType === "arcane-card") && (
             <div className="flex flex-col gap-1">
               <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
                 Challenge Rate
@@ -544,6 +670,59 @@ export default function GamesPanel() {
               </label>
               <BoardEditor board={formBoard} onChange={setFormBoard} />
             </div>
+          )}
+
+          {/* Isolation Protocol: shape + pre-placed shield picker */}
+          {formGameType === "isolation-protocol" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                  Field Shape
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {(["hexagonal", "wide", "triangular"] as IsolationShape[]).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setFormIPShape(s);
+                        setFormIPShields([]);
+                      }}
+                      className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
+                        formIPShape === s
+                          ? "border-indigo-400/50 bg-indigo-400/10 text-indigo-300/80"
+                          : "border-white/10 text-white/30 hover:border-white/20"
+                      }`}
+                      style={cinzel}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                  Pre-placed Shields (click cells)
+                </label>
+                <IsolationShieldPicker
+                  shape={formIPShape}
+                  shields={formIPShields}
+                  onChange={setFormIPShields}
+                />
+                <div className="flex items-center gap-3 text-[8px] tracking-[0.15em] uppercase text-white/40" style={cinzel}>
+                  <span>{formIPShields.length} shield{formIPShields.length === 1 ? "" : "s"}</span>
+                  {formIPShields.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormIPShields([])}
+                      className="text-white/30 hover:text-white/60 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
           )}
 
           {/* Actions */}
