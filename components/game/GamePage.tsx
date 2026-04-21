@@ -87,6 +87,7 @@ export default function GamePage({ username }: GamePageProps) {
   return (
     <div className="h-[calc(100dvh-4rem)] flex items-center justify-center px-4 relative">
       <BoardComponent
+        key={session.id}
         session={session}
         player={player}
         opponent={opponent}
