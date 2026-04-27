@@ -190,10 +190,36 @@ export function getAiMove(board: Board, challengeRate: number): GameMove | null 
 
 export function handleStormQueensFollyMove(
   session: GameSession,
-  body: { from?: Position; to?: Position; moveVersion?: number }
+  body: { action?: string; from?: Position; to?: Position; moveVersion?: number; selection?: Position | null }
 ): { state: StormQueensFollyState; winner: string | null; error?: string } {
   const state = session.state as StormQueensFollyState;
   const config = session.config as StormQueensFollyConfig;
+
+  // Lightweight selection sync: writes only the player's currently-highlighted
+  // cell so observers see the same hover/destination preview. No move advances.
+  if (body.action === "set-selection") {
+    if (state.turn !== "player") {
+      return { state, winner: null, error: "Not your turn" };
+    }
+    const sel = body.selection ?? null;
+    if (sel !== null) {
+      if (!Array.isArray(sel) || sel.length !== 2) {
+        return { state, winner: null, error: "selection must be [row, col] or null" };
+      }
+      const [r, c] = sel;
+      if (typeof r !== "number" || typeof c !== "number" || r < 0 || r > 2 || c < 0 || c > 2) {
+        return { state, winner: null, error: "selection out of bounds" };
+      }
+      if (state.board[r][c] !== "player") {
+        return { state, winner: null, error: "Can only select your own pieces" };
+      }
+    }
+    return {
+      state: { ...state, playerSelection: sel },
+      winner: null,
+    };
+  }
+
   const { from, to, moveVersion } = body;
 
   if (!from || !to) {
@@ -233,7 +259,7 @@ export function handleStormQueensFollyMove(
   }
 
   return {
-    state: { board, turn, moveHistory: history },
+    state: { board, turn, moveHistory: history, playerSelection: null },
     winner,
   };
 }

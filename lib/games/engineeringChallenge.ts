@@ -102,6 +102,16 @@ export function isValidWirePlacement(
     if (dr + dc !== 1) return "Wire must follow cardinal directions";
   }
 
+  // No cell may appear twice — including the path looping back through its own
+  // start or end endpoint. The client already enforces this; the server check
+  // is defense-in-depth so a hand-crafted POST can't produce a tangled wire.
+  const seen = new Set<string>();
+  for (const cell of wire.cells) {
+    const k = posKey(cell);
+    if (seen.has(k)) return "Wire crosses itself";
+    seen.add(k);
+  }
+
   // Check no overlap with existing wires (except the wire being replaced)
   const occupied = new Set<string>();
   for (const existing of state.wires) {

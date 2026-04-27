@@ -218,7 +218,10 @@ function CoinColumn({
                   style={{
                     background: isKept ? bgActive : "rgba(255, 255, 255, 0.03)",
                     boxShadow: isKept ? `0 0 12px ${glowColor}` : "none",
-                    animation: flipping ? "coinFlip 0.6s ease-in-out" : undefined,
+                    // Only re-rolled coins flip — kept coins held their face,
+                    // so flipping them looks wrong and would clash with any
+                    // in-flight slide on neighboring coins.
+                    animation: flipping && !isKept ? "coinFlip 0.6s ease-in-out" : undefined,
                   }}
                   title={SIGIL_LABELS[sigil]}
                 >

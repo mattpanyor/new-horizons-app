@@ -156,6 +156,10 @@ interface ArcaneCardMoveBody {
   moveVersion?: number;
   playSide?: { cardId: string; playAs: "positive" | "negative" };
   terminal?: "end-turn" | "hold";
+  // Lightweight selection sync for spectator parity. When set, the handler
+  // writes only state.playerSelection and returns — no draw, no AI move.
+  action?: "set-preview";
+  preview?: { cardId: string; playAs: "positive" | "negative" } | null;
 }
 
 function legalSignFor(card: SideCard, playAs: "positive" | "negative"): boolean {
@@ -411,6 +415,33 @@ export function handleArcaneCardMove(
 ): { state: ArcaneCardState; winner: string | null; error?: string } {
   const state = session.state as ArcaneCardState;
   const config = session.config as ArcaneCardConfig;
+
+  // Selection-only sync. Allowed any time it's the player's turn and the
+  // player still has a chance to act. Does not advance moveCount.
+  if (body.action === "set-preview") {
+    if (state.turn !== "player" || state.player.standing) {
+      return { state, winner: null, error: "Cannot set preview now" };
+    }
+    const preview = body.preview ?? null;
+    if (preview !== null) {
+      if (
+        typeof preview.cardId !== "string" ||
+        (preview.playAs !== "positive" && preview.playAs !== "negative")
+      ) {
+        return { state, winner: null, error: "Invalid preview" };
+      }
+      const card = state.player.hand.find((c) => c.id === preview.cardId);
+      if (!card) return { state, winner: null, error: "Card not in hand" };
+      if (!legalSignFor(card, preview.playAs)) {
+        return { state, winner: null, error: "Illegal sign for this card" };
+      }
+    }
+    return {
+      state: { ...state, playerSelection: preview },
+      winner: null,
+    };
+  }
+
   const { moveVersion, playSide, terminal } = body;
 
   if (typeof moveVersion === "number" && moveVersion !== state.moveCount) {
@@ -438,6 +469,9 @@ export function handleArcaneCardMove(
     player: playerResult.next,
     turn: "opponent",
     moveCount: state.moveCount + 1,
+    // Player just acted — clear the deliberation preview so observers don't
+    // see a stale selection floating after commit.
+    playerSelection: null,
   };
 
   let winner = resolveWinner(nextState);

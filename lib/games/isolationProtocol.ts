@@ -7,7 +7,7 @@ import type {
   IsolationShape,
 } from "@/types/game";
 
-const RECENT_MOVES_MAX = 8;
+const RECENT_MOVES_MAX = 24;
 
 // ─── Axial hex helpers ───
 

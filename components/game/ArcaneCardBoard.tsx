@@ -323,6 +323,9 @@ export default function ArcaneCardBoard({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [rematchCountdown, setRematchCountdown] = useState<number | null>(null);
+  // Serialize set-preview POSTs so they land in click order even when the
+  // player rapidly flips back and forth.
+  const previewSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const canInteract =
     isDesignatedPlayer &&
@@ -332,25 +335,77 @@ export default function ArcaneCardBoard({
     !displayState.player.standing &&
     !animating;
 
+  // The selection actually rendered on screen: optimistic local for the
+  // designated player; server-synced playerSelection for observers.
+  const observedSelection = !isDesignatedPlayer ? latestState.playerSelection ?? null : null;
+  const effectiveSelectedId: string | null = isDesignatedPlayer
+    ? selectedHandId
+    : observedSelection?.cardId ?? null;
+  const effectiveFlipState: Record<string, "positive" | "negative"> = isDesignatedPlayer
+    ? flipState
+    : observedSelection
+      ? { [observedSelection.cardId]: observedSelection.playAs }
+      : {};
+
   const selectedCard = useMemo<SideCard | null>(() => {
-    if (!selectedHandId) return null;
-    return displayState.player.hand.find((c) => c.id === selectedHandId) ?? null;
-  }, [selectedHandId, displayState.player.hand]);
+    if (!effectiveSelectedId) return null;
+    return displayState.player.hand.find((c) => c.id === effectiveSelectedId) ?? null;
+  }, [effectiveSelectedId, displayState.player.hand]);
+
+  // Compute what the server's playerSelection should be for the given local
+  // (cardId, flipState) and fire a set-preview POST. Fire-and-forget; the chain
+  // ref keeps requests serialized.
+  const syncPreview = useCallback(
+    (cardId: string | null, currentFlip: Record<string, "positive" | "negative">) => {
+      let preview: { cardId: string; playAs: "positive" | "negative" } | null = null;
+      if (cardId) {
+        const card = displayState.player.hand.find((c) => c.id === cardId);
+        if (card) {
+          const playAs: "positive" | "negative" =
+            card.kind === "mixed"
+              ? currentFlip[card.id] ?? "positive"
+              : (card.kind as "positive" | "negative");
+          preview = { cardId, playAs };
+        }
+      }
+      previewSyncChainRef.current = previewSyncChainRef.current.then(() =>
+        fetch("/api/games/move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: session.id,
+            action: "set-preview",
+            preview,
+          }),
+        }).catch(() => {})
+      );
+    },
+    [displayState.player.hand, session.id]
+  );
 
   const handleHandClick = useCallback(
     (cardId: string) => {
       if (!canInteract) return;
-      setSelectedHandId((prev) => (prev === cardId ? null : cardId));
+      setSelectedHandId((prev) => {
+        const next = prev === cardId ? null : cardId;
+        syncPreview(next, flipState);
+        return next;
+      });
     },
-    [canInteract]
+    [canInteract, flipState, syncPreview]
   );
 
   const handleFlip = useCallback((cardId: string) => {
-    setFlipState((prev) => ({
-      ...prev,
-      [cardId]: prev[cardId] === "negative" ? "positive" : "negative",
-    }));
-  }, []);
+    setFlipState((prev) => {
+      const next = {
+        ...prev,
+        [cardId]: prev[cardId] === "negative" ? "positive" : "negative" as "positive" | "negative",
+      };
+      // Push the new flip state to the server tied to the same selected card.
+      syncPreview(cardId, next);
+      return next;
+    });
+  }, [syncPreview]);
 
   const submitMove = useCallback(
     async (terminal: "end-turn" | "hold") => {
@@ -513,8 +568,8 @@ export default function ArcaneCardBoard({
                 : isMyTurn
                 ? "Your Turn"
                 : displayState.turn === "player"
-                ? "Player's Turn"
-                : "Opponent's Turn"}
+                ? `${player.character ?? player.username}'s Turn`
+                : `${opponent?.name ?? "Opponent"}'s Turn`}
             </span>
             {canInteract && (
               <div className="flex items-center gap-2">
@@ -563,13 +618,15 @@ export default function ArcaneCardBoard({
           side="player"
         />
 
-        {/* Player panel */}
+        {/* Player panel — selection state is mirrored from the server when the
+            viewer isn't the designated player, so observers see the same card
+            highlighted and the same flip preview the player is deliberating on. */}
         <PlayerPanel
           state={displayState.player}
           side="player"
           hideHand={false}
-          selectedHandId={selectedHandId}
-          flipState={flipState}
+          selectedHandId={effectiveSelectedId}
+          flipState={effectiveFlipState}
           canInteract={canInteract}
           onHandClick={handleHandClick}
           onFlip={handleFlip}

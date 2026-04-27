@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { Position, Board, GameMove, PieceOwner, StormQueensFollyConfig, StormQueensFollyState } from "@/types/game";
 import type { GameBoardProps } from "./gameComponents";
 import GamePiece from "./GamePiece";
@@ -113,18 +113,36 @@ export default function StormQueensFollyBoard({
   const sqfConfig = session.config as StormQueensFollyConfig;
   const sqfState = session.state as StormQueensFollyState;
 
-  // The board the move history replays from. Prefer the configured initialBoard,
-  // but fall back to the current state.board if it's missing — that way the
-  // animator and the backend always agree on the starting position.
-  const replayBoard: Board = sqfConfig.initialBoard ?? sqfState.board;
+  // Replay always starts from the configured initialBoard. Type guarantees this
+  // exists on every session — no fallback to state.board, which would
+  // double-apply moveHistory on top of an already-advanced position.
+  const replayBoard: Board = sqfConfig.initialBoard;
 
-  const [selectedPos, setSelectedPos] = useState<string | null>(null);
+  // latestState mirrors IP/AC: ingested from polling AND from POST responses,
+  // so the player's own move animates immediately instead of waiting on the
+  // 2-second poll cycle.
+  //   - Polled state with moveHistory ≥ what we've stored: accept (covers a
+  //     fresh move AND covers selection-only changes at the same move count).
+  //   - Polled state shorter: ignore as a stale poll arriving after we've
+  //     already ingested a POST response that moved us ahead.
+  const [latestState, setLatestState] = useState<StormQueensFollyState>(sqfState);
+
+  useEffect(() => {
+    if (sqfState.moveHistory.length >= latestState.moveHistory.length) {
+      setLatestState(sqfState);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sqfState]);
+
+  // Local optimistic selection so the player's own clicks feel instant; falls
+  // back to whatever the server has when not the designated player.
+  const [localSelection, setLocalSelection] = useState<string | null>(null);
+  const selectionSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const [submitting, setSubmitting] = useState(false);
 
   // Animation state
   const lastMoveCountRef = useRef<number>(0);
   const [displayPieces, setDisplayPieces] = useState<TrackedPiece[]>(() => {
-    // Seed both display states from the same source: replay initialBoard + history
     let board = replayBoard;
     let pieces = buildPiecesFromBoard(board);
     for (const move of sqfState.moveHistory) {
@@ -150,19 +168,18 @@ export default function StormQueensFollyBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Detect new moves and animate them
+  // Detect new moves and animate them. Driven off latestState so POST responses
+  // (not just polling) trigger animation immediately.
   useEffect(() => {
-    const history = sqfState.moveHistory;
+    const history = latestState.moveHistory;
     const lastKnown = lastMoveCountRef.current;
     const newMoves = history.slice(lastKnown);
 
     if (newMoves.length === 0) return;
 
-    // Cancel any in-flight animation timers from a prior effect run
     animTimeoutsRef.current.forEach((t) => clearTimeout(t));
     animTimeoutsRef.current = [];
 
-    // Build the board state at lastKnown by replaying from initialBoard
     let boardAtLastKnown = replayBoard;
     let piecesAtLastKnown = buildPiecesFromBoard(boardAtLastKnown);
     for (let i = 0; i < lastKnown; i++) {
@@ -172,7 +189,6 @@ export default function StormQueensFollyBoard({
 
     setAnimating(true);
 
-    // Replay new moves one by one with stagger
     let currentBoard = boardAtLastKnown;
     let currentPieces = piecesAtLastKnown;
 
@@ -185,7 +201,6 @@ export default function StormQueensFollyBoard({
         setDisplayPieces([...currentPieces]);
         setDisplayBoard(currentBoard.map((row) => [...row]));
 
-        // After last move animation completes
         if (idx === newMoves.length - 1) {
           const finalTimer = setTimeout(() => {
             setAnimating(false);
@@ -196,36 +211,81 @@ export default function StormQueensFollyBoard({
       animTimeoutsRef.current.push(timer);
     });
 
-    // Update lastMoveCount immediately to prevent re-triggering
     lastMoveCountRef.current = history.length;
 
     return () => {
       animTimeoutsRef.current.forEach((t) => clearTimeout(t));
       animTimeoutsRef.current = [];
     };
-  }, [sqfState.moveHistory, replayBoard]);
+  }, [latestState, replayBoard]);
 
-  // Sync display when no animation is happening (e.g. initial load, game reset)
+  // Resync display whenever the authoritative history is SHORTER than what
+  // we've already animated. That covers (a) first-mount with empty history and
+  // (b) any future rematch flow that resets moveHistory back toward zero.
   useEffect(() => {
-    if (!animating && lastMoveCountRef.current === 0 && sqfState.moveHistory.length === 0) {
-      setDisplayPieces(buildPiecesFromBoard(sqfState.board));
-      setDisplayBoard(sqfState.board);
+    if (animating) return;
+    if (latestState.moveHistory.length >= lastMoveCountRef.current) return;
+    let board = replayBoard;
+    let pieces = buildPiecesFromBoard(board);
+    for (const move of latestState.moveHistory) {
+      pieces = applyMoveToPieces(pieces, move);
+      board = applyMoveToBoard(board, move);
     }
-  }, [sqfState.board, sqfState.moveHistory.length, animating]);
+    setDisplayPieces(pieces);
+    setDisplayBoard(board);
+    lastMoveCountRef.current = latestState.moveHistory.length;
+  }, [latestState.moveHistory, animating, replayBoard]);
 
   const canInteract = isDesignatedPlayer && isMyTurn && !submitting && !session.winner && !animating;
 
-  // Valid destinations for selected piece (use displayBoard for current visual state)
-  const validDestinations: Set<string> = new Set();
-  if (selectedPos && canInteract) {
-    const adj = ADJACENCY[selectedPos] ?? [];
+  // The selection rendered on screen: the designated player uses optimistic
+  // local state for instant feedback; observers read from the server-synced
+  // playerSelection so they see the same piece highlighted that the player is
+  // currently considering.
+  const effectiveSelection: string | null = isDesignatedPlayer
+    ? localSelection
+    : latestState.playerSelection
+      ? posKey(latestState.playerSelection[0], latestState.playerSelection[1])
+      : null;
+
+  // Valid destinations for the displayed selection. We compute these for the
+  // designated player AND for observers — observers see the same destination
+  // dots the player is looking at. Memoized so handleNodeClick's deps are
+  // stable across renders that don't actually change the destination set.
+  const validDestinations = useMemo<Set<string>>(() => {
+    const dest = new Set<string>();
+    if (!effectiveSelection) return dest;
+    const adj = ADJACENCY[effectiveSelection] ?? [];
     for (const key of adj) {
       const [r, c] = key.split(",").map(Number);
       if (displayBoard[r][c] === null) {
-        validDestinations.add(key);
+        dest.add(key);
       }
     }
-  }
+    return dest;
+  }, [effectiveSelection, displayBoard]);
+
+  // Push selection changes to the server (fire-and-forget, ordered) so observers
+  // see the highlight in roughly one poll interval.
+  const syncSelection = useCallback(
+    (sel: string | null) => {
+      const selection: Position | null = sel
+        ? (sel.split(",").map(Number) as Position)
+        : null;
+      selectionSyncChainRef.current = selectionSyncChainRef.current.then(() =>
+        fetch("/api/games/move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: session.id,
+            action: "set-selection",
+            selection,
+          }),
+        }).catch(() => {})
+      );
+    },
+    [session.id]
+  );
 
   const handleNodeClick = useCallback(async (r: number, c: number) => {
     if (!canInteract) return;
@@ -234,14 +294,16 @@ export default function StormQueensFollyBoard({
     const cell = displayBoard[r][c];
 
     if (cell === "player") {
-      setSelectedPos(selectedPos === key ? null : key);
+      const next = localSelection === key ? null : key;
+      setLocalSelection(next);
+      syncSelection(next);
       return;
     }
 
-    if (cell === null && selectedPos && validDestinations.has(key)) {
-      const [fromR, fromC] = selectedPos.split(",").map(Number);
+    if (cell === null && localSelection && validDestinations.has(key)) {
+      const [fromR, fromC] = localSelection.split(",").map(Number);
       setSubmitting(true);
-      setSelectedPos(null);
+      setLocalSelection(null);
 
       try {
         const res = await fetch("/api/games/move", {
@@ -251,10 +313,21 @@ export default function StormQueensFollyBoard({
             sessionId: session.id,
             from: [fromR, fromC] as Position,
             to: [r, c] as Position,
-            moveVersion: sqfState.moveHistory.length,
+            moveVersion: latestState.moveHistory.length,
           }),
         });
-        if (!res.ok) {
+        if (res.ok) {
+          // Ingest server's authoritative new state immediately so the player's
+          // own move animates without waiting for the next poll.
+          const data = await res.json().catch(() => null);
+          if (
+            data?.state &&
+            (data.state as StormQueensFollyState).moveHistory.length >
+              latestState.moveHistory.length
+          ) {
+            setLatestState(data.state as StormQueensFollyState);
+          }
+        } else {
           const data = await res.json().catch(() => null);
           console.error("Move failed:", data?.error);
         }
@@ -264,10 +337,17 @@ export default function StormQueensFollyBoard({
       return;
     }
 
-    setSelectedPos(null);
-  }, [canInteract, displayBoard, selectedPos, validDestinations, session.id, sqfState.moveHistory.length]);
+    if (localSelection) {
+      setLocalSelection(null);
+      syncSelection(null);
+    }
+  }, [canInteract, displayBoard, localSelection, validDestinations, session.id, latestState.moveHistory.length, syncSelection]);
 
   const showPortraits = !!(player.character || opponent);
+
+  // Opponent display name: prefer the AI's character (Kanka entity), fall back
+  // to "Opponent". Used in the turn label so observers see who's about to move.
+  const opponentDisplayName = opponent?.name ?? "Opponent";
 
   let turnText = "";
   if (session.winner) {
@@ -275,9 +355,11 @@ export default function StormQueensFollyBoard({
   } else if (animating) {
     turnText = "";
   } else if (isDesignatedPlayer) {
-    turnText = isMyTurn ? "Your Turn" : "Opponent's Turn";
+    turnText = isMyTurn ? "Your Turn" : `${opponentDisplayName}'s Turn`;
   } else {
-    turnText = sqfState.turn === "player" ? `${player.character ?? player.username}'s Turn` : "Opponent's Turn";
+    turnText = latestState.turn === "player"
+      ? `${player.character ?? player.username}'s Turn`
+      : `${opponentDisplayName}'s Turn`;
   }
 
   return (
@@ -403,7 +485,7 @@ export default function StormQueensFollyBoard({
                 {displayPieces.map((piece) => {
                   const pct = NODE_PCT[piece.pos];
                   if (!pct) return null;
-                  const isSelected = selectedPos === piece.pos;
+                  const isSelected = effectiveSelection === piece.pos;
                   return (
                     <div
                       key={piece.id}

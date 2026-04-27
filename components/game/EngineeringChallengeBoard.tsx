@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { EngineeringChallengeConfig, EngineeringChallengeState, Position } from "@/types/game";
 import { WIRE_COLORS } from "@/lib/games/engineeringChallenge";
 import PlayerPortrait from "./PlayerPortrait";
@@ -29,7 +29,31 @@ export default function EngineeringChallengeBoard({
   const [isDragging, setIsDragging] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
 
+  // Pulse the most recently completed wire (player + observer parity).
+  // Tracks the previous set of completed wireIndexes; whenever a new index
+  // appears, set it as the pulsing one for ~700ms.
+  const [pulsingWireIndex, setPulsingWireIndex] = useState<number | null>(null);
+  const prevCompleteRef = useRef<Set<number>>(
+    new Set(state.wires.filter((w) => w.complete).map((w) => w.wireIndex))
+  );
+  useEffect(() => {
+    const current = new Set(state.wires.filter((w) => w.complete).map((w) => w.wireIndex));
+    let newlyComplete: number | null = null;
+    for (const idx of current) {
+      if (!prevCompleteRef.current.has(idx)) {
+        newlyComplete = idx;
+        break;
+      }
+    }
+    prevCompleteRef.current = current;
+    if (newlyComplete === null) return;
+    setPulsingWireIndex(newlyComplete);
+    const t = setTimeout(() => setPulsingWireIndex((cur) => (cur === newlyComplete ? null : cur)), 700);
+    return () => clearTimeout(t);
+  }, [state.wires]);
+
   const canInteract = isDesignatedPlayer && !session.winner && !submitting;
+  const completedCount = state.wires.filter((w) => w.complete).length;
 
   // Build occupied cells map (excluding current wire being drawn)
   const occupiedCells = new Set<string>();
@@ -55,13 +79,18 @@ export default function EngineeringChallengeBoard({
 
   // Color maps
   const cellColorMap = new Map<string, string>();
+  // Which wire owns each cell — used to drive the per-wire commit pulse.
+  const cellWireOwnerMap = new Map<string, number>();
   if (selectedWire !== null) {
     const color = WIRE_COLORS[selectedWire % WIRE_COLORS.length].hex;
     for (const cell of currentPath) cellColorMap.set(posKey(cell), color);
   }
   for (const wire of state.wires) {
     const color = WIRE_COLORS[wire.wireIndex % WIRE_COLORS.length].hex;
-    for (const cell of wire.cells) cellColorMap.set(posKey(cell), color);
+    for (const cell of wire.cells) {
+      cellColorMap.set(posKey(cell), color);
+      cellWireOwnerMap.set(posKey(cell), wire.wireIndex);
+    }
   }
 
   const getEndpointWire = (r: number, c: number): number => {
@@ -339,15 +368,32 @@ export default function EngineeringChallengeBoard({
                   ))}
                 </svg>
 
+                <style>{`
+                  @keyframes ec-wire-pulse {
+                    0% { transform: scale(0.6); opacity: 0.2; }
+                    50% { transform: scale(1.15); opacity: 1; }
+                    100% { transform: scale(1); opacity: 1; }
+                  }
+                  .ec-wire-pulse {
+                    transform-origin: center;
+                    animation: ec-wire-pulse 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
+                  }
+                `}</style>
+
                 {/* Cells */}
                 {Array.from({ length: gridRows }, (_, r) =>
                   Array.from({ length: gridCols }, (_, c) => {
                     const key = posKey([r, c]);
                     const wireColor = cellColorMap.get(key);
+                    const cellWireIdx = cellWireOwnerMap.get(key);
                     const epIdx = getEndpointWire(r, c);
                     const isEndpoint = epIdx >= 0;
                     const epColor = isEndpoint ? WIRE_COLORS[epIdx % WIRE_COLORS.length].hex : null;
                     const isCompleted = isEndpoint && state.wires.some((w) => w.wireIndex === epIdx && w.complete);
+                    const wirePulses =
+                      pulsingWireIndex !== null &&
+                      ((cellWireIdx !== undefined && cellWireIdx === pulsingWireIndex) ||
+                        (isEndpoint && epIdx === pulsingWireIndex && isCompleted));
 
                     return (
                       <div
@@ -364,7 +410,7 @@ export default function EngineeringChallengeBoard({
                       >
                         {wireColor && !isEndpoint && (
                           <div
-                            className="absolute inset-[15%] rounded-sm"
+                            className={`absolute inset-[15%] rounded-sm ${wirePulses ? "ec-wire-pulse" : ""}`}
                             style={{ background: `${wireColor}44`, boxShadow: `0 0 6px ${wireColor}22` }}
                           />
                         )}
@@ -372,7 +418,7 @@ export default function EngineeringChallengeBoard({
                         {isEndpoint && epColor && (
                           <div className="absolute inset-0 flex items-center justify-center">
                             <div
-                              className="w-[70%] aspect-square rounded-full border-2 flex items-center justify-center"
+                              className={`w-[70%] aspect-square rounded-full border-2 flex items-center justify-center ${wirePulses ? "ec-wire-pulse" : ""}`}
                               style={{
                                 borderColor: isCompleted ? epColor : `${epColor}99`,
                                 background: isCompleted ? `${epColor}44` : `${epColor}22`,
@@ -400,7 +446,8 @@ export default function EngineeringChallengeBoard({
           <p className="text-[8px] sm:text-[9px] tracking-[0.25em] uppercase text-white/25" style={cinzel}>
             {submitting ? "Submitting..." :
               selectedWire !== null ? "Draw path to matching endpoint" :
-              isDesignatedPlayer ? "Tap an endpoint to start wiring" : "Observing"}
+              isDesignatedPlayer ? "Tap an endpoint to start wiring" :
+              `${completedCount} of ${config.wireCount} wires routed`}
           </p>
         )}
       </div>

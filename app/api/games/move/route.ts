@@ -47,11 +47,12 @@ export async function POST(req: NextRequest) {
   if (session.status !== "launched") {
     return NextResponse.json({ error: "Game is not active" }, { status: 400 });
   }
-  if (session.designatedPlayer !== username) {
-    return NextResponse.json({ error: "Not your game" }, { status: 403 });
-  }
 
-  // Arcane Card: automatic rematch after a stalemate
+  // Arcane Card: automatic rematch after a stalemate. Allowed for ANY logged-in
+  // user — not just the designated player — so observers can recover the table
+  // if the player drops or has a network blip during the rematch countdown.
+  // Optimistic-concurrency on moveCount serializes concurrent triggers (the
+  // first one wins; the others get a 409 they can ignore).
   if (session.gameType === "arcane-card" && body?.action === "rematch") {
     if (session.winner !== "draw") {
       return NextResponse.json({ error: "Rematch only allowed after a draw" }, { status: 400 });
@@ -75,6 +76,10 @@ export async function POST(req: NextRequest) {
       state: sanitizeArcaneCardState(freshState),
       winner: null,
     });
+  }
+
+  if (session.designatedPlayer !== username) {
+    return NextResponse.json({ error: "Not your game" }, { status: 403 });
   }
 
   if (session.winner) {

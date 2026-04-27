@@ -22,6 +22,9 @@ export interface StormQueensFollyState {
   board: Board;
   turn: PieceOwner;
   moveHistory: GameMove[];
+  // Cell the designated player has currently selected. Synced via the lightweight
+  // "set-selection" action so observers see the same hover/destination preview.
+  playerSelection?: Position | null;
 }
 
 // ─── Engineering Challenge config & state ───
@@ -120,6 +123,9 @@ export interface ArcaneCardState {
   opponent: ArcaneCardPlayerState;
   turn: "player" | "opponent";
   moveCount: number;                                // strictly increasing, used for moveVersion staleness check
+  // Card the designated player has currently selected and how it would be played.
+  // Synced via "set-preview" so observers see the deliberation, cleared on commit.
+  playerSelection?: { cardId: string; playAs: "positive" | "negative" } | null;
 }
 
 // ─── Isolation Protocol config & state ───
@@ -153,7 +159,7 @@ export interface IsolationProtocolState {
   turn: "player" | "opponent";
   moveCount: number;
   lastEnemyMove: HexCoord | null;  // previous enemy position, for single-step animation
-  recentMoves: IsolationMoveEvent[]; // last ~8 events, oldest first — for spectator replay
+  recentMoves: IsolationMoveEvent[]; // last ~24 events, oldest first — for spectator replay
 }
 
 // ─── Session ───
