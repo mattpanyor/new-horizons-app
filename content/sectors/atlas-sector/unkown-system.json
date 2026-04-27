@@ -1,0 +1,39 @@
+{
+  "name": "Unkown System",
+  "published": true,
+  "star": {
+    "name": "Unkown System",
+    "type": "Blue Pulsar",
+    "color": "#60A5FA",
+    "secondaryColor": "#1E3A8A"
+  },
+  "bodies": [
+    {
+      "id": "kantar",
+      "name": "Kantar",
+      "type": "planet",
+      "biome": "barren",
+      "orbitPosition": 90,
+      "orbitDistance": 0.35,
+      "labelPosition": "bottom",
+      "special_attribute": "cult"
+    },
+    {
+      "id": "k2",
+      "name": "K2",
+      "type": "planet",
+      "biome": "molten",
+      "orbitPosition": 330,
+      "orbitDistance": 0.5,
+      "labelPosition": "bottom"
+    },
+    {
+      "id": "k3",
+      "name": "K3",
+      "type": "asteroid-field",
+      "orbitPosition": 200,
+      "orbitDistance": 0.55,
+      "labelPosition": "top"
+    }
+  ]
+}

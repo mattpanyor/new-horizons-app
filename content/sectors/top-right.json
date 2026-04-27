@@ -99,6 +99,12 @@
       "y": 100,
       "allegiance": "feyrose",
       "territoryRadius": 155
+    },
+    {
+      "slug": "unkown-system",
+      "x": 550,
+      "y": 570,
+      "hidden": true
     }
   ]
 }

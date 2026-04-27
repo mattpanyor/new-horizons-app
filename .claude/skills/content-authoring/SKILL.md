@@ -126,6 +126,20 @@ Colors defined in `lib/bodyColors.ts`. To add a new biome, add it to both `Plane
 - `special_attribute`: `"lathanium"` | `"nobility"` | `"purified"` — mutually exclusive special flag
 - `published`: Boolean (omit or true to show, false to hide)
 
+## Hiding Items
+
+Add `"hidden": true` to any sector item to omit it from the loaded data. Supported on:
+
+- `SystemPin` (sector → systems[])
+- `VortexPin` (sector → vortexes[])
+- `MapMarker` (sector → markers[] AND connection.marker)
+- `ConnectionLine` (sector → connections[])
+- `CelestialBody` (system → bodies[])
+
+Filtering happens in `lib/sectors.ts` and `lib/starsystems.ts` — render code never sees hidden items. Special case: when `connection.marker.hidden` is true, the line stays but the marker drops; when `connection.hidden` is true, the whole connection (line + marker) is removed.
+
+`hidden: true` differs from `published: false` (which already exists on SectorMetadata, StarSystemMetadata, CelestialBody): `published` is a publication-flow flag, `hidden` is a per-item suppression flag.
+
 ## After Content Changes
 
 Run `npm run build` to regenerate static pages via `generateStaticParams()`. New content won't appear in production without a rebuild.
