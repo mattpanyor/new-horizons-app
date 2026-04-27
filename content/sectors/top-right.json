@@ -63,7 +63,7 @@
       "marker": {
         "type": "ship",
         "name": "Vanguard Wolf",
-        "position": 0.4,
+        "position": 0.9,
         "allegiance": "ashford"
       }
     },
@@ -75,7 +75,7 @@
       "marker": {
         "type": "ship",
         "name": "Arch of Laurel",
-        "position": 0.3,
+        "position": 0.8,
         "allegiance": "fairfield"
       }
     },
