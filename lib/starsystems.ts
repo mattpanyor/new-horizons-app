@@ -4,12 +4,14 @@ import { StarSystemMetadata } from "@/types/starsystem";
 
 const sectorsDir = path.join(process.cwd(), "content/sectors");
 
-// Read a star system by its sector slug and system slug
+// Read a star system by its sector slug and system slug. Bodies flagged
+// `hidden: true` are stripped here so render code never sees them.
 export function getStarSystemBySlug(sectorSlug: string, systemSlug: string): StarSystemMetadata {
   const fullPath = path.join(sectorsDir, sectorSlug, `${systemSlug}.json`);
   const fileContents = fs.readFileSync(fullPath, "utf8");
   const data = JSON.parse(fileContents) as Omit<StarSystemMetadata, "slug">;
-  return { ...data, slug: systemSlug };
+  const bodies = data.bodies.filter((b) => !b.hidden);
+  return { ...data, bodies, slug: systemSlug };
 }
 
 // Scan all sector subdirectories and return every published star system

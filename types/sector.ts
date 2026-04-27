@@ -6,6 +6,7 @@ export interface SystemPin {
   y: number;  // canvas coordinate 0–800
   allegiance?: AllegianceKey;       // key into ALLEGIANCES registry
   territoryRadius?: number;  // overrides TERRITORY_RADIUS default (120)
+  hidden?: boolean;          // if true, omitted by the loader
 }
 
 export interface VortexPin {
@@ -17,6 +18,7 @@ export interface VortexPin {
   radius?: number;          // base radius in canvas units, default 80
   ratio?: [number, number]; // [width, height] aspect ratio, e.g. [6, 3]
   layer?: LayerSlug;        // only visible when this layer is selected
+  hidden?: boolean;         // if true, omitted by the loader
 }
 
 export type MarkerType = "ship" | "fleet" | "anomaly" | "poi" | "black-hole";
@@ -45,6 +47,7 @@ export interface MapMarker {
   // Optional territory blob
   territoryRadius?: number;  // wavy cloud radius around the marker
   layer?: LayerSlug;        // only visible when this layer is selected
+  hidden?: boolean;         // if true, omitted by the loader (route lines stay)
 }
 
 /** @deprecated Use MapMarker instead */
@@ -60,6 +63,7 @@ export interface ConnectionLine {
   opacity?: number;   // line + label opacity (default 0.35)
   marker?: MapMarker;
   layer?: LayerSlug;        // only visible when this layer is selected
+  hidden?: boolean;         // if true, omitted by the loader (line + marker)
 }
 
 export interface SectorMetadata {

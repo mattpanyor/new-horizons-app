@@ -32,6 +32,7 @@ export interface CelestialBody {
   kankaUrl?: string;
   image?: string;
   published?: boolean;
+  hidden?: boolean;      // if true, omitted by the loader
 }
 
 export interface Star {
