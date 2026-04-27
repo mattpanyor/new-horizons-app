@@ -95,6 +95,24 @@ const SIGIL_LABELS: Record<Sigil, string> = {
 
 // ─── Coin column with outer kept-tray ───
 // keptSide: which side the kept coins slide to ("left" = tray on left, "right" = tray on right)
+//
+// Layout strategy: single absolute-positioned container with a fixed 2-column grid
+// of slot positions. Each coin computes its target (x, y) from its lock state and
+// transitions smoothly when locked/unlocked. Stable React keys keep the DOM node
+// identity, so the transform transition runs across the lock toggle.
+
+const COIN_PX = 56;
+const ROW_GAP = 6;
+const STEP = COIN_PX + ROW_GAP;
+const COL_GAP = 12;
+const COL_X_NEAR = 0;
+const COL_X_FAR = COIN_PX + COL_GAP;
+const COLUMN_WIDTH = COL_X_FAR + COIN_PX;
+const COLUMN_HEIGHT = 340;
+
+function centeredTop(count: number, slot: number) {
+  return (COLUMN_HEIGHT - count * STEP + ROW_GAP) / 2 + slot * STEP;
+}
 
 function CoinColumn({
   coins,
@@ -126,60 +144,26 @@ function CoinColumn({
   const handText = isPlayer ? "text-amber-300/50" : "text-purple-300/50";
 
   const hasCoins = coins.length > 0;
+  const trayX = keptSide === "left" ? COL_X_NEAR : COL_X_FAR;
+  const mainX = keptSide === "left" ? COL_X_FAR : COL_X_NEAR;
 
-  // Render a single coin (circle)
-  const renderCoin = (sigil: Sigil, idx: number, isKept: boolean) => (
-    <button
-      key={idx}
-      onClick={canLock && onToggleLock ? () => onToggleLock(idx) : undefined}
-      className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full border-2 ${
-        isKept ? borderActive : borderDim
-      } flex items-center justify-center transition-all duration-500 ${
-        canLock ? "cursor-pointer hover:scale-110" : "cursor-default"
-      }`}
-      style={{
-        background: isKept ? bgActive : "rgba(255, 255, 255, 0.03)",
-        boxShadow: isKept ? `0 0 12px ${glowColor}` : "none",
-        animation: flipping ? "coinFlip 0.6s ease-in-out" : undefined,
-      }}
-      title={SIGIL_LABELS[sigil]}
-    >
-      <div style={{ color: SIGIL_COLORS[sigil] }}>
-        <SigilIcon sigil={sigil} size={26} />
-      </div>
-    </button>
-  );
+  // Compute kept and unkept slot order so each coin knows where to sit.
+  const keptSlots: number[] = [];
+  const mainSlots: number[] = [];
+  for (let i = 0; i < coins.length; i++) {
+    if (lockedCoins[i]) keptSlots.push(i);
+    else mainSlots.push(i);
+  }
 
-  // Empty placeholder circle
-  const renderEmpty = (idx: number, dashed?: boolean) => (
-    <div
-      key={`empty-${idx}`}
-      className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full ${
-        dashed ? "border border-dashed border-white/8" : "border border-white/8"
-      } bg-white/[0.02]`}
-    />
-  );
-
-  // Build the two columns: kept tray + main column (unkept only, vertically centered)
-  const keptTray = (
-    <div className="flex flex-col items-center justify-center gap-1.5 w-14 sm:w-16 min-h-[300px] sm:min-h-[340px]">
-      {hasCoins && coins.map((sigil, i) =>
-        lockedCoins[i] ? renderCoin(sigil, i, true) : null
-      )}
-    </div>
-  );
-
-  const mainColumn = (
-    <div className="flex flex-col items-center justify-center gap-1.5 min-h-[300px] sm:min-h-[340px]">
-      {hasCoins ? (
-        coins.map((sigil, i) =>
-          lockedCoins[i] ? null : renderCoin(sigil, i, false)
-        )
-      ) : (
-        Array.from({ length: 5 }, (_, i) => renderEmpty(i))
-      )}
-    </div>
-  );
+  const positionFor = (idx: number) => {
+    const isKept = lockedCoins[idx];
+    const list = isKept ? keptSlots : mainSlots;
+    const slot = list.indexOf(idx);
+    return {
+      left: isKept ? trayX : mainX,
+      top: centeredTop(list.length, slot),
+    };
+  };
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -187,8 +171,64 @@ function CoinColumn({
         {label}
       </p>
 
-      <div className="flex items-start gap-2 sm:gap-3">
-        {keptSide === "left" ? <>{keptTray}{mainColumn}</> : <>{mainColumn}{keptTray}</>}
+      <div
+        style={{
+          position: "relative",
+          width: COLUMN_WIDTH,
+          height: COLUMN_HEIGHT,
+        }}
+      >
+        {!hasCoins &&
+          Array.from({ length: 5 }, (_, i) => (
+            <div
+              key={`empty-${i}`}
+              className="rounded-full border border-white/8 bg-white/[0.02]"
+              style={{
+                position: "absolute",
+                width: COIN_PX,
+                height: COIN_PX,
+                left: mainX,
+                top: centeredTop(5, i),
+              }}
+            />
+          ))}
+
+        {hasCoins &&
+          coins.map((sigil, i) => {
+            const { left, top } = positionFor(i);
+            const isKept = lockedCoins[i];
+            return (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  width: COIN_PX,
+                  height: COIN_PX,
+                  transform: `translate(${left}px, ${top}px)`,
+                  transition: "transform 500ms cubic-bezier(0.4, 0.0, 0.2, 1)",
+                }}
+              >
+                <button
+                  onClick={canLock && onToggleLock ? () => onToggleLock(i) : undefined}
+                  className={`w-full h-full rounded-full border-2 ${
+                    isKept ? borderActive : borderDim
+                  } flex items-center justify-center transition-[background,border-color,box-shadow,transform] duration-300 ${
+                    canLock ? "cursor-pointer hover:scale-110" : "cursor-default"
+                  }`}
+                  style={{
+                    background: isKept ? bgActive : "rgba(255, 255, 255, 0.03)",
+                    boxShadow: isKept ? `0 0 12px ${glowColor}` : "none",
+                    animation: flipping ? "coinFlip 0.6s ease-in-out" : undefined,
+                  }}
+                  title={SIGIL_LABELS[sigil]}
+                >
+                  <div style={{ color: SIGIL_COLORS[sigil] }}>
+                    <SigilIcon sigil={sigil} size={26} />
+                  </div>
+                </button>
+              </div>
+            );
+          })}
       </div>
 
       {handRank && (
@@ -217,6 +257,8 @@ export default function RunePokerBoard({
   const [lockedCoins, setLockedCoins] = useState<boolean[]>([false, false, false, false, false]);
   const [submitting, setSubmitting] = useState(false);
   const [flipping, setFlipping] = useState(false);
+  // Serialize lock-sync POSTs so they reach the server in click order.
+  const lockSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   // Trigger flip animation when a cast/recast happens (castsRemaining, round, or phase changes)
   const prevCastKeyRef = useRef<string>("");
@@ -246,9 +288,21 @@ export default function RunePokerBoard({
     setLockedCoins((prev) => {
       const next = [...prev];
       next[idx] = !next[idx];
+      // Sync to server so observers see the selection live. Chain to preserve order.
+      lockSyncChainRef.current = lockSyncChainRef.current.then(() =>
+        fetch("/api/games/move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: session.id,
+            action: "set-locks",
+            lockedCoins: next,
+          }),
+        }).catch(() => {})
+      );
       return next;
     });
-  }, [canInteract, state.phase]);
+  }, [canInteract, state.phase, session.id]);
 
   const sendAction = useCallback(async (action: string) => {
     setSubmitting(true);
@@ -278,7 +332,20 @@ export default function RunePokerBoard({
   if (session.winner) {
     phaseText = "";
   } else if (!isDesignatedPlayer) {
-    phaseText = "Observing";
+    switch (state.phase) {
+      case "casting":
+        phaseText = state.round > 1 ? "Awaiting next cast" : "Awaiting cast";
+        break;
+      case "keeping":
+        phaseText = `Choosing keeps · ${state.castsRemaining} recast${state.castsRemaining !== 1 ? "s" : ""} left`;
+        break;
+      case "showdown":
+        phaseText = "";
+        break;
+      case "round-end":
+        phaseText = "Round complete";
+        break;
+    }
   } else {
     switch (state.phase) {
       case "casting":
@@ -401,7 +468,11 @@ export default function RunePokerBoard({
                 {/* Player: kept tray on the LEFT (outer side) */}
                 <CoinColumn
                   coins={state.playerCoins}
-                  lockedCoins={lockedCoins}
+                  lockedCoins={
+                    isDesignatedPlayer
+                      ? lockedCoins
+                      : (state.lockedCoins ?? [false, false, false, false, false])
+                  }
                   owner="player"
                   canLock={canInteract && state.phase === "keeping"}
                   onToggleLock={toggleLock}

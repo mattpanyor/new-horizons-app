@@ -300,6 +300,25 @@ export function handleRunePokerMove(
     };
   }
 
+  // ── Set locks: sync player's keep selections so observers see them live ──
+  if (action === "set-locks") {
+    if (state.phase !== "keeping") {
+      return { state, winner: null, error: "Cannot set locks now" };
+    }
+    const locks = body.lockedCoins;
+    if (
+      !Array.isArray(locks) ||
+      locks.length !== 5 ||
+      !locks.every((l) => typeof l === "boolean")
+    ) {
+      return { state, winner: null, error: "lockedCoins must be a boolean[5]" };
+    }
+    return {
+      state: { ...state, lockedCoins: locks },
+      winner: null,
+    };
+  }
+
   // ── End turn: skip remaining recasts, go to showdown ──
   if (action === "end-turn") {
     if (state.phase !== "keeping") {
