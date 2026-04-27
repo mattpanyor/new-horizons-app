@@ -29,13 +29,22 @@
       "labelPosition": "bottom"
     },
     {
-      "id": "2nd-exploratory-fleet",
-      "name": "2nd Exploratory Fleet",
-      "type": "fleet",
-      "orbitPosition": 65,
-      "orbitDistance": 0.65,
+      "id": "vanguard-wolf",
+      "name": "Vanguard Wolf",
+      "type": "ship",
+      "orbitPosition": 100,
+      "orbitDistance": 0.40,
+      "labelPosition": "top",
+      "allegiance": "ashford"
+    },
+    {
+      "id": "arch-of-laurel",
+      "name": "Arch of Laurel",
+      "type": "ship",
+      "orbitPosition": 150,
+      "orbitDistance": 0.57,
       "labelPosition": "bottom",
-      "allegiance": "exploratorium"
+      "allegiance": "fairfield"
     }
   ]
 }

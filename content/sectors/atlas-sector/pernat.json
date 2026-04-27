@@ -31,7 +31,7 @@
       "type": "ship",
       "orbitPosition": 150,
       "orbitDistance": 0.6,
-      "labelPosition": "bottom",
+      "labelPosition": "top",
       "allegiance": "exploratorium"
     },
     {
@@ -59,6 +59,15 @@
       "orbitPosition": 280,
       "orbitDistance": 0.3,
       "labelPosition": "top"
+    },
+    {
+      "id": "ray-of-purity",
+      "name": "Ray of Purity",
+      "type": "ship",
+      "orbitPosition": 110,
+      "orbitDistance": 0.63,
+      "labelPosition": "bottom",
+      "allegiance": "inquisitorium"
     }
   ]
 }

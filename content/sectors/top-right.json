@@ -56,39 +56,15 @@
       "layer": "story"
     },
     {
-      "from": "belliar",
-      "to": "ertamis",
+      "from": "ertamis",
+      "to": "callisto",
       "layer": "movement",
-      "curvature": 110,
+      "curvature": -110,
       "marker": {
-        "type": "ship",
-        "name": "Vanguard Wolf",
-        "position": 0.9,
-        "allegiance": "ashford"
-      }
-    },
-    {
-      "from": "pelao",
-      "to": "ertamis",
-      "layer": "movement",
-      "curvature": -150,
-      "marker": {
-        "type": "ship",
-        "name": "Arch of Laurel",
-        "position": 0.8,
-        "allegiance": "fairfield"
-      }
-    },
-    {
-      "from": "callisto",
-      "to": "pernat",
-      "layer": "movement",
-      "curvature": 160,
-      "marker": {
-        "type": "ship",
-        "name": "Ray of Purity",
-        "position": 0.4,
-        "allegiance": "inquisitorium"
+        "type": "fleet",
+        "name": "2nd Exploratory Fleet",
+        "position": 0.2,
+        "allegiance": "exploratorium"
       }
     }
   ],
