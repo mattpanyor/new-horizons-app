@@ -531,14 +531,14 @@ export default function ArcaneCardBoard({
           >
             <style>{`@keyframes arcaneVictoryIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }`}</style>
             <h2
-              className={`text-xl font-semibold tracking-[0.3em] ${
+              className={`text-4xl sm:text-5xl font-semibold tracking-[0.3em] ${
                 isDraw ? "text-white/60" : playerWon ? "text-amber-300/80" : "text-purple-400/80"
               }`}
               style={cinzel}
             >
               {isDraw ? "STALEMATE" : playerWon ? "VICTORY" : "DEFEAT"}
             </h2>
-            <p className="text-[9px] text-white/40 text-center max-w-[260px]" style={cinzel}>
+            <p className="text-xs text-white/50 text-center max-w-[320px]" style={cinzel}>
               {isDraw
                 ? victoryText.draw
                 : isDesignatedPlayer
@@ -621,29 +621,39 @@ export default function ArcaneCardBoard({
         {/* Player panel — selection state is mirrored from the server when the
             viewer isn't the designated player, so observers see the same card
             highlighted and the same flip preview the player is deliberating on. */}
-        <PlayerPanel
-          state={displayState.player}
-          side="player"
-          hideHand={false}
-          selectedHandId={effectiveSelectedId}
-          flipState={effectiveFlipState}
-          canInteract={canInteract}
-          onHandClick={handleHandClick}
-          onFlip={handleFlip}
-        />
+        <div
+          className="transition-[filter] duration-500"
+          style={{ filter: showVictory ? "blur(2.25px)" : "none" }}
+        >
+          <PlayerPanel
+            state={displayState.player}
+            side="player"
+            hideHand={false}
+            selectedHandId={effectiveSelectedId}
+            flipState={effectiveFlipState}
+            canInteract={canInteract}
+            onHandClick={handleHandClick}
+            onFlip={handleFlip}
+          />
+        </div>
 
         {/* Art-deco golden divider */}
         <ArtDecoDivider />
 
         {/* Opponent panel */}
-        <PlayerPanel
-          state={displayState.opponent}
-          side="opponent"
-          hideHand={true}
-          selectedHandId={null}
-          flipState={{}}
-          canInteract={false}
-        />
+        <div
+          className="transition-[filter] duration-500"
+          style={{ filter: showVictory ? "blur(2.25px)" : "none" }}
+        >
+          <PlayerPanel
+            state={displayState.opponent}
+            side="opponent"
+            hideHand={true}
+            selectedHandId={null}
+            flipState={{}}
+            canInteract={false}
+          />
+        </div>
 
         {/* Opponent portrait (right) */}
         {opponent && (
