@@ -142,3 +142,19 @@ export async function updateGameState(
         `;
   return rows.length > 0 ? rowToSession(rows[0]) : null;
 }
+
+// Atomically merge a patch into the state JSONB without touching other fields.
+// Use for observer-sync writes (e.g. selection/preview) that must never clobber
+// a concurrent full-state write landing at the same time.
+export async function patchGameState(
+  id: number,
+  patch: Record<string, unknown>
+): Promise<boolean> {
+  const rows = await sql`
+    UPDATE game_sessions SET
+      state = state || ${JSON.stringify(patch)}::jsonb
+    WHERE id = ${id} AND status = 'launched'
+    RETURNING id
+  `;
+  return rows.length > 0;
+}

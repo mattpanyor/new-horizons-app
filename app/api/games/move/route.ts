@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername } from "@/lib/db/users";
-import { getGameSession, updateGameState } from "@/lib/db/games";
+import { getGameSession, updateGameState, patchGameState } from "@/lib/db/games";
 import { handleStormQueensFollyMove } from "@/lib/games/stormQueensFolly";
 import { handleEngineeringChallengeMove } from "@/lib/games/engineeringChallenge";
 import { handleRunePokerMove } from "@/lib/games/runePoker";
@@ -15,6 +15,7 @@ import type {
   ArcaneCardConfig,
   ArcaneCardState,
   IsolationProtocolState,
+  StormQueensFollyState,
 } from "@/types/game";
 
 export async function POST(req: NextRequest) {
@@ -111,6 +112,23 @@ export async function POST(req: NextRequest) {
 
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+
+  // Storm Queen's Folly set-selection is an observer-sync write (no move
+  // applied). It must NOT clobber a concurrent move POST writing the full
+  // state, so merge just the playerSelection field via JSONB || instead of
+  // overwriting the row.
+  if (
+    session.gameType === "storm-queens-folly" &&
+    body?.action === "set-selection"
+  ) {
+    const sel =
+      (result.state as StormQueensFollyState).playerSelection ?? null;
+    const ok = await patchGameState(sessionId, { playerSelection: sel });
+    if (!ok) {
+      return NextResponse.json({ error: "Game is not active" }, { status: 400 });
+    }
+    return NextResponse.json({ state: result.state, winner: null });
   }
 
   // For arcane-card, use optimistic-concurrency guard on moveCount to prevent
