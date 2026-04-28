@@ -131,6 +131,7 @@ function IsolationShieldPicker({
   const toggle = (c: HexCoord) => {
     if (c.q === data.center.q && c.r === data.center.r) return; // can't shield center
     const k = `${c.q},${c.r}`;
+    if (data.borderSet.has(k)) return; // border cells are escape points, not shieldable
     if (shieldSet.has(k)) {
       onChange(shields.filter((s) => `${s.q},${s.r}` !== k));
     } else {
@@ -167,7 +168,7 @@ function IsolationShieldPicker({
           <g
             key={k}
             transform={`translate(${x}, ${y})`}
-            style={{ cursor: isCenter ? "not-allowed" : "pointer" }}
+            style={{ cursor: isCenter || isBorder ? "not-allowed" : "pointer" }}
             onClick={() => toggle(c)}
           >
             <path d={ipHexPath(IP_HEX_SIZE - 0.8)} fill={fill} stroke={stroke} strokeWidth={1} />

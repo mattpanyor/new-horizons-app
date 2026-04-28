@@ -171,6 +171,8 @@ export default function IsolationProtocolBoard({
     [config.initialShields]
   );
 
+  const borderSet = shapeData.borderSet;
+
   // Compute SVG viewport by scanning all cell pixel coords.
   const { viewBox, cellPixels } = useMemo(() => {
     const pxs = shapeData.cells.map((c) => ({ c, ...axialToPixel(c) }));
@@ -244,10 +246,11 @@ export default function IsolationProtocolBoard({
       if (!canInteract) return;
       const k = keyOf(cell);
       if (shieldSet.has(k)) return;
+      if (borderSet.has(k)) return;
       if (cell.q === displayEnemy.q && cell.r === displayEnemy.r) return;
       submitShield(cell);
     },
-    [canInteract, shieldSet, displayEnemy, submitShield]
+    [canInteract, shieldSet, borderSet, displayEnemy, submitShield]
   );
 
   const enemyPos = axialToPixel(displayEnemy);
@@ -395,7 +398,7 @@ export default function IsolationProtocolBoard({
                       : "rgba(99, 102, 241, 0.55)";
                   }
 
-                  const clickable = canInteract && !isShield;
+                  const clickable = canInteract && !isShield && !isBorder;
                   const hoverFill =
                     clickable && isHover ? "rgba(99, 102, 241, 0.25)" : fill;
 

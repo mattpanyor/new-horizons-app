@@ -138,6 +138,7 @@ export function getDefaultState(config?: Partial<IsolationProtocolConfig>): Isol
     const k = keyOf(s);
     if (seen.has(k)) continue;
     if (!shapeData.cellSet.has(k)) continue;
+    if (shapeData.borderSet.has(k)) continue;
     if (eqCoord(s, shapeData.center)) continue;
     seen.add(k);
     shields.push({ q: s.q, r: s.r });
@@ -279,6 +280,9 @@ export function handleIsolationProtocolMove(
   if (!shapeData.cellSet.has(shieldKey)) {
     return { state, winner: null, error: "Shield placed outside the field" };
   }
+  if (shapeData.borderSet.has(shieldKey)) {
+    return { state, winner: null, error: "Cannot shield a border cell" };
+  }
   if (eqCoord(shield, state.enemy)) {
     return { state, winner: null, error: "Cannot shield the enemy's current cell" };
   }
@@ -289,15 +293,17 @@ export function handleIsolationProtocolMove(
 
   // Apply the player's shield.
   const nextShields: HexCoord[] = [...state.shields, { q: shield.q, r: shield.r }];
-
-  // Check immediate win: enemy has no legal moves after this shield is placed.
   const newShieldSet = new Set(nextShields.map(keyOf));
-  const hasAnyMove = neighbors(state.enemy).some((n) => {
-    const k = keyOf(n);
-    return shapeData.cellSet.has(k) && !newShieldSet.has(k);
-  });
 
-  if (!hasAnyMove) {
+  // Win condition: the enemy is sealed off from every unshielded border cell.
+  // The player doesn't have to encircle the enemy adjacent-by-adjacent — once
+  // there's no path through unshielded cells from the enemy to any escape
+  // point, victory is decided regardless of whether the enemy could still hop
+  // around inside its sealed pocket.
+  const escapeDist = computeEscapeDistances(shapeData, newShieldSet);
+  const enemySealed = !escapeDist.has(keyOf(state.enemy));
+
+  if (enemySealed) {
     const newMoveCount = state.moveCount + 1;
     const event: IsolationMoveEvent = {
       moveCount: newMoveCount,
