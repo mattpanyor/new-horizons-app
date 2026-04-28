@@ -572,15 +572,15 @@ export default function ArcaneCardBoard({
                 : `${opponent?.name ?? "Opponent"}'s Turn`}
             </span>
             {canInteract && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-2">
                 <button
                   type="button"
                   onClick={() => submitMove("end-turn")}
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded border border-indigo-400/40 text-[9px] tracking-[0.2em] uppercase text-indigo-300/80 hover:text-indigo-200 hover:border-indigo-400/70 hover:bg-indigo-400/10 disabled:opacity-30 cursor-pointer transition-all"
+                  className="px-8 py-3 rounded border border-indigo-400/40 text-[13px] tracking-[0.3em] uppercase text-indigo-300/80 hover:text-indigo-200 hover:border-indigo-400/70 hover:bg-indigo-400/10 disabled:opacity-30 cursor-pointer transition-all"
                   style={cinzel}
                 >
-                  End Turn
+                  Call
                 </button>
                 <button
                   type="button"
@@ -595,7 +595,7 @@ export default function ArcaneCardBoard({
             )}
             {selectedCard && canInteract && (
               <p className="text-[8px] text-white/30" style={cinzel}>
-                Card selected — End Turn or Hold to play it
+                Card selected — Call or Hold to play it
               </p>
             )}
             {errorMsg && (
