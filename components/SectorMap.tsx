@@ -289,10 +289,14 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
     return () => window.removeEventListener("keydown", onKey);
   }, [planningActive, planningToggle, activeSystemSlug, exitSystem]);
 
-  // Auto-select system when zoomed in close enough (skip during animation)
+  // Auto-select system when zoomed in close enough (skip during animation).
+  // The state updates are deferred to the next macrotask so they don't run
+  // synchronously inside the effect body — keeps a one-frame delay at most,
+  // imperceptible to users panning/zooming.
   useEffect(() => {
     if (isAnimatingRef.current) return;
     const currentZoom = FULL_W / vb.w;
+    let target: string | null | undefined;
     if (currentZoom >= AUTO_SELECT_ZOOM && !activeSystemSlug) {
       const cx = vb.x + vb.w / 2;
       const cy = vb.y + vb.h / 2;
@@ -305,18 +309,21 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
         if (dist < bestDist) { bestDist = dist; best = pin; }
       }
       if (best && bestDist < Math.min(vb.w, vb.h) * 0.6) {
-        setActiveSystemSlug(best.slug);
-        setHoveredSlug(null);
-        hideBody();
+        target = best.slug;
       }
     } else if (activeSystemSlug) {
       const activeMinZoom = SYSTEM_OVERRIDES[activeSystemSlug]?.focusZoom ?? AUTO_SELECT_ZOOM;
       if (currentZoom < activeMinZoom * 0.8) {
-        setActiveSystemSlug(null);
-        setHoveredSlug(systemUnderCursor());
-        hideBody();
+        target = null;
       }
     }
+    if (target === undefined) return;
+    const id = setTimeout(() => {
+      setActiveSystemSlug(target);
+      setHoveredSlug(target === null ? systemUnderCursor() : null);
+      hideBody();
+    }, 0);
+    return () => clearTimeout(id);
   }, [vb, activeSystemSlug, sector.systems, hideBody, systemUnderCursor, isAnimatingRef]);
 
   const handleSvgClick = useCallback(() => {

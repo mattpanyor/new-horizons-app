@@ -28,6 +28,9 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
   const [selectedLayer, setSelectedLayer] = useState<ShipLayer | null>(null);
   const [hoveredBay, setHoveredBay] = useState<string | null>(null);
 
+  // Recursive rAF loop. Indirect the self-reference through a ref so the
+  // callback isn't reading its own binding inside its initializer.
+  const animateRef = useRef<((ts: number) => void) | null>(null);
   const animate = useCallback((timestamp: number) => {
     const { time: startTime, from } = animStartRef.current;
     const target = targetRef.current;
@@ -43,11 +46,14 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
     setProgress(value);
 
     if (rawT < 1) {
-      animRef.current = requestAnimationFrame(animate);
+      animRef.current = requestAnimationFrame(animateRef.current!);
     } else {
       animRef.current = null;
     }
   }, []);
+  // Keep the ref synced post-commit. `animate` is called from event handlers
+  // (post-mount), so the ref is always set by the time it's dereferenced.
+  useEffect(() => { animateRef.current = animate; }, [animate]);
 
   const startAnimation = useCallback(
     (target: 0 | 1) => {

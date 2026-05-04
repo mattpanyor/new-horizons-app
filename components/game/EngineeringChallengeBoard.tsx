@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { EngineeringChallengeConfig, EngineeringChallengeState, Position } from "@/types/game";
 import { WIRE_COLORS } from "@/lib/games/engineeringChallenge";
 import PlayerPortrait from "./PlayerPortrait";
@@ -56,18 +56,21 @@ export default function EngineeringChallengeBoard({
   const completedCount = state.wires.filter((w) => w.complete).length;
 
   // Build occupied cells map (excluding current wire being drawn)
-  const occupiedCells = new Set<string>();
-  for (const wire of state.wires) {
-    if (wire.wireIndex === selectedWire) continue;
-    for (const cell of wire.cells) {
-      occupiedCells.add(posKey(cell));
+  const occupiedCells = useMemo(() => {
+    const set = new Set<string>();
+    for (const wire of state.wires) {
+      if (wire.wireIndex === selectedWire) continue;
+      for (const cell of wire.cells) {
+        set.add(posKey(cell));
+      }
     }
-  }
-  for (let i = 0; i < pairs.length; i++) {
-    if (i === selectedWire) continue;
-    occupiedCells.add(posKey(pairs[i].a));
-    occupiedCells.add(posKey(pairs[i].b));
-  }
+    for (let i = 0; i < pairs.length; i++) {
+      if (i === selectedWire) continue;
+      set.add(posKey(pairs[i].a));
+      set.add(posKey(pairs[i].b));
+    }
+    return set;
+  }, [state.wires, selectedWire, pairs]);
 
   // Timer
   let timerDisplay = "";
@@ -93,13 +96,13 @@ export default function EngineeringChallengeBoard({
     }
   }
 
-  const getEndpointWire = (r: number, c: number): number => {
+  const getEndpointWire = useCallback((r: number, c: number): number => {
     for (let i = 0; i < pairs.length; i++) {
       if ((pairs[i].a[0] === r && pairs[i].a[1] === c) ||
           (pairs[i].b[0] === r && pairs[i].b[1] === c)) return i;
     }
     return -1;
-  };
+  }, [pairs]);
 
   // ─── Cell resolution from pointer/touch position ───
 
@@ -114,6 +117,51 @@ export default function EngineeringChallengeBoard({
     if (r < 0 || r >= gridRows || c < 0 || c >= gridCols) return null;
     return [r, c];
   }, [gridRows, gridCols]);
+
+  // ─── Server actions (declared before tryExtendPath/handlePointerDown
+  //     because those callbacks list them in their dep arrays) ───
+
+  const submitWire = useCallback(async (wireIndex: number, cells: Position[], complete: boolean) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/games/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.id,
+          action: "place-wire",
+          wireIndex,
+          cells,
+          complete,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.error("Wire placement failed:", data?.error);
+      }
+    } finally {
+      setSubmitting(false);
+      setSelectedWire(null);
+      setCurrentPath([]);
+    }
+  }, [session.id]);
+
+  const removeWire = useCallback(async (wireIndex: number) => {
+    setSubmitting(true);
+    try {
+      await fetch("/api/games/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.id,
+          action: "remove-wire",
+          wireIndex,
+        }),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [session.id]);
 
   // ─── Try to extend the current path to a cell ───
 
@@ -155,7 +203,7 @@ export default function EngineeringChallengeBoard({
     if (!occupiedCells.has(key) && !currentPath.some(([pr, pc]) => pr === r && pc === c)) {
       setCurrentPath([...currentPath, [r, c]]);
     }
-  }, [selectedWire, currentPath, pairs, occupiedCells]);
+  }, [selectedWire, currentPath, pairs, occupiedCells, getEndpointWire, submitWire]);
 
   // ─── Pointer/touch handlers ───
 
@@ -187,7 +235,7 @@ export default function EngineeringChallengeBoard({
       setIsDragging(true);
       tryExtendPath(r, c);
     }
-  }, [canInteract, selectedWire, state.wires, tryExtendPath]);
+  }, [canInteract, selectedWire, state.wires, tryExtendPath, getEndpointWire, removeWire]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent | React.TouchEvent) => {
     if (!isDragging || selectedWire === null) return;
@@ -228,48 +276,6 @@ export default function EngineeringChallengeBoard({
       setCurrentPath([]);
     }
   }, [canInteract, isDragging, selectedWire, currentPath, tryExtendPath]);
-
-  const submitWire = async (wireIndex: number, cells: Position[], complete: boolean) => {
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/games/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          action: "place-wire",
-          wireIndex,
-          cells,
-          complete,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        console.error("Wire placement failed:", data?.error);
-      }
-    } finally {
-      setSubmitting(false);
-      setSelectedWire(null);
-      setCurrentPath([]);
-    }
-  };
-
-  const removeWire = async (wireIndex: number) => {
-    setSubmitting(true);
-    try {
-      await fetch("/api/games/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          action: "remove-wire",
-          wireIndex,
-        }),
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const showPortraits = !!(player.character || opponent);
 

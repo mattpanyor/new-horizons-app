@@ -85,7 +85,13 @@ export function SearchOverlay({ sector, systemsData, onSelectSystem, onSelectBod
     ).slice(0, 6);
   }, [query, searchIndex]);
 
-  useEffect(() => { setHighlightIdx(0); }, [results]);
+  // Reset highlight when the result set changes — render-time pattern from
+  // React 19 docs (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  const [lastResults, setLastResults] = useState(results);
+  if (results !== lastResults) {
+    setLastResults(results);
+    setHighlightIdx(0);
+  }
 
   const close = useCallback(() => {
     setIsOpen(false);

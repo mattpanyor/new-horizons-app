@@ -32,7 +32,9 @@ export function usePlanningMode({ svgRef, zoom, isValidPoint }: UsePlanningModeO
 
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const waypointsRef = useRef<Waypoint[]>(waypoints);
-  waypointsRef.current = waypoints;
+  // Update after render (not during render) — handlers run on user events, which
+  // always fire after effects have flushed, so the synchronous reads are safe.
+  useEffect(() => { waypointsRef.current = waypoints; });
 
   /** Client-space position of the last rejected OOB click/tap, or null when no warning is showing */
   const [outOfBoundsPos, setOutOfBoundsPos] = useState<{ x: number; y: number } | null>(null);

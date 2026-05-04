@@ -173,7 +173,6 @@ export type GameType =
 export type GameStatus = "configured" | "launched" | "finished";
 
 // Generic config/state — the DB stores these as JSONB
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type GameConfig =
   | StormQueensFollyConfig
   | EngineeringChallengeConfig

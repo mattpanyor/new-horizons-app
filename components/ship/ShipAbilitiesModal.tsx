@@ -136,8 +136,12 @@ export default function ShipAbilitiesModal({
   const [selectedAbility, setSelectedAbility] = useState<ShipAbility | null>(null);
   const [closing, setClosing] = useState(false);
 
-  // Reset state when opening
-  useEffect(() => {
+  // Reset state when the modal opens. Render-time pattern instead of an effect
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders)
+  // so React applies all six state updates in a single re-render.
+  const [lastOpen, setLastOpen] = useState(open);
+  if (open !== lastOpen) {
+    setLastOpen(open);
     if (open) {
       setPhase("resize");
       setResizeProgress(0);
@@ -146,7 +150,7 @@ export default function ShipAbilitiesModal({
       setSelectedAbility(null);
       setClosing(false);
     }
-  }, [open]);
+  }
 
   // Phase 1: Resize animation
   useEffect(() => {
@@ -180,16 +184,20 @@ export default function ShipAbilitiesModal({
     return () => clearTimeout(t);
   }, [phase]);
 
-  // Phase 3: Icons appear one by one
+  // Phase 3: Icons appear one by one. The previous "done" phase was unread
+  // anywhere — once visibleIcons reaches the abilities count, the effect just
+  // stops scheduling new ticks.
   useEffect(() => {
     if (phase !== "icons") return;
-    if (visibleIcons >= abilities.length) {
-      setPhase("done");
-      return;
-    }
+    if (visibleIcons >= abilities.length) return;
     const t = setTimeout(() => setVisibleIcons((v) => v + 1), 120);
     return () => clearTimeout(t);
   }, [phase, visibleIcons, abilities.length]);
+
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => onClose(), 300);
+  }, [onClose]);
 
   // Escape key
   useEffect(() => {
@@ -202,12 +210,7 @@ export default function ShipAbilitiesModal({
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open, selectedAbility]);
-
-  const handleClose = useCallback(() => {
-    setClosing(true);
-    setTimeout(() => onClose(), 300);
-  }, [onClose]);
+  }, [open, selectedAbility, handleClose]);
 
   if (!open) return null;
 

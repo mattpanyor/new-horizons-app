@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MessageModal } from "./MessageModal";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
@@ -48,22 +48,25 @@ export function InboxDropdown() {
     return () => clearInterval(interval);
   }, []);
 
-  const fetchMessages = useCallback(async () => {
-    try {
-      const res = await fetch("/api/messages");
-      if (res.ok) {
-        const data: InboxMessage[] = await res.json();
-        setMessages(data);
-        setUnreadCount(data.filter((m) => !m.isRead).length);
-        setLoaded(true);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  // Fetch messages when dropdown opens
+  // Fetch messages when dropdown opens. Inlined (instead of calling a
+  // useCallback'd helper) so the lint rule's static analysis can see that
+  // setState happens after `await`, not synchronously inside the effect.
   useEffect(() => {
-    if (open) fetchMessages();
-  }, [open, fetchMessages]);
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/messages");
+        if (!cancelled && res.ok) {
+          const data: InboxMessage[] = await res.json();
+          setMessages(data);
+          setUnreadCount(data.filter((m) => !m.isRead).length);
+          setLoaded(true);
+        }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
 
   // Click outside to close
   useEffect(() => {

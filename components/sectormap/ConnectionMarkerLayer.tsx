@@ -67,7 +67,6 @@ export function ConnectionMarkerLayer({
         const rotAngle = marker.type === "ship" ? angle + 90 : angle - 180;
         const markerGradId = `conn-marker-${connIdx}`;
         const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
-        const colors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
         const shipSecondary = allegiance?.color ?? SHIP_COLORS.secondaryColor;
 
         return (
