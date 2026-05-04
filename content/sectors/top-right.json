@@ -28,6 +28,14 @@
       "y": 129,
       "layer": "story",
       "kankaUrl": "https://app.kanka.io/w/96303/entities/9073491"
+    },
+    {
+      "type": "poi",
+      "slug": "ambush-site",
+      "name": "Distress signal Ambush",
+      "x": 800,
+      "y": 500,
+      "layer": "story"
     }
   ],
   "connections": [
@@ -35,7 +43,7 @@
       "from": "ertamis",
       "to": "callisto",
       "curvature": 140,
-      "label": "Act II. - first chapter",
+      "label": "CH. I.",
       "color": "#8e8cff",
       "layer": "story"
     },
@@ -43,16 +51,32 @@
       "from": "callisto",
       "to": "aegis-found",
       "curvature": 80,
-      "label": "Act II. - first chapter",
+      "label": "CH. II.",
       "color": "#8e8cff",
       "layer": "story"
     },
     {
       "from": "aegis-found",
       "to": "pernat",
-      "label": "ACT II - second chapter",
+      "label": "CH. II.",
       "color": "#8e8cff",
       "curvature": 100,
+      "layer": "story"
+    },
+    {
+      "from": "pernat",
+      "to": "ambush-site",
+      "label": "CH. II.",
+      "color": "#8e8cff",
+      "curvature": 10,
+      "layer": "story"
+    },
+    {
+      "from": "ambush-site",
+      "to": "unkown-system",
+      "label": "CH. II.",
+      "color": "#8e8cff",
+      "curvature": 30,
       "layer": "story"
     },
     {
