@@ -113,6 +113,35 @@ export default function SectorsPage() {
           <GalacticMapBackground coreSector={coreSector} outerSectors={outerSectors} />
         </GalacticMap>
       </div>
+      <NavIcon href="/investigation" label="Investigation" position="bottom-right">
+        <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+          {/* Hex grid backdrop */}
+          <g strokeWidth="0.5" strokeOpacity="0.22">
+            <path d="M20 30 L26 26 L32 30 L32 38 L26 42 L20 38 Z" />
+            <path d="M32 38 L38 34 L44 38 L44 46 L38 50 L32 46 Z" />
+            <path d="M44 30 L50 26 L56 30 L56 38 L50 42 L44 38 Z" />
+            <path d="M56 38 L62 34 L68 38 L68 46 L62 50 L56 46 Z" />
+            <path d="M20 46 L26 42 L32 46 L32 54 L26 58 L20 54 Z" />
+            <path d="M44 46 L50 42 L56 46 L56 54 L50 58 L44 54 Z" />
+            <path d="M68 46 L74 42 L80 46 L80 54 L74 58 L68 54 Z" />
+            <path d="M32 54 L38 50 L44 54 L44 62 L38 66 L32 62 Z" />
+            <path d="M56 54 L62 50 L68 54 L68 62 L62 66 L56 62 Z" />
+          </g>
+          {/* Magnifying glass */}
+          <circle cx="42" cy="44" r="22" strokeWidth="2" />
+          <circle cx="42" cy="44" r="17" strokeWidth="0.5" strokeOpacity="0.45" />
+          <line x1="42" y1="32" x2="42" y2="56" strokeWidth="0.4" strokeOpacity="0.3" />
+          <line x1="30" y1="44" x2="54" y2="44" strokeWidth="0.4" strokeOpacity="0.3" />
+          <path d="M30 36 Q34 32, 40 32" strokeWidth="0.8" strokeOpacity="0.5" />
+          {/* Handle */}
+          <line x1="60" y1="62" x2="78" y2="80" strokeWidth="2.5" />
+          <line x1="58" y1="64" x2="76" y2="82" strokeWidth="0.6" strokeOpacity="0.4" />
+          {/* Clue sparks */}
+          <circle cx="36" cy="40" r="1.4" fill="currentColor" fillOpacity="0.55" stroke="none" />
+          <circle cx="46" cy="48" r="1" fill="currentColor" fillOpacity="0.45" stroke="none" />
+          <circle cx="50" cy="38" r="1.1" fill="currentColor" fillOpacity="0.5" stroke="none" />
+        </svg>
+      </NavIcon>
       <PresenceCard position="Galactic Map" />
     </>
   );

@@ -9,6 +9,52 @@ interface User {
   role: string | null;
   character: string | null;
   accessLevel: number;
+  imageUrl: string | null;
+  color: string | null;
+}
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+function ColorSwatch({ color }: { color: string | null }) {
+  if (!color) return <span className="text-white/25">—</span>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span
+        className="inline-block w-4 h-4 rounded-sm border border-white/15"
+        style={{ background: color }}
+      />
+      <span className="text-white/55 tabular-nums text-[11px] uppercase">{color}</span>
+    </span>
+  );
+}
+
+function ColorEditor({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const isValid = value === null || value === "" || HEX_RE.test(value ?? "");
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={value && HEX_RE.test(value) ? value : "#6366f1"}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-7 h-7 rounded border border-white/20 bg-transparent cursor-pointer p-0"
+        title="Pick color"
+      />
+      <input
+        type="text"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        placeholder="#aabbcc"
+        maxLength={7}
+        className={`w-24 bg-white/10 border rounded px-2 py-1 text-white text-sm focus:outline-none ${isValid ? "border-white/20 focus:border-white/40" : "border-red-500/50"}`}
+      />
+    </div>
+  );
 }
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
@@ -21,7 +67,7 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [addingUser, setAddingUser] = useState(false);
-  const [addForm, setAddForm] = useState({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0 });
+  const [addForm, setAddForm] = useState<{ username: string; password: string; group: string; role: string; character: string; accessLevel: number; imageUrl: string | null; color: string | null }>({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0, imageUrl: null, color: null });
   const [error, setError] = useState<string | null>(null);
 
   function startEdit(user: User) {
@@ -101,7 +147,7 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
 
   function startAdd() {
     setAddingUser(true);
-    setAddForm({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0 });
+    setAddForm({ username: "", password: "", group: "", role: "", character: "", accessLevel: 0, imageUrl: null, color: null });
     setEditingId(null);
     setConfirmDeleteId(null);
     setResetPasswordUser(null);
@@ -133,8 +179,8 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
   }
 
   const columns = canEditAccessLevel
-    ? ["Username", "Group", "Role", "Character", "Access Level", ""]
-    : ["Username", "Group", "Role", "Character", ""];
+    ? ["Username", "Group", "Role", "Character", "Image", "Color", "Access Level", ""]
+    : ["Username", "Group", "Role", "Character", "Image", "Color", ""];
 
   return (
     <div className="w-full max-w-6xl mx-auto">
@@ -192,6 +238,20 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
                         onChange={(e) => setEditForm({ ...editForm, character: e.target.value || null })}
                       />
                     </td>
+                    <td className="px-4 py-2">
+                      <input
+                        className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-white/40"
+                        placeholder="https://…"
+                        value={editForm.imageUrl ?? ""}
+                        onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value || null })}
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <ColorEditor
+                        value={editForm.color}
+                        onChange={(v) => setEditForm({ ...editForm, color: v })}
+                      />
+                    </td>
                     {canEditAccessLevel && (
                       <td className="px-4 py-2">
                         <input
@@ -232,6 +292,14 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
                     <td className="px-4 py-3 text-white/80">{user.group}</td>
                     <td className="px-4 py-3 text-white/60">{user.role ?? "—"}</td>
                     <td className="px-4 py-3 text-white/60">{user.character ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {user.imageUrl ? (
+                        <img src={user.imageUrl} alt="" className="w-6 h-6 rounded-full object-cover border border-white/15" />
+                      ) : (
+                        <span className="text-white/25">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3"><ColorSwatch color={user.color} /></td>
                     {canEditAccessLevel && (
                       <td className="px-4 py-3 text-white/60">{user.accessLevel}</td>
                     )}
@@ -347,6 +415,19 @@ export default function UsersTable({ initialUsers, canEditAccessLevel }: { initi
                 value={addForm.character}
                 onChange={(e) => setAddForm({ ...addForm, character: e.target.value })}
               />
+              <input
+                className="w-full bg-white/10 border border-white/20 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-white/40"
+                placeholder="Image URL (optional)"
+                value={addForm.imageUrl ?? ""}
+                onChange={(e) => setAddForm({ ...addForm, imageUrl: e.target.value || null })}
+              />
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-white/50 whitespace-nowrap">Color (optional)</label>
+                <ColorEditor
+                  value={addForm.color}
+                  onChange={(v) => setAddForm({ ...addForm, color: v })}
+                />
+              </div>
               {canEditAccessLevel && (
                 <div className="flex items-center gap-3">
                   <label className="text-sm text-white/50 whitespace-nowrap">Access Level</label>
