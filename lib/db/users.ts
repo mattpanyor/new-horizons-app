@@ -63,25 +63,57 @@ export async function getAllUsers(maxAccessLevel?: number): Promise<User[]> {
   return rows.map(rowToUser);
 }
 
+export async function getUserById(id: number): Promise<User | null> {
+  const rows = await sql`
+    SELECT id, username, "group", role, character, access_level, image_url, color
+    FROM users
+    WHERE id = ${id}
+  `;
+  return rows.length > 0 ? rowToUser(rows[0]) : null;
+}
+
+/**
+ * Updates only the columns whose values are explicitly provided. A field
+ * absent from `fields` is left untouched; passing `null` for a nullable field
+ * (role, character, imageUrl, color) explicitly clears it.
+ *
+ * This is the "only-touch-passed-fields" rule: callers can never silently
+ * wipe a column by forgetting to round-trip it.
+ */
 export async function updateUser(
   id: number,
-  fields: { username: string; group: string; role: string | null; character: string | null; accessLevel: number; imageUrl?: string | null; color?: string | null }
+  fields: Partial<{
+    username: string;
+    group: string;
+    role: string | null;
+    character: string | null;
+    accessLevel: number;
+    imageUrl: string | null;
+    color: string | null;
+  }>
 ): Promise<User | null> {
-  const rows = await sql`
-    UPDATE users SET
-      username     = ${fields.username},
-      "group"      = ${fields.group},
-      role         = ${fields.role},
-      character    = ${fields.character},
-      access_level = ${fields.accessLevel},
-      image_url    = ${fields.imageUrl ?? null},
-      color        = ${fields.color ?? null}
-    WHERE id = ${id}
-    RETURNING id, username, "group", role, character, access_level, image_url, color
-  `;
-
-  if (rows.length === 0) return null;
-  return rowToUser(rows[0]);
+  if (fields.username !== undefined) {
+    await sql`UPDATE users SET username = ${fields.username} WHERE id = ${id}`;
+  }
+  if (fields.group !== undefined) {
+    await sql`UPDATE users SET "group" = ${fields.group} WHERE id = ${id}`;
+  }
+  if (fields.role !== undefined) {
+    await sql`UPDATE users SET role = ${fields.role} WHERE id = ${id}`;
+  }
+  if (fields.character !== undefined) {
+    await sql`UPDATE users SET character = ${fields.character} WHERE id = ${id}`;
+  }
+  if (fields.accessLevel !== undefined) {
+    await sql`UPDATE users SET access_level = ${fields.accessLevel} WHERE id = ${id}`;
+  }
+  if (fields.imageUrl !== undefined) {
+    await sql`UPDATE users SET image_url = ${fields.imageUrl} WHERE id = ${id}`;
+  }
+  if (fields.color !== undefined) {
+    await sql`UPDATE users SET color = ${fields.color} WHERE id = ${id}`;
+  }
+  return getUserById(id);
 }
 
 export async function deleteUser(id: number): Promise<boolean> {

@@ -9,11 +9,19 @@ import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
+export interface PlayerInfo {
+  firstName: string;
+  imageUrl: string | null;
+}
+
 interface InvestigationBoardProps {
   chapters: Chapter[];
   initialChapter: number | null;
   initialClues: Clue[];
   accessLevel: number;
+  currentUsername: string;
+  initialPlayerTotals: Record<string, number>;
+  players: Record<string, PlayerInfo>;
 }
 
 export default function InvestigationBoard({
@@ -21,11 +29,15 @@ export default function InvestigationBoard({
   initialChapter,
   initialClues,
   accessLevel,
+  currentUsername,
+  initialPlayerTotals,
+  players,
 }: InvestigationBoardProps) {
   const [selectedChapter, setSelectedChapter] = useState<number | null>(initialChapter);
   const [clues, setClues] = useState<Clue[]>(initialClues);
   const [loading, setLoading] = useState(false);
   const [activeFactions, setActiveFactions] = useState<Set<string>>(new Set());
+  const [playerTotals, setPlayerTotals] = useState<Record<string, number>>(initialPlayerTotals);
 
   const canDelete = accessLevel >= 66;
 
@@ -48,6 +60,25 @@ export default function InvestigationBoard({
     if (activeFactions.size === 0) return clues;
     return clues.filter((c) => c.factionSlugs.some((s) => activeFactions.has(s)));
   }, [clues, activeFactions]);
+
+  // Per-player stats (only users present in `players` — i.e. accessLevel < 127
+  // per the server-side filter). Shows "this chapter / total".
+  const playerStats = useMemo(() => {
+    const thisChapter = new Map<string, number>();
+    for (const c of clues) {
+      if (!players[c.createdBy]) continue;
+      thisChapter.set(c.createdBy, (thisChapter.get(c.createdBy) ?? 0) + 1);
+    }
+    return Object.keys(players)
+      .map((username) => ({
+        username,
+        thisChapter: thisChapter.get(username) ?? 0,
+        total: playerTotals[username] ?? 0,
+        info: players[username],
+      }))
+      .filter((p) => p.total > 0 || p.thisChapter > 0)
+      .sort((a, b) => b.total - a.total || a.username.localeCompare(b.username));
+  }, [clues, playerTotals, players]);
 
   const toggleFaction = (slug: string) => {
     setActiveFactions((prev) => {
@@ -98,6 +129,10 @@ export default function InvestigationBoard({
     }
     const data = await res.json();
     setClues((prev) => [data.clue, ...prev]);
+    const author = data.clue?.createdBy ?? currentUsername;
+    if (players[author]) {
+      setPlayerTotals((prev) => ({ ...prev, [author]: (prev[author] ?? 0) + 1 }));
+    }
   };
 
   const handleSave = async (id: number, text: string, factionSlugs: string[]) => {
@@ -116,6 +151,7 @@ export default function InvestigationBoard({
   };
 
   const handleDelete = async (id: number) => {
+    const target = clues.find((c) => c.id === id);
     const res = await fetch(`/api/investigation/clues/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -123,6 +159,12 @@ export default function InvestigationBoard({
       return;
     }
     setClues((prev) => prev.filter((c) => c.id !== id));
+    if (target && players[target.createdBy]) {
+      setPlayerTotals((prev) => ({
+        ...prev,
+        [target.createdBy]: Math.max(0, (prev[target.createdBy] ?? 0) - 1),
+      }));
+    }
   };
 
   const noChapters = chapters.length === 0;
@@ -146,6 +188,49 @@ export default function InvestigationBoard({
               current={selectedChapter}
               onSelect={setSelectedChapter}
             />
+            {playerStats.length > 0 && (
+              <div className="flex flex-col items-end gap-1 ml-auto pb-1">
+                <span className="text-[8px] tracking-[0.3em] uppercase text-white/30" style={cinzel}>
+                  Chapter / Total
+                </span>
+                <div className="flex items-center flex-wrap justify-end gap-x-4 gap-y-2">
+                {playerStats.map((p) => {
+                  const firstName = p.info?.firstName ?? p.username;
+                  const imageUrl = p.info?.imageUrl ?? null;
+                  return (
+                    <div
+                      key={p.username}
+                      className="flex items-center gap-2"
+                      title={`${p.username} — ${p.thisChapter} this chapter / ${p.total} total`}
+                    >
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={firstName}
+                          className="w-5 h-5 rounded-full object-cover border border-white/15"
+                        />
+                      ) : (
+                        <span
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] uppercase border border-white/15 bg-white/5 text-white/55"
+                          style={cinzel}
+                        >
+                          {firstName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="text-[10px] tracking-[0.15em] uppercase text-white/65" style={cinzel}>
+                        {firstName}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-white/85" style={cinzel}>
+                        {p.thisChapter}
+                        <span className="text-white/30"> / </span>
+                        {p.total}
+                      </span>
+                    </div>
+                  );
+                })}
+                </div>
+              </div>
+            )}
           </div>
           <div className="w-32 h-px mt-3 bg-gradient-to-r from-indigo-400/60 via-indigo-400/20 to-transparent" />
 

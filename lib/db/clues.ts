@@ -49,15 +49,21 @@ export async function createClue(fields: {
   factionSlugs: string[];
   createdBy: string;
 }): Promise<Clue> {
+  // Single round-trip: INSERT then SELECT with the users join in one CTE.
   const rows = await sql`
-    INSERT INTO clues (chapter, text, faction_slugs, created_by)
-    VALUES (${fields.chapter}, ${fields.text}, ${fields.factionSlugs}, ${fields.createdBy})
-    RETURNING id, chapter, text, faction_slugs, created_by, created_at
+    WITH inserted AS (
+      INSERT INTO clues (chapter, text, faction_slugs, created_by)
+      VALUES (${fields.chapter}, ${fields.text}, ${fields.factionSlugs}, ${fields.createdBy})
+      RETURNING id, chapter, text, faction_slugs, created_by, created_at
+    )
+    SELECT
+      i.id, i.chapter, i.text, i.faction_slugs, i.created_by, i.created_at,
+      u.image_url AS creator_image_url,
+      u.color     AS creator_color
+    FROM inserted i
+    LEFT JOIN users u ON u.username = i.created_by
   `;
-  const inserted = rows[0];
-  // re-fetch with creator image join (small cost, single row)
-  const full = await getClueById(inserted.id as number);
-  return full!;
+  return rowToClue(rows[0]);
 }
 
 export async function updateClue(
@@ -80,4 +86,17 @@ export async function updateClue(
 export async function deleteClue(id: number): Promise<boolean> {
   const rows = await sql`DELETE FROM clues WHERE id = ${id} RETURNING id`;
   return rows.length > 0;
+}
+
+export async function getClueCountByUser(): Promise<Record<string, number>> {
+  const rows = await sql`
+    SELECT created_by, COUNT(*)::int AS count
+    FROM clues
+    GROUP BY created_by
+  `;
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    out[row.created_by as string] = row.count as number;
+  }
+  return out;
 }

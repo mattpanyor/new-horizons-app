@@ -3,7 +3,7 @@
 // Stored in clue text. Parsed at render time into clickable links to the
 // project's Kanka campaign.
 
-export const KANKA_CAMPAIGN_ID = "96303";
+import { kankaEntityUrl } from "@/lib/kanka";
 
 const MENTION_RE = /@\[([^\]]+)\]\(kanka:(\d+)\)/g;
 
@@ -37,7 +37,7 @@ export function parseClueText(text: string): ClueToken[] {
       kind: "mention",
       name,
       entityId,
-      url: `https://app.kanka.io/w/${KANKA_CAMPAIGN_ID}/entities/${entityId}`,
+      url: kankaEntityUrl(entityId),
     });
     lastIndex = MENTION_RE.lastIndex;
   }
@@ -48,7 +48,10 @@ export function parseClueText(text: string): ClueToken[] {
 }
 
 export function buildMentionMarkup(name: string, entityId: number): string {
-  // Strip ] from name to keep the markup parseable
-  const safeName = name.replace(/\]/g, "");
+  // Strip characters that would interfere with the markup syntax or render
+  // confusingly. `]` would terminate the name capture early; `[` `(` `)` look
+  // like part of the markup brackets and confuse readers when present in raw
+  // text. Newlines collapse to spaces so a mention always stays on one line.
+  const safeName = name.replace(/[[\]()]/g, "").replace(/\s+/g, " ").trim();
   return `@[${safeName}](kanka:${entityId})`;
 }

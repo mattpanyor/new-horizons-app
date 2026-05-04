@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getAllUsers, getUserByUsername, updateUser, deleteUser, resetPassword, createUser } from "@/lib/db/users";
+import { getUserByUsername, getUserById, getAllUsers, updateUser, deleteUser, resetPassword, createUser } from "@/lib/db/users";
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -89,19 +89,22 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Color must be a hex string like #aabbcc" }, { status: 400 });
   }
 
-  // Only users with access level >= 127 can change access levels
-  // Others must keep the existing value
-  let finalAccessLevel = accessLevel ?? 0;
-  if (admin.accessLevel < 127) {
-    // Fetch current user to preserve their access level
-    const allUsers = await getAllUsers(admin.accessLevel);
-    const target = allUsers.find((u) => u.id === id);
-    if (!target) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const target = await getUserById(id);
+  if (!target) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // Determine the access level to write. Only ≥127 admins may change it; for
+  // anyone else (or when the field is absent) the existing value is preserved.
+  let finalAccessLevel = target.accessLevel;
+  if (admin.accessLevel >= 127 && accessLevel !== undefined) {
+    if (typeof accessLevel !== "number" || !Number.isInteger(accessLevel) || accessLevel < 0) {
+      return NextResponse.json({ error: "Invalid access level" }, { status: 400 });
     }
-    finalAccessLevel = target.accessLevel;
-  } else if (finalAccessLevel > admin.accessLevel) {
-    return NextResponse.json({ error: "Cannot set access level higher than your own" }, { status: 403 });
+    if (accessLevel > admin.accessLevel) {
+      return NextResponse.json({ error: "Cannot set access level higher than your own" }, { status: 403 });
+    }
+    finalAccessLevel = accessLevel;
   }
 
   const updated = await updateUser(id, {

@@ -8,6 +8,29 @@ import { parseClueText } from "@/lib/investigation/clueText";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
+// Skip these when reducing a faction name to initials.
+const TAG_FILLER = new Set(["of", "and", "the", "for", "in", "on", "at", "to", "a", "an"]);
+
+// Per-slug overrides for the small badge shown on cards. Houses use the
+// post-"House" name's prefix instead of "HA"/"HF" etc.
+const TAG_OVERRIDES: Record<string, string> = {
+  ashford: "ASH",
+  fairfield: "FAIR",
+  feyrose: "FEY",
+  lenard: "LEN",
+};
+
+function factionShort(slug: string, name: string): string {
+  const override = TAG_OVERRIDES[slug];
+  if (override) return override;
+  return name
+    .split(/\s+/)
+    .filter((w) => w && !TAG_FILLER.has(w.toLowerCase()))
+    .map((w) => w.charAt(0))
+    .join("")
+    .toUpperCase();
+}
+
 function ClueTextWithMentions({ text }: { text: string }) {
   const tokens = parseClueText(text);
   return (
@@ -123,14 +146,15 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
         {clue.factionSlugs.map((slug) => {
           const f = ALLEGIANCES[slug as AllegianceKey];
           if (!f) return null;
+          const initials = factionShort(slug, f.name);
           return (
             <span
               key={slug}
               title={f.name}
-              className="shrink-0 text-[8px] tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-sm whitespace-nowrap"
+              className="shrink-0 text-[9px] tracking-[0.15em] uppercase px-1.5 py-0.5 rounded-sm whitespace-nowrap"
               style={{ ...cinzel, background: `${f.color}25`, color: f.color }}
             >
-              {f.name}
+              {initials}
             </span>
           );
         })}
