@@ -149,7 +149,7 @@ export default function EngineeringChallengeBoard({
   const removeWire = useCallback(async (wireIndex: number) => {
     setSubmitting(true);
     try {
-      await fetch("/api/games/move", {
+      const res = await fetch("/api/games/move", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -158,6 +158,10 @@ export default function EngineeringChallengeBoard({
           wireIndex,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.error("Wire removal failed:", res.status, data?.error);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -211,23 +215,25 @@ export default function EngineeringChallengeBoard({
     if (!canInteract) return;
     const epIdx = getEndpointWire(r, c);
 
+    // Click on existing wire (including its endpoints) to remove it.
+    // Must run before the "start new wire" branch so tapping a wired
+    // endpoint resets that wire instead of starting a second draw.
+    if (selectedWire === null) {
+      const existing = state.wires.find((w) =>
+        w.cells.some(([wr, wc]) => wr === r && wc === c)
+      ) ?? (epIdx >= 0 ? state.wires.find((w) => w.wireIndex === epIdx) : undefined);
+      if (existing) {
+        removeWire(existing.wireIndex);
+        return;
+      }
+    }
+
     // Start new wire from endpoint
     if (epIdx >= 0 && selectedWire === null) {
       setSelectedWire(epIdx);
       setCurrentPath([[r, c]]);
       setIsDragging(true);
       return;
-    }
-
-    // Click on existing wire to remove
-    if (selectedWire === null) {
-      const existing = state.wires.find((w) =>
-        w.cells.some(([wr, wc]) => wr === r && wc === c)
-      );
-      if (existing) {
-        removeWire(existing.wireIndex);
-        return;
-      }
     }
 
     // If already drawing, start dragging from current position
