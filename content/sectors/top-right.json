@@ -90,6 +90,18 @@
         "position": 0.2,
         "allegiance": "exploratorium"
       }
+    },
+    {
+      "from": "pernat",
+      "to": "unkown-system",
+      "layer": "movement",
+      "curvature": -30,
+      "marker": {
+        "type": "ship",
+        "name": "Aegis",
+        "position": 0.33,
+        "allegiance": "exploratorium"
+      }
     }
   ],
   "systems": [

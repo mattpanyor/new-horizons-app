@@ -26,15 +26,6 @@
       "special_attribute": "cult"
     },
     {
-      "id": "aegis",
-      "name": "Aegis",
-      "type": "ship",
-      "orbitPosition": 150,
-      "orbitDistance": 0.6,
-      "labelPosition": "top",
-      "allegiance": "exploratorium"
-    },
-    {
       "id": "menlar-2",
       "name": "Menlar 2",
       "type": "planet",
@@ -66,7 +57,7 @@
       "type": "ship",
       "orbitPosition": 110,
       "orbitDistance": 0.63,
-      "labelPosition": "bottom",
+      "labelPosition": "top",
       "allegiance": "inquisitorium"
     }
   ]
