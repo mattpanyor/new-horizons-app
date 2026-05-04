@@ -28,13 +28,21 @@ async function getUser() {
   return getUserByUsername(username);
 }
 
-const MIN_ACCESS: Record<string, number> = {
+const MIN_VIEW_ACCESS: Record<string, number> = {
+  cargo: 0,
+  isolation: 0,
+};
+const MIN_EDIT_ACCESS: Record<string, number> = {
   cargo: 0,
   isolation: 1,
 };
 
-function canAccess(accessLevel: number, category: string): boolean {
-  return accessLevel >= (MIN_ACCESS[category] ?? 999);
+function canView(accessLevel: number, category: string): boolean {
+  return accessLevel >= (MIN_VIEW_ACCESS[category] ?? 999);
+}
+
+function canEdit(accessLevel: number, category: string): boolean {
+  return accessLevel >= (MIN_EDIT_ACCESS[category] ?? 999);
 }
 
 async function parseBody(req: NextRequest) {
@@ -56,7 +64,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
 
-  if (!canAccess(user.accessLevel, category)) {
+  if (!canView(user.accessLevel, category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -80,7 +88,7 @@ export async function POST(req: NextRequest) {
   if (category !== "cargo" && category !== "isolation") {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
-  if (!canAccess(user.accessLevel, category)) {
+  if (!canEdit(user.accessLevel, category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!itemType || typeof itemType !== "string" || !isValidItemType(category, itemType)) {
@@ -129,7 +137,7 @@ export async function PUT(req: NextRequest) {
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (!canAccess(user.accessLevel, existing.category)) {
+  if (!canEdit(user.accessLevel, existing.category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -184,7 +192,7 @@ export async function DELETE(req: NextRequest) {
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (!canAccess(user.accessLevel, existing.category)) {
+  if (!canEdit(user.accessLevel, existing.category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
