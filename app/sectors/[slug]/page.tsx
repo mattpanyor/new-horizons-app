@@ -5,7 +5,7 @@ import { getStarSystemBySlug } from "@/lib/starsystems";
 import { getKankaUrlMap } from "@/lib/db/kankaEntities";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import StarSystemBackground from "@/components/StarSystemBackground";
-import SectorMapWithPresence from "@/components/SectorMapWithPresence";
+import SectorMap from "@/components/SectorMap";
 import { SectorMapNebula } from "@/components/sectormap/SectorMapNebula";
 import { SectorMapGrid } from "@/components/sectormap/SectorMapGrid";
 import { SectorMapSvgLayer } from "@/components/sectormap/SectorMapSvgLayer";
@@ -80,7 +80,7 @@ export default async function SectorPage({
         </div>
 
         <div className="flex-1 min-h-0">
-          <SectorMapWithPresence
+          <SectorMap
             sector={sector}
             systemsData={systemsData}
             staticSvgLayers={
@@ -89,7 +89,7 @@ export default async function SectorPage({
           >
             <SectorMapNebula nebulaColor={sector.nebulaColor ?? sector.color} sectorColor={sector.color} />
             <SectorMapGrid />
-          </SectorMapWithPresence>
+          </SectorMap>
         </div>
       </div>
     </>

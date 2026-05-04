@@ -35,7 +35,6 @@ const noopStr = (_: string | null) => {};
 interface SectorMapProps {
   sector: SectorMetadata;
   systemsData?: Record<string, StarSystemMetadata>;
-  onSystemChange?: (slug: string | null) => void;
   children?: React.ReactNode;
   staticSvgLayers: React.ReactNode;
 }
@@ -96,7 +95,7 @@ function computeContentViewBox(sector: SectorMetadata): { x: number; y: number; 
   return { x: cxContent - finalW / 2, y: cyContent - finalH / 2, w: finalW, h: finalH };
 }
 
-export default function SectorMap({ sector, systemsData = {}, onSystemChange, children, staticSvgLayers }: SectorMapProps) {
+export default function SectorMap({ sector, systemsData = {}, children, staticSvgLayers }: SectorMapProps) {
   const initialViewBox = useMemo(() => computeContentViewBox(sector), [sector]);
 
   const {
@@ -160,10 +159,6 @@ export default function SectorMap({ sector, systemsData = {}, onSystemChange, ch
     cardEnter: markerCardEnter, cardLeave: markerCardLeave,
     activeIdRef: activeMarkerIdRef, hideNow: hideMarker,
   } = useSvgTooltipTimer();
-
-  useEffect(() => {
-    onSystemChange?.(activeSystemSlug);
-  }, [activeSystemSlug, onSystemChange]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent) => {
     cursorClientRef.current = { x: e.clientX, y: e.clientY };

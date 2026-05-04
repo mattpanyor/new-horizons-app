@@ -2,7 +2,6 @@ import { getAllSectors } from "@/lib/sectors";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import GalacticMap from "@/components/GalacticMap";
 import { GalacticMapBackground } from "@/components/galacticmap/GalacticMapBackground";
-import PresenceCard from "@/components/PresenceCard";
 import NavIcon from "@/components/NavIcon";
 
 export default function SectorsPage() {
@@ -142,7 +141,6 @@ export default function SectorsPage() {
           <circle cx="50" cy="38" r="1.1" fill="currentColor" fillOpacity="0.5" stroke="none" />
         </svg>
       </NavIcon>
-      <PresenceCard position="Galactic Map" />
     </>
   );
 }

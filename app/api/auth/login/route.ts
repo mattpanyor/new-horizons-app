@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set("nh_user", username, {
-    httpOnly: false, // readable client-side for presence tracking
+    httpOnly: true,
     path: "/",
     maxAge: 60 * 60 * 5, // 5 hours
     sameSite: "lax",

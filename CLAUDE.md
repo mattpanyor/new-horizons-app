@@ -101,7 +101,6 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 - Neon Postgres (serverless) for users, messages, and Kanka entities
 - Cookie-based auth: `nh_user` cookie stores username, validated against DB
 - Access levels: 0 (user), 66 (admin), 127 (superadmin)
-- In-memory presenceMap (volatile), 30s stale timeout, 5s client polling
 - SVG-based interactive maps with gradient patterns
 - Images served from Vercel Blob storage (faction logos, ship bay images)
 
@@ -109,8 +108,8 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 
 - `/` - Auth check -> WelcomeScreen -> redirect to /sectors
 - `/login` - LoginPage
-- `/sectors` - GalacticMap + PresenceCard
-- `/sectors/[slug]` - SectorMapWithPresence
+- `/sectors` - GalacticMap
+- `/sectors/[slug]` - SectorMap
 - `/ship` - Ship viewer with interactive deck layers and bay modals
 - `/admin/users` - User management (accessLevel >= 66)
 - `/admin/messages` - Message admin panel (accessLevel >= 127)
@@ -119,7 +118,6 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 ## API Routes
 
 - POST `/api/auth/login`, POST `/api/auth/logout` - Authentication
-- GET/POST `/api/presence` - Presence tracking
 - GET `/api/messages` - User messages (enriched with Kanka entity data)
 - GET `/api/messages/unread-count` - Unread message count
 - PATCH `/api/messages/read` - Mark message as read
@@ -155,7 +153,6 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 ## Constraints
 
 - GalacticMap supports 5 sector positions (hardcoded layout)
-- Presence tracking is in-memory only (lost on server restart)
 - No tests or CI configured
 - Sector coordinates: canvas-space x(0-1200) y(0-800)
 - Body orbit: orbitDistance(0-1 normalized), orbitPosition(0-360 degrees)
