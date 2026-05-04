@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   role       VARCHAR(100),
   character  VARCHAR(100),
   access_level INTEGER NOT NULL DEFAULT 0,
-  image_url    TEXT
+  image_url    TEXT,
+  color        VARCHAR(7)
 );
 
 CREATE TABLE IF NOT EXISTS ship_items (
@@ -22,6 +23,21 @@ CREATE TABLE IF NOT EXISTS ship_items (
   description TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS chapters (
+  number  INTEGER PRIMARY KEY,
+  title   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS clues (
+  id            SERIAL PRIMARY KEY,
+  chapter       INTEGER NOT NULL REFERENCES chapters(number) ON DELETE CASCADE,
+  text          TEXT NOT NULL,
+  faction_slugs TEXT[] NOT NULL DEFAULT '{}',
+  created_by    TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS clues_chapter_created_at_idx ON clues (chapter, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS game_sessions (
   id                SERIAL PRIMARY KEY,

@@ -13,11 +13,12 @@ interface Props {
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
-const adminPages = [
+const adminPages: { label: string; href: string; minLevel?: number }[] = [
   { label: "Home", href: "/sectors" },
   { label: "User Management", href: "/admin/users" },
   { label: "Messages", href: "/admin/messages" },
   { label: "Games", href: "/admin/games" },
+  { label: "Investigation", href: "/admin/investigation", minLevel: 127 },
   { label: "CDN Manager", href: "/admin/cdn" },
   { label: "Kanka Sync", href: "/admin/kanka" },
 ];
@@ -107,16 +108,18 @@ export default function Navbar({ username, character, role, group, accessLevel =
                 className="absolute right-0 top-full mt-2 min-w-[180px] rounded-lg border border-white/10 bg-gray-950/95 backdrop-blur-md shadow-2xl shadow-black/50 overflow-hidden z-50"
                 onMouseLeave={() => setAdminOpen(false)}
               >
-                {adminPages.map((page) => (
-                  <a
-                    key={page.href}
-                    href={page.href}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-all duration-200"
-                    style={cinzel}
-                  >
-                    <span className="text-[11px] tracking-[0.15em]">{page.label}</span>
-                  </a>
-                ))}
+                {adminPages
+                  .filter((page) => accessLevel >= (page.minLevel ?? 66))
+                  .map((page) => (
+                    <a
+                      key={page.href}
+                      href={page.href}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-all duration-200"
+                      style={cinzel}
+                    >
+                      <span className="text-[11px] tracking-[0.15em]">{page.label}</span>
+                    </a>
+                  ))}
                 <div className="border-t border-white/10" />
                 <a
                   href="/logout"

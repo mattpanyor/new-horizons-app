@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAllUsers, getUserByUsername, updateUser, deleteUser, resetPassword, createUser } from "@/lib/db/users";
 
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Returns:
+ *   - { value: string | null } when input is valid (string = canonical lowercase hex; null = explicit clear)
+ *   - { invalid: true } when a non-empty string was provided that doesn't match #RRGGBB
+ */
+function parseColor(input: unknown): { value: string | null } | { invalid: true } {
+  if (input === null || input === undefined || input === "") return { value: null };
+  if (typeof input !== "string") return { invalid: true };
+  if (!HEX_RE.test(input)) return { invalid: true };
+  return { value: input.toLowerCase() };
+}
+
 async function requireAdmin() {
   const cookieStore = await cookies();
   const username = cookieStore.get("nh_user")?.value;
@@ -27,10 +41,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { username, password, group, role, character, accessLevel } = await req.json();
+  const { username, password, group, role, character, accessLevel, imageUrl, color } = await req.json();
 
   if (!username || !password || !group) {
     return NextResponse.json({ error: "Missing required fields (username, password, group)" }, { status: 400 });
+  }
+
+  const colorParse = parseColor(color);
+  if ("invalid" in colorParse) {
+    return NextResponse.json({ error: "Color must be a hex string like #aabbcc" }, { status: 400 });
   }
 
   const finalAccessLevel = admin.accessLevel >= 127 ? (accessLevel ?? 0) : 0;
@@ -43,6 +62,8 @@ export async function POST(req: NextRequest) {
       role: role || null,
       character: character || null,
       accessLevel: finalAccessLevel,
+      imageUrl: imageUrl || null,
+      color: colorParse.value,
     });
     return NextResponse.json(user);
   } catch {
@@ -57,10 +78,15 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, username, group, role, character, accessLevel } = body;
+  const { id, username, group, role, character, accessLevel, imageUrl, color } = body;
 
   if (!id || !username || !group) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const colorParse = parseColor(color);
+  if ("invalid" in colorParse) {
+    return NextResponse.json({ error: "Color must be a hex string like #aabbcc" }, { status: 400 });
   }
 
   // Only users with access level >= 127 can change access levels
@@ -84,6 +110,8 @@ export async function PUT(req: NextRequest) {
     role: role || null,
     character: character || null,
     accessLevel: finalAccessLevel,
+    imageUrl: imageUrl || null,
+    color: colorParse.value,
   });
 
   if (!updated) {

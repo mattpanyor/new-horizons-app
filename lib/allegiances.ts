@@ -22,7 +22,7 @@ export const ALLEGIANCES = {
   },
   imperial: {
     name: "Imperial",
-    color: "#EC4899",
+    color: "#FFE87A",
     logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/feyrose_logo.png",
   },
   lenard: {
@@ -49,6 +49,16 @@ export const ALLEGIANCES = {
     name: "Inquisitorium",
     color: "#FFD700",
     logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/inquisitorium_logo.png",
+  },
+  alien_feral: {
+    name: "Unkown Alien - feral",
+    color: "#AADD33",
+    logo: ""
+  },
+  alien_int: {
+    name: "Unkown Alien - intelligent",
+    color: "#8B5CF6",
+    logo: ""
   }
 } as const satisfies Record<string, Allegiance>;
 
