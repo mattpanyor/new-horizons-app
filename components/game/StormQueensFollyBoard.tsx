@@ -116,7 +116,18 @@ export default function StormQueensFollyBoard({
   // Replay always starts from the configured initialBoard. Type guarantees this
   // exists on every session — no fallback to state.board, which would
   // double-apply moveHistory on top of an already-advanced position.
-  const replayBoard: Board = sqfConfig.initialBoard;
+  //
+  // Memoized on JSON content, not on the raw array reference. Polling
+  // re-deserializes session.config every 2s, producing a new initialBoard
+  // array even when content is unchanged. Without this stabilization, every
+  // poll would change replayBoard's identity, re-run the animation effect,
+  // and clear in-flight move timers — manifesting as missing AI animations
+  // for the player while observers see them fine.
+  const initialBoardJson = JSON.stringify(sqfConfig.initialBoard);
+  const replayBoard = useMemo<Board>(
+    () => JSON.parse(initialBoardJson) as Board,
+    [initialBoardJson]
+  );
 
   // latestState mirrors IP/AC: ingested from polling AND from POST responses,
   // so the player's own move animates immediately instead of waiting on the
@@ -128,7 +139,15 @@ export default function StormQueensFollyBoard({
   const [latestState, setLatestState] = useState<StormQueensFollyState>(sqfState);
 
   useEffect(() => {
-    if (sqfState.moveHistory.length >= latestState.moveHistory.length) {
+    // Accept the polled state when it moved forward (new moves) OR when it
+    // reset to an empty history. The reset clause covers admin "relaunch":
+    // session.id stays the same so the parent's key={session.id} doesn't
+    // remount us, and without this branch we'd cling to the previous game's
+    // end-state because length 0 < latestState's length.
+    if (
+      sqfState.moveHistory.length >= latestState.moveHistory.length ||
+      sqfState.moveHistory.length === 0
+    ) {
       setLatestState(sqfState);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,7 +194,13 @@ export default function StormQueensFollyBoard({
     const lastKnown = lastMoveCountRef.current;
     const newMoves = history.slice(lastKnown);
 
-    if (newMoves.length === 0) return;
+    if (newMoves.length === 0) {
+      // History shrank (admin relaunched mid-animation). The cleanup from the
+      // previous run cleared the pending setAnimating(false) timer, so we must
+      // clear it here or canInteract stays false on the fresh game.
+      setAnimating(false);
+      return;
+    }
 
     animTimeoutsRef.current.forEach((t) => clearTimeout(t));
     animTimeoutsRef.current = [];
@@ -217,7 +242,12 @@ export default function StormQueensFollyBoard({
       animTimeoutsRef.current.forEach((t) => clearTimeout(t));
       animTimeoutsRef.current = [];
     };
-  }, [latestState, replayBoard]);
+    // Depend on length, not the latestState reference. Polling re-creates the
+    // state object every 2s; if we depended on the reference, an in-flight
+    // animation's cleanup would clear the staggered AI move and the final
+    // setAnimating(false) timer, leaving animating=true and canInteract=false.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestState.moveHistory.length, replayBoard]);
 
   // Resync display whenever the authoritative history is SHORTER than what
   // we've already animated. That covers (a) first-mount with empty history and
