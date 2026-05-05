@@ -59,6 +59,7 @@ export default function ClueEditor({
   const [busy, setBusy] = useState(false);
   const [mention, setMention] = useState<MentionState | null>(null);
   const [entities, setEntities] = useState<MentionEntity[]>([]);
+  const [factionError, setFactionError] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const highlighterInnerRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +122,14 @@ export default function ClueEditor({
       return;
     }
 
+    // Player-facing rule: every clue must be tagged with at least one faction.
+    // Show the error inline and keep the editor open so the user doesn't lose
+    // their typed text when click-outside attempts to commit.
+    if (factionSlugs.length === 0) {
+      setFactionError(true);
+      return;
+    }
+
     setBusy(true);
     try {
       await onSave(trimmed, factionSlugs);
@@ -128,6 +137,11 @@ export default function ClueEditor({
       setBusy(false);
     }
   }, [busy, text, factionSlugs, emptyMeansCancel, isUnchanged, onSave, onCancel]);
+
+  // Clear the error as soon as the user picks a faction.
+  useEffect(() => {
+    if (factionSlugs.length > 0) setFactionError(false);
+  }, [factionSlugs]);
 
   // Click outside → commit (save or close)
   useEffect(() => {
@@ -268,6 +282,14 @@ export default function ClueEditor({
         selected={factionSlugs}
         onChange={setFactionSlugs}
       />
+      {factionError && (
+        <p
+          className="text-[8px] tracking-[0.2em] uppercase text-red-400/80"
+          style={cinzel}
+        >
+          Tag at least one faction to save.
+        </p>
+      )}
       <p className="text-[7px] tracking-[0.2em] uppercase text-white/25 mt-1" style={cinzel}>
         Click outside to save · Esc to cancel · @ to mention
       </p>

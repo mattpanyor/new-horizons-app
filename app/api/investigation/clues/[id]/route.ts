@@ -63,6 +63,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (slugs === null) {
       return NextResponse.json({ error: "Invalid faction slugs" }, { status: 400 });
     }
+    if (slugs.length === 0) {
+      return NextResponse.json({ error: "Tag at least one faction" }, { status: 400 });
+    }
     fields.factionSlugs = slugs;
   }
 

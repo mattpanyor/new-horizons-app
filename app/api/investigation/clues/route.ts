@@ -68,6 +68,9 @@ export async function POST(req: NextRequest) {
   if (slugs === null) {
     return NextResponse.json({ error: "Invalid faction slugs" }, { status: 400 });
   }
+  if (slugs.length === 0) {
+    return NextResponse.json({ error: "Tag at least one faction" }, { status: 400 });
+  }
 
   let targetChapter: number;
   if (chapterInput === undefined || chapterInput === null) {
