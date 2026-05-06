@@ -25,6 +25,10 @@ import {
   getDefaultConfig as ipDefaultConfig,
   getDefaultState as ipDefaultState,
 } from "./isolationProtocol";
+import {
+  getDefaultConfig as scDefaultConfig,
+  getDefaultState as scDefaultState,
+} from "./spaceCombat";
 
 export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
   "storm-queens-folly": {
@@ -93,6 +97,18 @@ export const GAME_REGISTRY: Record<GameType, GameDefinition> = {
       spectatorWin: "The cordon holds.",
       spectatorLose: "The cordon has broken.",
       draw: "The hunt is inconclusive.",
+    },
+  },
+  "space-combat": {
+    label: "Space Combat",
+    getDefaultConfig: scDefaultConfig,
+    getDefaultState: scDefaultState,
+    victoryText: {
+      playerWin: "—",
+      playerLose: "—",
+      spectatorWin: "—",
+      spectatorLose: "—",
+      draw: "—",
     },
   },
 };

@@ -202,6 +202,7 @@ export default function GamesPanel() {
   const [formRoundCount, setFormRoundCount] = useState<1 | 3 | 5>(3);
   const [formIPShape, setFormIPShape] = useState<IsolationShape>("hexagonal");
   const [formIPShields, setFormIPShields] = useState<HexCoord[]>([]);
+  const [formCombatLabel, setFormCombatLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Player dropdown
@@ -300,6 +301,14 @@ export default function GamesPanel() {
               shape: formIPShape,
               initialShields: formIPShields,
             }
+          : formGameType === "space-combat"
+          ? {
+              gameType: formGameType,
+              designatedPlayer: formPlayer,
+              commanderUsername: formPlayer,
+              label: formCombatLabel.trim() || undefined,
+              opponentEntityId: null,
+            }
           : {
               gameType: formGameType,
               designatedPlayer: formPlayer,
@@ -319,6 +328,7 @@ export default function GamesPanel() {
     setCreating(false);
     setFormBoard(getDefaultBoard());
     setFormIPShields([]);
+    setFormCombatLabel("");
     await fetchData();
   };
 
@@ -408,6 +418,10 @@ export default function GamesPanel() {
                       if (t === "isolation-protocol") {
                         setFormIPShape("hexagonal");
                         setFormIPShields([]);
+                      }
+                      if (t === "space-combat") {
+                        setFormCombatLabel("");
+                        setFormEntity(null);
                       }
                     }}
                     className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.1em] uppercase cursor-pointer transition-all ${
@@ -548,10 +562,26 @@ export default function GamesPanel() {
             </div>
           )}
 
-          {/* Designated player */}
+          {/* Space Combat: scenario label */}
+          {formGameType === "space-combat" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+                Scenario Name (optional)
+              </label>
+              <input
+                className="w-full bg-white/10 border border-white/20 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-white/40"
+                placeholder="e.g. Ambush at Pernat"
+                value={formCombatLabel}
+                onChange={(e) => setFormCombatLabel(e.target.value)}
+                maxLength={80}
+              />
+            </div>
+          )}
+
+          {/* Designated player (a.k.a. Commander for Space Combat) */}
           <div className="flex flex-col gap-1">
             <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
-              Designated Player
+              {formGameType === "space-combat" ? "Commander" : "Designated Player"}
             </label>
             <div className="relative" ref={playerDropdownRef}>
               <input
@@ -602,7 +632,8 @@ export default function GamesPanel() {
             </div>
           </div>
 
-          {/* Opponent entity */}
+          {/* Opponent entity (hidden for space-combat — irrelevant) */}
+          {formGameType !== "space-combat" && (
           <div className="flex flex-col gap-1">
             <label className="text-[8px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
               Opponent (Kanka Character)
@@ -662,6 +693,7 @@ export default function GamesPanel() {
               )}
             </div>
           </div>
+          )}
 
           {/* SQF: Board setup */}
           {formGameType === "storm-queens-folly" && (

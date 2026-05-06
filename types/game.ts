@@ -162,6 +162,49 @@ export interface IsolationProtocolState {
   recentMoves: IsolationMoveEvent[]; // last ~24 events, oldest first — for spectator replay
 }
 
+// ─── Space Combat config & state ───
+
+export type CombatRangeBand = "up-close" | "close" | "medium" | "far" | "very-far";
+export type CombatFace = "bow" | "stern" | "port" | "starboard" | "dorsal" | "ventral";
+export type CombatSizeClass =
+  | "corvette"
+  | "frigate"
+  | "destroyer"
+  | "cruiser"
+  | "battlecruiser"
+  | "object";
+
+export interface CombatEnemyShip {
+  id: string;
+  sizeClass: CombatSizeClass;
+  label: string;
+  factionId: string | null;        // references lib/combat/factions.ts; null → render white
+  range: CombatRangeBand;
+  azimuthDeg: number;              // 0..360, 0 = +X (north), increases clockwise from above
+  elevationDeg: number;            // -90..90, 0 = equator, +90 = directly above player
+  facing: CombatFace;              // which face of the enemy points at the player
+}
+
+export interface CombatPlacedHighlight {
+  weaponId: string;
+  axis: { x: number; y: number; z: number };  // unit vector from origin
+  color: string;                               // resolved at write-time (users.color or default)
+}
+
+export interface SpaceCombatConfig {
+  commanderUsername: string;
+  label?: string;                  // optional scenario name
+  opponentEntityId: null;          // unused, kept null for GamesPanel uniformity
+}
+
+export interface SpaceCombatState {
+  phase: "player" | "gm";
+  enemies: CombatEnemyShip[];
+  weaponHighlights: Record<string, CombatPlacedHighlight | null>;
+  moveCount: number;
+  prevEnemies?: CombatEnemyShip[]; // pre-EndTurn snapshot, drives client animation
+}
+
 // ─── Session ───
 
 export type GameType =
@@ -169,7 +212,8 @@ export type GameType =
   | "engineering-challenge"
   | "rune-poker"
   | "arcane-card"
-  | "isolation-protocol";
+  | "isolation-protocol"
+  | "space-combat";
 export type GameStatus = "configured" | "launched" | "finished";
 
 // Generic config/state — the DB stores these as JSONB
@@ -179,6 +223,7 @@ export type GameConfig =
   | RunePokerConfig
   | ArcaneCardConfig
   | IsolationProtocolConfig
+  | SpaceCombatConfig
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | Record<string, any>;
 export type GameState =
@@ -187,6 +232,7 @@ export type GameState =
   | RunePokerState
   | ArcaneCardState
   | IsolationProtocolState
+  | SpaceCombatState
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | Record<string, any>;
 
@@ -222,6 +268,11 @@ export interface ActiveGameResponse {
     imageUrl: string | null;
     title: string | null;
   } | null;
+  viewer: {
+    username: string;
+    color: string | null;
+    accessLevel: number;
+  };
 }
 
 export interface NoActiveGameResponse {

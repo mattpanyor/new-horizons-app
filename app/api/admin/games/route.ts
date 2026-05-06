@@ -165,6 +165,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // For Space Combat: commander = designated player; sanitize optional label.
+  if (resolvedType === "space-combat") {
+    const rawLabel =
+      typeof gameConfig.label === "string" ? gameConfig.label.trim() : "";
+    config = {
+      ...config,
+      commanderUsername: designatedPlayer,
+      label: rawLabel || undefined,
+      opponentEntityId: null,
+    };
+  }
+
   const session = await createGameSession({
     gameType: resolvedType,
     config,
