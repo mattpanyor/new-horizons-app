@@ -1,13 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Environment, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
   CAMERA_INITIAL_DISTANCE,
   CAMERA_MAX_DISTANCE,
   CAMERA_MIN_DISTANCE,
 } from "@/lib/combat/ranges";
+import { buildStarfield } from "@/lib/combat/buildSkybox";
 import type {
   CombatEnemyShip,
   CombatFace,
@@ -107,6 +109,11 @@ export default function Scene({
   const shownFace = hoveredFace ?? activeFace;
   const shownRange = hoveredRange ?? activeRange;
 
+  // Build the starfield texture once on mount. Shared between the visible
+  // skybox sphere and the PMREM-filtered environment map (image-based
+  // lighting on metallic ship surfaces).
+  const [skyboxTexture] = useState<THREE.Texture | null>(() => buildStarfield());
+
   // Hemisphere check — when a face is active, ships on the opposite half are
   // marked as `dim` so they render in a darkened palette. We don't hide them;
   // the player still wants to know they're there, just visually demoted while
@@ -119,26 +126,57 @@ export default function Scene({
   };
   return (
     <Canvas
+      shadows
       camera={{
         position: [0, CAMERA_INITIAL_DISTANCE, 0.001],  // tiny offset avoids gimbal lock
         fov: 50,
         near: 0.1,
         far: CAMERA_MAX_DISTANCE * 8,
       }}
-      gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
+      gl={{
+        antialias: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.0,
+      }}
       onCreated={({ gl }) => {
-        // Enable per-material clipping planes (used by FaceFilterOverlay's
+        // Per-material clipping planes (used by FaceFilterOverlay's
         // half-space darken effect). Renderer property, not a constructor arg.
         gl.localClippingEnabled = true;
+        // Soft shadow filtering — much nicer than the default hard PCF.
+        gl.shadowMap.type = THREE.PCFSoftShadowMap;
       }}
       style={{ width: "100%", height: "100%", display: "block" }}
     >
-      {/* Lights — keyed cool/warm pair to give shape definition without overwhelming the dark void aesthetic. */}
-      <ambientLight intensity={0.35} />
-      <directionalLight position={[12, 18, 8]} intensity={1.0} color="#cfe8ff" />
-      <directionalLight position={[-15, -6, -10]} intensity={0.4} color="#5a4a78" />
+      {/* Lights — keyed cool/warm pair plus a soft hemispherical fill and a
+         warm rim from behind. The cool key casts shadows; the others fill
+         and rim without shadow cost. Shadow camera frustum is sized to the
+         medium/far range area where most enemies will sit. */}
+      <ambientLight intensity={0.22} />
+      <hemisphereLight color="#a8c8ff" groundColor="#1a1830" intensity={0.4} />
+      <directionalLight
+        position={[18, 24, 12]}
+        intensity={1.15}
+        color="#cfe8ff"
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-bias={-0.0005}
+        shadow-camera-left={-60}
+        shadow-camera-right={60}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-60}
+        shadow-camera-near={1}
+        shadow-camera-far={120}
+      />
+      <directionalLight position={[-15, -6, -10]} intensity={0.35} color="#5a4a78" />
+      {/* Warm rim from behind the camera's typical starting view — picks out
+         the back edges of ships against the dark side of space. */}
+      <directionalLight position={[-8, 4, -22]} intensity={0.45} color="#ffb878" />
 
-      <Skybox />
+      <Skybox texture={skyboxTexture} />
+      {skyboxTexture && (
+        <Environment map={skyboxTexture as THREE.Texture} background={false} />
+      )}
       <PlayerVessel />
 
       {/* Enemy ships. Ships on the inactive half-space (when a face filter is

@@ -6,42 +6,91 @@ interface ShipProps {
   color: string;
 }
 
-// Enemy frigate: octahedral hull, 4-sided pyramid prow at the bow, two
-// tetrahedral wings, two engines. Visually distinct from the player frigate
-// (which is curvy + has a dorsal sensor cluster).
+// Standard mid-sized combat ship. Pyramidal prow, raised bridge tower, twin
+// dorsal gun turrets, twin engine pods, swept wings. All non-centerline
+// meshes mirrored port/starboard across the bow axis.
 export default function Frigate({ color }: ShipProps) {
   const { hull, accent, engine } = getShipShades(color);
+  const M = { metalness: 0.85, roughness: 0.3, flatShading: true } as const;
+  const Macc = { metalness: 0.8, roughness: 0.35, flatShading: true } as const;
+
   return (
     <group>
-      {/* Hull — stretched octahedron. */}
-      <mesh scale={[1.6, 0.5, 0.7]}>
+      {/* Main hull — stretched octahedron, centerline. */}
+      <mesh scale={[1.6, 0.5, 0.7]} castShadow receiveShadow>
         <octahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color={hull} metalness={0.55} roughness={0.5} flatShading />
+        <meshStandardMaterial color={hull} {...M} />
       </mesh>
-      {/* Prow — 4-sided pyramid (cone with radialSegments=4) jutting forward at the bow. */}
-      <mesh position={[1.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
-        <coneGeometry args={[0.35, 0.7, 4]} />
-        <meshStandardMaterial color={accent} metalness={0.55} roughness={0.5} flatShading />
+
+      {/* Prow — 4-sided pyramid jutting forward. */}
+      <mesh position={[1.55, 0, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow receiveShadow>
+        <coneGeometry args={[0.32, 0.65, 4]} />
+        <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      {/* Wing port — tetrahedron tilted out. */}
-      <mesh position={[-0.1, 0, -0.85]} rotation={[0.4, 0.3, 0]}>
-        <tetrahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial color={accent} metalness={0.55} roughness={0.5} flatShading />
+
+      {/* Bridge tower — stepped pyramid, centerline dorsal. */}
+      <mesh position={[0.1, 0.55, 0]} castShadow receiveShadow>
+        <coneGeometry args={[0.22, 0.32, 4]} />
+        <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      {/* Wing starboard. */}
-      <mesh position={[-0.1, 0, 0.85]} rotation={[-0.4, -0.3, 0]}>
-        <tetrahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial color={accent} metalness={0.55} roughness={0.5} flatShading />
+      <mesh position={[0.1, 0.78, 0]} castShadow receiveShadow>
+        <coneGeometry args={[0.1, 0.18, 4]} />
+        <meshStandardMaterial color={hull} {...M} />
       </mesh>
-      {/* Engines — two emissive cylinders flanking the stern. */}
-      <mesh position={[-1.3, 0, 0.22]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.1, 0.1, 0.28, 12]} />
-        <meshStandardMaterial color={accent} emissive={engine} emissiveIntensity={1.1} />
-      </mesh>
-      <mesh position={[-1.3, 0, -0.22]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.1, 0.1, 0.28, 12]} />
-        <meshStandardMaterial color={accent} emissive={engine} emissiveIntensity={1.1} />
-      </mesh>
+
+      {/* Dorsal twin gun turrets (mirrored). Small pyramid bases with
+         protruding barrels. */}
+      {[-0.32, 0.32].map((z) => (
+        <group key={z} position={[0.55, 0.42, z]}>
+          <mesh castShadow receiveShadow>
+            <coneGeometry args={[0.12, 0.18, 4]} />
+            <meshStandardMaterial color={accent} {...Macc} />
+          </mesh>
+          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.025, 0.025, 0.3, 10]} />
+            <meshStandardMaterial color={accent} {...Macc} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Wings — swept tetrahedra extending port/starboard (mirrored). */}
+      {[-0.85, 0.85].map((z) => (
+        <mesh
+          key={z}
+          position={[-0.15, 0, z]}
+          rotation={[z > 0 ? -0.4 : 0.4, z > 0 ? -0.3 : 0.3, 0]}
+          castShadow
+          receiveShadow
+        >
+          <tetrahedronGeometry args={[0.5, 0]} />
+          <meshStandardMaterial color={accent} {...Macc} />
+        </mesh>
+      ))}
+
+      {/* Sensor masts — small spires on the wing tips (mirrored). */}
+      {[-0.95, 0.95].map((z) => (
+        <mesh key={z} position={[-0.1, 0.15, z]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.02, 0.02, 0.2, 8]} />
+          <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
+        </mesh>
+      ))}
+
+      {/* Twin engine pods (mirrored). Each pod has a stubby nacelle housing
+         + emissive cylinder inside. */}
+      {[-0.25, 0.25].map((z) => (
+        <group key={z} position={[-1.3, 0, z]}>
+          {/* Nacelle housing — slightly larger non-emissive shell. */}
+          <mesh rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.13, 0.11, 0.34, 12]} />
+            <meshStandardMaterial color={accent} {...Macc} />
+          </mesh>
+          {/* Emissive core. */}
+          <mesh position={[-0.05, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
+            <cylinderGeometry args={[0.1, 0.1, 0.28, 12]} />
+            <meshStandardMaterial color={accent} emissive={engine} emissiveIntensity={1.1} />
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }
