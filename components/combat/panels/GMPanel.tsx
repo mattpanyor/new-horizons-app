@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CombatEnemyShip } from "@/types/game";
 import { COMBAT_FACTIONS } from "@/lib/combat/factions";
 import { SIZE_CLASS_BY_ID } from "@/lib/combat/sizeClasses";
@@ -42,6 +42,14 @@ export default function GMPanel({
     setSeededId(null);
   }
 
+  // Slide-in on first mount (mirror of PlayerPanel — from right).
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [visible]);
+
   if (!visible) return null;
 
   const handleDelete = () => {
@@ -52,8 +60,12 @@ export default function GMPanel({
 
   return (
     <div
-      className="fixed top-1/2 -translate-y-1/2 right-3 z-20 w-64 flex flex-col gap-3 rounded-lg border border-white/8 bg-black/40 backdrop-blur-md p-3"
-      style={{ pointerEvents: "auto" }}
+      className="fixed top-1/2 right-3 z-20 w-64 flex flex-col gap-3 rounded-lg border border-white/8 bg-black/40 backdrop-blur-md p-3 transition-all duration-700 ease-out"
+      style={{
+        pointerEvents: "auto",
+        transform: `translateY(-50%) translateX(${shown ? "0" : "150%"})`,
+        opacity: shown ? 1 : 0,
+      }}
     >
       {inGmPhase && !selectedEnemy && (
         <button

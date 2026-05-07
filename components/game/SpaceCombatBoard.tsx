@@ -20,6 +20,8 @@ import GMPanel from "@/components/combat/panels/GMPanel";
 import AddShipModal from "@/components/combat/panels/AddShipModal";
 import EndTurnButton from "@/components/combat/panels/EndTurnButton";
 import EnemyContextMenu from "@/components/combat/panels/EnemyContextMenu";
+import AssemblySplash from "@/components/combat/AssemblySplash";
+import HUDBezel from "@/components/combat/HUDBezel";
 import { useCombatStaging } from "@/hooks/useCombatStaging";
 
 const Scene = dynamic(() => import("@/components/combat/Scene"), { ssr: false });
@@ -113,6 +115,26 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const inGmPhase = state.phase === "gm";
   const playerToolsEnabled = inPlayerPhase && !isGM;
   const viewerColor = viewer.color ?? VISUAL.defaultUserColor;
+
+  // ─── Loading splash gating ─────────────────────────────────────────────
+  // Show splash while the 3D scene is initializing for the first time, AND
+  // for non-GM users until the GM has ended their first turn (moveCount ≥ 1).
+  // After that, the splash never reappears for that user until a page refresh.
+  const [sceneReady, setSceneReady] = useState(false);
+  useEffect(() => {
+    // Minimum on-screen time so the splash isn't a sub-second flash on fast
+    // page loads. Long enough to cover R3F Canvas mount + skybox texture.
+    const t = window.setTimeout(() => setSceneReady(true), 1400);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const splashVisible =
+    !sceneReady ||
+    (!isGM && inGmPhase && (state.moveCount ?? 0) === 0);
+
+  // HUD frame + panels render only after the splash decides to dismiss; their
+  // mount triggers the bezel-glitch and panel-slide-in animations.
+  const hudShouldShow = !splashVisible;
 
   // Edit-mode focus trap: while a ship is selected, all GM controls outside
   // the editing section + the currently-edited ship's right-click menu are
@@ -415,8 +437,12 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
 
       <StatusOverlay face={statusFace} range={statusRange} weapon={statusWeapon} />
 
+      {/* HUD frame — top + bottom thin lines tracing the chamfered notch.
+         Mounts after splash dismisses; glitch-fades in on its own. */}
+      {hudShouldShow && <HUDBezel />}
+
       {/* Empty-state hint while no enemies are present (helps the first turn). */}
-      {renderEnemies.length === 0 && (
+      {hudShouldShow && renderEnemies.length === 0 && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-10 pointer-events-none text-center">
           <p className="text-[10px] tracking-[0.4em] uppercase text-white/30" style={cinzel}>
             {isGM
@@ -426,7 +452,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         </div>
       )}
 
-      {!isGM && (
+      {hudShouldShow && !isGM && (
         <PlayerPanel
           activeFace={view.activeFace}
           hoveredFace={view.hoveredFace}
@@ -443,7 +469,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       )}
 
       <GMPanel
-        visible={isGM}
+        visible={hudShouldShow && isGM}
         inGmPhase={inGmPhase && !editLocked}
         onAdd={() => setAddModalOpen(true)}
         selectedEnemy={editingShip}
@@ -470,10 +496,25 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         />
       )}
 
-      <EndTurnButton
-        enabled={endTurnEnabled}
-        disabledReason={endTurnReason}
-        onClick={handleEndTurn}
+      {hudShouldShow && (
+        <EndTurnButton
+          enabled={endTurnEnabled}
+          disabledReason={endTurnReason}
+          onClick={handleEndTurn}
+        />
+      )}
+
+      {/* Loading splash — sits on top of everything during the gated window. */}
+      <AssemblySplash
+        visible={splashVisible}
+        title="Initializing Combat Systems"
+        subtitle={
+          !sceneReady
+            ? "Synchronizing tactical view"
+            : !isGM && inGmPhase && (state.moveCount ?? 0) === 0
+              ? "Awaiting tactical telemetry feed"
+              : undefined
+        }
       />
     </>
   );

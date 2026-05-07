@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { CombatFace, CombatRangeBand } from "@/types/game";
 import { FACES } from "@/lib/combat/faces";
 import { RANGES } from "@/lib/combat/ranges";
@@ -96,10 +97,23 @@ export default function PlayerPanel({
   onToggleWeapon,
   enabled,
 }: PlayerPanelProps) {
+  // Slide-in on first mount: starts off-screen-left + fully transparent,
+  // animates to its docked position on the next animation frame so the
+  // browser registers the initial state before transitioning.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
     <div
-      className="fixed top-1/2 -translate-y-1/2 left-3 z-20 flex flex-col gap-4 rounded-lg border border-white/8 bg-black/40 backdrop-blur-md p-3"
-      style={{ pointerEvents: "auto" }}
+      className="fixed top-1/2 left-3 z-20 flex flex-col gap-4 rounded-lg border border-white/8 bg-black/40 backdrop-blur-md p-3 transition-all duration-700 ease-out"
+      style={{
+        pointerEvents: "auto",
+        transform: `translateY(-50%) translateX(${shown ? "0" : "-150%"})`,
+        opacity: shown ? 1 : 0,
+      }}
     >
       {/* Faces */}
       <div className="flex flex-col gap-1.5">
