@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserByUsername } from "@/lib/db/users";
-import { getActiveGame, patchGameState } from "@/lib/db/games";
+import { getActiveGame, setStateAtPath } from "@/lib/db/games";
 import { getWeaponById } from "@/lib/combat/playerShip";
 import type { CombatPlacedHighlight, SpaceCombatState } from "@/types/game";
 
@@ -40,10 +40,14 @@ export async function POST(req: NextRequest) {
   const weaponId = (body as { weaponId?: unknown }).weaponId;
   const axis = (body as { axis?: unknown }).axis;
 
-  // Clear-slot path: weaponId === null.
+  // Clear-slot path: weaponId === null. Atomic single-key write so concurrent
+  // POSTs from other users (writing their own slot) can't blow this one away.
   if (weaponId === null) {
-    const merged = { ...state.weaponHighlights, [username]: null };
-    const ok = await patchGameState(session.id, { weaponHighlights: merged });
+    const ok = await setStateAtPath(
+      session.id,
+      ["weaponHighlights", username],
+      null,
+    );
     if (!ok) {
       return NextResponse.json({ error: "Game is not active" }, { status: 400 });
     }
@@ -74,8 +78,11 @@ export async function POST(req: NextRequest) {
     axis: { x: x / len, y: y / len, z: z / len },
     color: user.color ?? DEFAULT_COLOR,
   };
-  const merged = { ...state.weaponHighlights, [username]: placed };
-  const ok = await patchGameState(session.id, { weaponHighlights: merged });
+  const ok = await setStateAtPath(
+    session.id,
+    ["weaponHighlights", username],
+    placed,
+  );
   if (!ok) {
     return NextResponse.json({ error: "Game is not active" }, { status: 400 });
   }
