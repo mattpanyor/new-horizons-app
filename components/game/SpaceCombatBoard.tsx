@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameBoardProps } from "./gameComponents";
 import type {
   CombatEnemyShip,
@@ -116,6 +116,39 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const playerToolsEnabled = inPlayerPhase && !isGM;
   const viewerColor = viewer.color ?? VISUAL.defaultUserColor;
 
+  // ─── Error toast (auto-dismissing) ─────────────────────────────────────
+  // POSTs that fail (network blip, rejected by server) raise a short message
+  // here so the user knows their action didn't sync. Local state revert is
+  // handled at each call site below.
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const errorTimerRef = useRef<number | null>(null);
+  const showError = useCallback((msg: string) => {
+    setErrorMsg(msg);
+    if (errorTimerRef.current) window.clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = window.setTimeout(() => setErrorMsg(null), 4000);
+  }, []);
+  useEffect(() => () => {
+    if (errorTimerRef.current) window.clearTimeout(errorTimerRef.current);
+  }, []);
+
+  // Wraps fetch with consistent failure handling. Returns true on success.
+  const postCombat = useCallback(
+    async (url: string, init?: RequestInit): Promise<boolean> => {
+      try {
+        const res = await fetch(url, init);
+        if (!res.ok) {
+          console.warn(`[combat] ${url} failed: HTTP ${res.status}`);
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.warn(`[combat] ${url} fetch error:`, e);
+        return false;
+      }
+    },
+    [],
+  );
+
   // ─── Loading splash gating ─────────────────────────────────────────────
   // Show splash while the 3D scene is initializing for the first time, AND
   // for non-GM users until the GM has ended their first turn (moveCount ≥ 1).
@@ -151,23 +184,31 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const setHoveredRange = (range: CombatRangeBand | null) =>
     setView((v) => ({ ...v, hoveredRange: range }));
 
-  const postClearHighlight = useCallback(() => {
-    void fetch("/api/combat/highlight", {
+  const postClearHighlight = useCallback(async () => {
+    const ok = await postCombat("/api/combat/highlight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ weaponId: null, axis: null }),
     });
-  }, []);
+    if (!ok) showError("Failed to clear weapon highlight");
+  }, [postCombat, showError]);
 
   const postPlaceHighlight = useCallback(
-    (weaponId: string, axis: { x: number; y: number; z: number }) => {
-      void fetch("/api/combat/highlight", {
+    async (weaponId: string, axis: { x: number; y: number; z: number }) => {
+      const ok = await postCombat("/api/combat/highlight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ weaponId, axis }),
       });
+      if (!ok) {
+        showError("Failed to place weapon highlight");
+        // Revert local placed state to inactive — the visible cone in the
+        // user's own view would otherwise stay up while no other client
+        // ever sees it (no server record).
+        setWeapon({ kind: "inactive" });
+      }
     },
-    [],
+    [postCombat, showError],
   );
 
   const toggleWeapon = (weaponId: string) => {
@@ -236,20 +277,22 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
 
   // Done in panel — commit local staged edits to the buffer (already applied
   // to staged via editStaged calls) and exit edit mode.
-  const handleSaveEdit = (changes: { label: string; factionId: string | null }) => {
+  const handleSaveEdit = async (changes: { label: string; factionId: string | null }) => {
     if (!selectedEnemyId) return;
+    const id = selectedEnemyId;
+    setSelectedEnemyId(null);
     if (inGmPhase) {
       // Stage label/faction edits client-side; End Turn commits the full list.
-      staging.editStaged(selectedEnemyId, changes);
-    } else {
-      // Player phase: PATCH directly (no End Turn from GM in this phase).
-      void fetch(`/api/combat/enemy/${selectedEnemyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(changes),
-      });
+      staging.editStaged(id, changes);
+      return;
     }
-    setSelectedEnemyId(null);
+    // Player phase: PATCH directly (no End Turn from GM in this phase).
+    const ok = await postCombat(`/api/combat/enemy/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+    });
+    if (!ok) showError("Failed to save edit — server may have stale state");
   };
 
   // Esc / Cancel — discard pending edits for this ship by reverting staged to original.
@@ -260,13 +303,15 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     setSelectedEnemyId(null);
   };
 
-  // Delete — always immediate, both phases. Bypasses staging.
+  // Delete — always immediate, both phases. Bypasses staging. If the network
+  // call fails, the next 2 s poll will restore the enemy from server state.
   const handleDelete = async () => {
     if (!selectedEnemyId) return;
     const id = selectedEnemyId;
     setSelectedEnemyId(null);
     staging.removeFromStaging(id);
-    await fetch(`/api/combat/enemy/${id}`, { method: "DELETE" });
+    const ok = await postCombat(`/api/combat/enemy/${id}`, { method: "DELETE" });
+    if (!ok) showError("Failed to delete — will reappear on next sync");
   };
 
   // GM drag — updates staged azimuth/elevation as cursor moves.
@@ -275,51 +320,55 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   };
 
   // Right-click context menu actions (range / facing / delete).
-  const handleContextChangeRange = (range: CombatRangeBand) => {
+  const handleContextChangeRange = async (range: CombatRangeBand) => {
     if (!contextMenu) return;
     const id = contextMenu.enemyId;
     if (inGmPhase) {
       staging.editStaged(id, { range });
-    } else {
-      void fetch(`/api/combat/enemy/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ range }),
-      });
+      return;
     }
+    const ok = await postCombat(`/api/combat/enemy/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ range }),
+    });
+    if (!ok) showError("Failed to change range");
   };
-  const handleContextChangeFacing = (facing: CombatFace) => {
+  const handleContextChangeFacing = async (facing: CombatFace) => {
     if (!contextMenu) return;
     const id = contextMenu.enemyId;
     if (inGmPhase) {
       staging.editStaged(id, { facing });
-    } else {
-      void fetch(`/api/combat/enemy/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ facing }),
-      });
+      return;
     }
+    const ok = await postCombat(`/api/combat/enemy/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facing }),
+    });
+    if (!ok) showError("Failed to change facing");
   };
   const handleContextDelete = async () => {
     if (!contextMenu) return;
     const id = contextMenu.enemyId;
     staging.removeFromStaging(id);
     if (selectedEnemyId === id) setSelectedEnemyId(null);
-    await fetch(`/api/combat/enemy/${id}`, { method: "DELETE" });
+    const ok = await postCombat(`/api/combat/enemy/${id}`, { method: "DELETE" });
+    if (!ok) showError("Failed to delete — will reappear on next sync");
   };
 
-  // End Turn — gm-phase POSTs the full staged list; player-phase POSTs without body.
+  // End Turn — gm-phase POSTs the full staged list; player-phase POSTs no body.
+  // Failures here are the most user-visible: the GM thinks the turn ended but
+  // the server didn't get it. Surface a clear error so they can retry.
   const handleEndTurn = async () => {
-    if (inGmPhase) {
-      await fetch("/api/combat/end-turn", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enemies: staging.stagedEnemies }),
-      });
-    } else {
-      await fetch("/api/combat/end-turn", { method: "POST" });
-    }
+    const ok = inGmPhase
+      ? await postCombat("/api/combat/end-turn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enemies: staging.stagedEnemies }),
+        })
+      : await postCombat("/api/combat/end-turn", { method: "POST" });
+    if (!ok) showError("End Turn failed — try again");
   };
 
   // Esc — priority cascade.
@@ -436,6 +485,18 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       </div>
 
       <StatusOverlay face={statusFace} range={statusRange} weapon={statusWeapon} />
+
+      {/* Auto-dismissing error toast for failed network calls. */}
+      {errorMsg && (
+        <div className="fixed top-24 right-1/2 translate-x-1/2 z-30 pointer-events-none">
+          <div
+            className="px-4 py-2 rounded border border-red-400/50 bg-red-950/85 backdrop-blur-md text-[10px] tracking-[0.25em] uppercase text-red-200/95"
+            style={cinzel}
+          >
+            {errorMsg}
+          </div>
+        </div>
+      )}
 
       {/* HUD frame — top + bottom thin lines tracing the chamfered notch.
          Mounts after splash dismisses; glitch-fades in on its own. */}
