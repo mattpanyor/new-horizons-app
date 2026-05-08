@@ -115,3 +115,13 @@ body {
     transform: scale(1.05);
   }
 }
+
+/* Combat status overlay — slow opacity pulse driven by CSS instead of an
+   rAF setState loop, so it doesn't trigger React re-renders at 60 fps. */
+@keyframes combat-status-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.combat-status-pulse {
+  animation: combat-status-pulse 2s ease-in-out infinite;
+}
