@@ -22,6 +22,7 @@ import EndTurnButton from "@/components/combat/panels/EndTurnButton";
 import EnemyContextMenu from "@/components/combat/panels/EnemyContextMenu";
 import AssemblySplash from "@/components/combat/AssemblySplash";
 import HUDBezel from "@/components/combat/HUDBezel";
+import SceneErrorBoundary from "@/components/combat/SceneErrorBoundary";
 import { useCombatStaging } from "@/hooks/useCombatStaging";
 
 const Scene = dynamic(() => import("@/components/combat/Scene"), { ssr: false });
@@ -450,25 +451,27 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   return (
     <>
       <div className="fixed left-0 right-0 bottom-0 top-16 overflow-hidden bg-black z-0">
-        <Scene
-          activeFace={view.activeFace}
-          hoveredFace={view.hoveredFace}
-          activeRange={view.activeRange}
-          hoveredRange={view.hoveredRange}
-          aimingWeapon={aimingWeaponDef}
-          viewerColor={viewerColor}
-          onPlaceWeapon={handlePlaceWeapon}
-          localPlaced={localPlaced}
-          syncedPlaced={syncedPlaced}
-          enemies={renderEnemies}
-          onEnemyClick={isGM ? handleEnemyClick : undefined}
-          onEnemyContextMenu={isGM ? handleEnemyContextMenu : undefined}
-          editingShipId={selectedEnemyId}
-          editingOriginal={editingOriginal}
-          onEnemyDrag={inGmPhase ? handleEnemyDrag : undefined}
-          prevEnemies={state.prevEnemies}
-          animStartMs={inPlayerPhase ? animStartMs : null}
-        />
+        <SceneErrorBoundary>
+          <Scene
+            activeFace={view.activeFace}
+            hoveredFace={view.hoveredFace}
+            activeRange={view.activeRange}
+            hoveredRange={view.hoveredRange}
+            aimingWeapon={aimingWeaponDef}
+            viewerColor={viewerColor}
+            onPlaceWeapon={handlePlaceWeapon}
+            localPlaced={localPlaced}
+            syncedPlaced={syncedPlaced}
+            enemies={renderEnemies}
+            onEnemyClick={isGM ? handleEnemyClick : undefined}
+            onEnemyContextMenu={isGM ? handleEnemyContextMenu : undefined}
+            editingShipId={selectedEnemyId}
+            editingOriginal={editingOriginal}
+            onEnemyDrag={inGmPhase ? handleEnemyDrag : undefined}
+            prevEnemies={state.prevEnemies}
+            animStartMs={inPlayerPhase ? animStartMs : null}
+          />
+        </SceneErrorBoundary>
       </div>
 
       <div className="fixed top-20 left-3 pointer-events-none flex flex-col gap-1 z-10">
