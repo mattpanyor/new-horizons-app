@@ -181,11 +181,11 @@ export default function Scene({
 
       {/* Enemy ships. Ships on the inactive half-space (when a face filter is
          active) render `dim` — present but visually demoted. While editing,
-         click/contextmenu on OTHER ships are suppressed (focus trap). The
-         animated wrapper interpolates position when `animStartMs` is set;
-         otherwise snaps to canonical. While editing, the editing ship uses
-         the static EnemyShip so its position tracks the staged buffer in real
-         time during drag (no animation). */}
+         click/contextmenu on OTHER ships are suppressed (focus trap).
+         AnimatedEnemyShip is only mounted DURING the End-Turn animation
+         window (animStartMs !== null). Outside of it, the static EnemyShip
+         renders declaratively so no per-frame useFrame overhead is paid at
+         scene rest. */}
       {enemies.map((e) => {
         const isLocked = editingShipId !== null && e.id !== editingShipId;
         const isEditing = editingShipId === e.id;
@@ -201,18 +201,27 @@ export default function Scene({
           : onEnemyContextMenu
             ? (sx: number, sy: number) => onEnemyContextMenu(e.id, sx, sy)
             : undefined;
-        if (isEditing) {
-          // No onClick on the editing ship — so left-click events pass
-          // through to the drag-shell sphere. Right-click context menu still
-          // works for range/facing/delete on the editing ship.
-          return <EnemyShip key={e.id} enemy={e} dim={dim} onContextMenu={ctx} />;
+        // The editing ship intentionally drops onClick so left-clicks pass
+        // through to the drag-shell sphere; everyone else gets the click hook.
+        // Same goes for the static path: the editing ship is always static,
+        // and it never wants click anyway.
+        if (isEditing || animStartMs == null) {
+          return (
+            <EnemyShip
+              key={e.id}
+              enemy={e}
+              dim={dim}
+              onClick={isEditing ? undefined : click}
+              onContextMenu={ctx}
+            />
+          );
         }
         return (
           <AnimatedEnemyShip
             key={e.id}
             current={e}
             previous={previous}
-            animStartMs={animStartMs ?? null}
+            animStartMs={animStartMs}
             animDurationMs={VISUAL.endTurnAnimMs}
             dim={dim}
             onClick={click}
