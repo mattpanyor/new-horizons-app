@@ -39,6 +39,22 @@ export async function POST(req: NextRequest) {
 
   const weaponId = (body as { weaponId?: unknown }).weaponId;
   const axis = (body as { axis?: unknown }).axis;
+  const expectedMoveCount = (body as { expectedMoveCount?: unknown })
+    .expectedMoveCount;
+
+  // Optimistic-concurrency guard: if the client read an older state than the
+  // current server state (e.g. they placed during the player turn but the
+  // commander has since End-Turned and bumped moveCount), reject the write
+  // so the slot doesn't leak into the new turn.
+  if (
+    typeof expectedMoveCount === "number" &&
+    state.moveCount > expectedMoveCount
+  ) {
+    return NextResponse.json(
+      { error: "Stale state — turn has advanced" },
+      { status: 409 },
+    );
+  }
 
   // Clear-slot path: weaponId === null. Atomic single-key write so concurrent
   // POSTs from other users (writing their own slot) can't blow this one away.

@@ -185,11 +185,21 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const setHoveredRange = (range: CombatRangeBand | null) =>
     setView((v) => ({ ...v, hoveredRange: range }));
 
+  // Latest server moveCount. Read by the highlight POSTs as
+  // `expectedMoveCount` so a write racing against End Turn is rejected with
+  // 409 instead of leaking a stale highlight into the next turn.
+  const moveCountRef = useRef(state.moveCount);
+  moveCountRef.current = state.moveCount;
+
   const postClearHighlight = useCallback(async () => {
     const ok = await postCombat("/api/combat/highlight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ weaponId: null, axis: null }),
+      body: JSON.stringify({
+        weaponId: null,
+        axis: null,
+        expectedMoveCount: moveCountRef.current,
+      }),
     });
     if (!ok) showError("Failed to clear weapon highlight");
   }, [postCombat, showError]);
@@ -199,7 +209,11 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       const ok = await postCombat("/api/combat/highlight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weaponId, axis }),
+        body: JSON.stringify({
+          weaponId,
+          axis,
+          expectedMoveCount: moveCountRef.current,
+        }),
       });
       if (!ok) {
         showError("Failed to place weapon highlight");
