@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Top + bottom HUD bezels. Each is a thin SVG line tracing the inside of the
 // console frame with a chamfered notch in the middle (matching the user's
@@ -57,54 +57,32 @@ const NOTCH_DEPTH = 64;            // how far the notch dips into the frame —
                                    // (bottom) and the status overlay (top).
 const NOTCH_CHAMFER = 22;          // diagonal taper at the notch sides
 const FRAME_INSET = 6;             // padding from screen edge
+const NAV_H = 64;                  // top navbar reserve
 
-// The bezel SVG covers the viewport. Top/bottom lines are drawn relative to
-// 100% width via percentage path expressions; we use a fixed viewBox sized to
-// the window and re-compute on resize.
+// The bezel SVG covers the viewport. Top/bottom path coordinates derive from
+// the current viewport size, which lives in state so a window resize triggers
+// a re-render and the paths recompute.
 export default function HUDBezel({ chromatic = true }: HUDBezelProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  // Default to a sensible size for SSR / first paint; the effect below
+  // overwrites with the real viewport on mount and subsequent resizes.
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 1200, h: 800 });
 
   useEffect(() => {
-    const update = () => {
-      const svg = svgRef.current;
-      if (!svg) return;
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    };
+    const update = () =>
+      setSize({ w: window.innerWidth, h: window.innerHeight });
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // Use 100% viewport via CSS absolute positioning; SVG path is computed once
-  // viewBox attaches via JS effect above.
-  return (
-    <svg
-      ref={svgRef}
-      className="fixed inset-0 z-20 pointer-events-none"
-      preserveAspectRatio="none"
-      width="100%"
-      height="100%"
-    >
-      <BezelLines chromatic={chromatic} />
-    </svg>
-  );
-}
-
-function BezelLines({ chromatic }: { chromatic: boolean }) {
-  const w = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const h = typeof window !== "undefined" ? window.innerHeight : 800;
-  const navH = 64; // top navbar reserve so we don't draw under it
-  const topY = navH + FRAME_INSET;
+  const { w, h } = size;
+  const topY = NAV_H + FRAME_INSET;
   const bottomY = h - FRAME_INSET;
   const cx = w / 2;
   const notchW = w * NOTCH_WIDTH_FRACTION;
   const cham = NOTCH_CHAMFER;
 
   // Top: horizontal line that dips DOWN by NOTCH_DEPTH in the middle.
-  // Path: 0,topY → cx-notchW/2,topY → cx-notchW/2+cham,topY+NOTCH_DEPTH
-  //     → cx+notchW/2-cham,topY+NOTCH_DEPTH → cx+notchW/2,topY → w,topY
   const topPath = [
     `M ${FRAME_INSET},${topY}`,
     `L ${cx - notchW / 2},${topY}`,
@@ -114,7 +92,7 @@ function BezelLines({ chromatic }: { chromatic: boolean }) {
     `L ${w - FRAME_INSET},${topY}`,
   ].join(" ");
 
-  // Bottom: line that dips UP in the middle, slightly stepped/asymmetric.
+  // Bottom: line that dips UP in the middle.
   const bottomPath = [
     `M ${FRAME_INSET},${bottomY}`,
     `L ${cx - notchW / 2},${bottomY}`,
@@ -124,7 +102,7 @@ function BezelLines({ chromatic }: { chromatic: boolean }) {
     `L ${w - FRAME_INSET},${bottomY}`,
   ].join(" ");
 
-  // Side accent ticks — short verticals where the panels will dock.
+  // Side accent ticks — short verticals where the panels dock.
   const sideTopY = topY + 8;
   const sideBottomY = bottomY - 8;
   const sideX1 = FRAME_INSET;
@@ -135,7 +113,13 @@ function BezelLines({ chromatic }: { chromatic: boolean }) {
   ];
 
   return (
-    <>
+    <svg
+      className="fixed inset-0 z-20 pointer-events-none"
+      preserveAspectRatio="none"
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${w} ${h}`}
+    >
       <GlitchInGroup>
         {chromatic && (
           <>
@@ -191,6 +175,6 @@ function BezelLines({ chromatic }: { chromatic: boolean }) {
           />
         ))}
       </GlitchInGroup>
-    </>
+    </svg>
   );
 }
