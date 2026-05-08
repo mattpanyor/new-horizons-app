@@ -497,18 +497,41 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         </SceneErrorBoundary>
       </div>
 
-      <div className="fixed top-20 left-3 pointer-events-none flex flex-col gap-1 z-10">
-        {config.label && (
-          <p className="text-[11px] tracking-[0.3em] uppercase text-white/70" style={cinzel}>
-            {config.label}
+      {/* Top-left flavor text — quiet sci-fi chrome. */}
+      {hudShouldShow && (
+        <div className="fixed top-20 left-4 pointer-events-none z-10">
+          <p
+            className="text-xs tracking-[0.55em] uppercase text-white/40"
+            style={cinzel}
+          >
+            Aegis Systems Initialized
           </p>
-        )}
-        <p className="text-[9px] tracking-[0.25em] uppercase text-white/35" style={cinzel}>
-          Phase: {state.phase} · Commander: {config.commanderUsername || "—"}
-          {isCommander && " · You command"}
-          {isGM && " · GM"}
-        </p>
-      </div>
+        </div>
+      )}
+
+      {/* Turn indicator — big text inside the top bezel notch.
+         GM phase is presented to players as "ENEMY TURN" (the GM is the
+         narrative adversary). Glow tint distinguishes the two: blue when it
+         belongs to the players, red when the enemy is acting. */}
+      {hudShouldShow && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-10 pointer-events-none text-center"
+          style={{ top: 78 }}
+        >
+          <p
+            className="text-2xl md:text-3xl font-bold tracking-[0.5em] uppercase"
+            style={{
+              ...cinzel,
+              color: inGmPhase ? "#ff8a8a" : "#a8c8ff",
+              textShadow: inGmPhase
+                ? "0 0 14px rgba(239,68,68,0.55), 0 0 4px rgba(239,68,68,0.4)"
+                : "0 0 14px rgba(120,180,255,0.55), 0 0 4px rgba(120,180,255,0.4)",
+            }}
+          >
+            {inGmPhase ? "Enemy Turn" : "Player Turn"}
+          </p>
+        </div>
+      )}
 
       <StatusOverlay face={statusFace} range={statusRange} weapon={statusWeapon} />
 

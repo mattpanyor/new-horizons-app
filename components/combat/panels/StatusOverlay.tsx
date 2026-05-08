@@ -20,7 +20,7 @@ export default function StatusOverlay({ face, range, weapon }: StatusOverlayProp
   if (lines.length === 0) return null;
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1 pointer-events-none text-center combat-status-pulse">
+    <div className="fixed top-36 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1 pointer-events-none text-center combat-status-pulse">
       {lines.map((line, i) => (
         <p
           key={i}
