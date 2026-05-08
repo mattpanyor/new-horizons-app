@@ -42,15 +42,15 @@ export default function Cruiser({ color }: ShipProps) {
         <coneGeometry args={[0.32, 0.3, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[-0.05, 0.95, 0]} castShadow receiveShadow>
+      <mesh position={[-0.05, 0.95, 0]} receiveShadow>
         <coneGeometry args={[0.2, 0.24, 4]} />
         <meshStandardMaterial color={hull} {...M} />
       </mesh>
-      <mesh position={[-0.05, 1.18, 0]} castShadow receiveShadow>
+      <mesh position={[-0.05, 1.18, 0]} receiveShadow>
         <coneGeometry args={[0.1, 0.2, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[-0.05, 1.42, 0]} castShadow receiveShadow>
+      <mesh position={[-0.05, 1.42, 0]} receiveShadow>
         <cylinderGeometry args={[0.025, 0.025, 0.2, 8]} />
         <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
       </mesh>
@@ -62,7 +62,7 @@ export default function Cruiser({ color }: ShipProps) {
             <coneGeometry args={[0.13, 0.2, 4]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
-          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
             <cylinderGeometry args={[0.024, 0.024, 0.3, 10]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
@@ -76,7 +76,7 @@ export default function Cruiser({ color }: ShipProps) {
             <coneGeometry args={[0.13, 0.2, 4]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
-          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
             <cylinderGeometry args={[0.024, 0.024, 0.3, 10]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
@@ -90,7 +90,7 @@ export default function Cruiser({ color }: ShipProps) {
             <coneGeometry args={[0.12, 0.18, 4]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
-          <mesh position={[0.16, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+          <mesh position={[0.16, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
             <cylinderGeometry args={[0.022, 0.022, 0.26, 10]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
@@ -111,9 +111,9 @@ export default function Cruiser({ color }: ShipProps) {
         </mesh>
       ))}
 
-      {/* Side-pod sensor masts (mirrored). */}
+      {/* Side-pod sensor masts (mirrored). Receive only. */}
       {[-1.05, 1.05].map((z) => (
-        <mesh key={z} position={[0.1, 0.3, z]} castShadow receiveShadow>
+        <mesh key={z} position={[0.1, 0.3, z]} receiveShadow>
           <cylinderGeometry args={[0.022, 0.022, 0.34, 8]} />
           <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
         </mesh>

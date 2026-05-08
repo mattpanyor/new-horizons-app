@@ -36,8 +36,8 @@ export default function Battlecruiser({ color }: ShipProps) {
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
 
-      {/* Spinal mount under-rail (gives the prow extra structure). */}
-      <mesh position={[2.5, -0.18, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow receiveShadow>
+      {/* Spinal mount under-rail (gives the prow extra structure). Receive only. */}
+      <mesh position={[2.5, -0.18, 0]} rotation={[0, 0, -Math.PI / 2]} receiveShadow>
         <cylinderGeometry args={[0.05, 0.05, 0.7, 10]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
@@ -47,19 +47,19 @@ export default function Battlecruiser({ color }: ShipProps) {
         <coneGeometry args={[0.36, 0.34, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[-0.15, 1.15, 0]} castShadow receiveShadow>
+      <mesh position={[-0.15, 1.15, 0]} receiveShadow>
         <coneGeometry args={[0.24, 0.28, 4]} />
         <meshStandardMaterial color={hull} {...M} />
       </mesh>
-      <mesh position={[-0.15, 1.4, 0]} castShadow receiveShadow>
+      <mesh position={[-0.15, 1.4, 0]} receiveShadow>
         <coneGeometry args={[0.14, 0.24, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[-0.15, 1.62, 0]} castShadow receiveShadow>
+      <mesh position={[-0.15, 1.62, 0]} receiveShadow>
         <octahedronGeometry args={[0.07, 0]} />
         <meshStandardMaterial color={hull} metalness={0.9} roughness={0.2} />
       </mesh>
-      <mesh position={[-0.15, 1.78, 0]} castShadow receiveShadow>
+      <mesh position={[-0.15, 1.78, 0]} receiveShadow>
         <cylinderGeometry args={[0.022, 0.022, 0.28, 8]} />
         <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
       </mesh>
@@ -79,7 +79,7 @@ export default function Battlecruiser({ color }: ShipProps) {
               <coneGeometry args={[0.14, 0.22, 4]} />
               <meshStandardMaterial color={accent} {...Macc} />
             </mesh>
-            <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+            <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
               <cylinderGeometry args={[0.025, 0.025, 0.3, 10]} />
               <meshStandardMaterial color={accent} {...Macc} />
             </mesh>
@@ -110,9 +110,9 @@ export default function Battlecruiser({ color }: ShipProps) {
         </mesh>
       ))}
 
-      {/* Sensor masts on the side pods (mirrored). */}
+      {/* Sensor masts on the side pods (mirrored). Receive only. */}
       {[-1.2, 1.2].map((z) => (
-        <mesh key={z} position={[0.5, 0.25, z]} castShadow receiveShadow>
+        <mesh key={z} position={[0.5, 0.25, z]} receiveShadow>
           <cylinderGeometry args={[0.022, 0.022, 0.36, 8]} />
           <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
         </mesh>

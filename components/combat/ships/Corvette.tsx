@@ -36,9 +36,9 @@ export default function Corvette({ color }: ShipProps) {
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
 
-      {/* Forward twin gun barrels (mirrored). */}
+      {/* Forward twin gun barrels (mirrored). Skinny — no readable shadow. */}
       {[-0.3, 0.3].map((z) => (
-        <mesh key={z} position={[0.95, -0.05, z]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+        <mesh key={z} position={[0.95, -0.05, z]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
           <cylinderGeometry args={[0.04, 0.04, 0.5, 10]} />
           <meshStandardMaterial color={accent} {...Macc} />
         </mesh>
@@ -58,8 +58,8 @@ export default function Corvette({ color }: ShipProps) {
         </mesh>
       ))}
 
-      {/* Antenna spire — centerline, dorsal-aft. */}
-      <mesh position={[-0.5, 0.4, 0]} castShadow receiveShadow>
+      {/* Antenna spire — centerline, dorsal-aft. Receive only. */}
+      <mesh position={[-0.5, 0.4, 0]} receiveShadow>
         <cylinderGeometry args={[0.025, 0.025, 0.32, 8]} />
         <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
       </mesh>

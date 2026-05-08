@@ -57,12 +57,13 @@ export default function PlayerVessel() {
         />
       </mesh>
 
-      {/* Dorsal sensor cluster — short thin spire + small sphere on top. */}
-      <mesh position={[0.3, 0.28, 0]} castShadow receiveShadow>
+      {/* Dorsal sensor cluster — short thin spire + small sphere on top.
+         Too small to cast a readable shadow; receive only. */}
+      <mesh position={[0.3, 0.28, 0]} receiveShadow>
         <cylinderGeometry args={[0.04, 0.04, 0.32, 12]} />
         <meshStandardMaterial color={accent} metalness={ACCENT_METAL} roughness={ACCENT_ROUGH} />
       </mesh>
-      <mesh position={[0.3, 0.46, 0]} castShadow receiveShadow>
+      <mesh position={[0.3, 0.46, 0]} receiveShadow>
         <sphereGeometry args={[0.06, 12, 8]} />
         <meshStandardMaterial color={hull} metalness={0.9} roughness={0.2} />
       </mesh>

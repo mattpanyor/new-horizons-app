@@ -38,11 +38,11 @@ export default function Destroyer({ color }: ShipProps) {
         <coneGeometry args={[0.22, 0.3, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[-0.5, 0.8, 0]} castShadow receiveShadow>
+      <mesh position={[-0.5, 0.8, 0]} receiveShadow>
         <coneGeometry args={[0.14, 0.22, 4]} />
         <meshStandardMaterial color={hull} {...M} />
       </mesh>
-      <mesh position={[-0.5, 1.0, 0]} castShadow receiveShadow>
+      <mesh position={[-0.5, 1.0, 0]} receiveShadow>
         <cylinderGeometry args={[0.03, 0.03, 0.18, 8]} />
         <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
       </mesh>
@@ -52,7 +52,7 @@ export default function Destroyer({ color }: ShipProps) {
         <coneGeometry args={[0.15, 0.22, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[1.3, 0.42, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+      <mesh position={[1.3, 0.42, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
         <cylinderGeometry args={[0.025, 0.025, 0.32, 10]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
@@ -68,7 +68,7 @@ export default function Destroyer({ color }: ShipProps) {
               <coneGeometry args={[0.1, 0.16, 4]} />
               <meshStandardMaterial color={accent} {...Macc} />
             </mesh>
-            <mesh position={[0.14, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+            <mesh position={[0.14, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
               <cylinderGeometry args={[0.018, 0.018, 0.22, 8]} />
               <meshStandardMaterial color={accent} {...Macc} />
             </mesh>

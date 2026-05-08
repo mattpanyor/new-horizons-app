@@ -33,7 +33,7 @@ export default function Frigate({ color }: ShipProps) {
         <coneGeometry args={[0.22, 0.32, 4]} />
         <meshStandardMaterial color={accent} {...Macc} />
       </mesh>
-      <mesh position={[0.1, 0.78, 0]} castShadow receiveShadow>
+      <mesh position={[0.1, 0.78, 0]} receiveShadow>
         <coneGeometry args={[0.1, 0.18, 4]} />
         <meshStandardMaterial color={hull} {...M} />
       </mesh>
@@ -46,7 +46,7 @@ export default function Frigate({ color }: ShipProps) {
             <coneGeometry args={[0.12, 0.18, 4]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
-          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+          <mesh position={[0.18, 0, 0]} rotation={[0, 0, Math.PI / 2]} receiveShadow>
             <cylinderGeometry args={[0.025, 0.025, 0.3, 10]} />
             <meshStandardMaterial color={accent} {...Macc} />
           </mesh>
@@ -67,9 +67,9 @@ export default function Frigate({ color }: ShipProps) {
         </mesh>
       ))}
 
-      {/* Sensor masts — small spires on the wing tips (mirrored). */}
+      {/* Sensor masts — small spires on the wing tips (mirrored). Receive only. */}
       {[-0.95, 0.95].map((z) => (
-        <mesh key={z} position={[-0.1, 0.15, z]} castShadow receiveShadow>
+        <mesh key={z} position={[-0.1, 0.15, z]} receiveShadow>
           <cylinderGeometry args={[0.02, 0.02, 0.2, 8]} />
           <meshStandardMaterial color={accent} metalness={0.7} roughness={0.4} />
         </mesh>
