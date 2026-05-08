@@ -188,6 +188,11 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const moveCountRef = useRef(state.moveCount);
   moveCountRef.current = state.moveCount;
 
+  // In-flight guard for the place POST. React's render batching can queue
+  // two click events before the state update lands, both passing the
+  // weapon.kind === "aiming" guard. The ref makes the second call a no-op.
+  const placeInFlightRef = useRef(false);
+
   const postClearHighlight = useCallback(async () => {
     const ok = await postCombat("/api/combat/highlight", {
       method: "POST",
@@ -203,21 +208,27 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
 
   const postPlaceHighlight = useCallback(
     async (weaponId: string, axis: { x: number; y: number; z: number }) => {
-      const ok = await postCombat("/api/combat/highlight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          weaponId,
-          axis,
-          expectedMoveCount: moveCountRef.current,
-        }),
-      });
-      if (!ok) {
-        showError("Failed to place weapon highlight");
-        // Revert local placed state to inactive — the visible cone in the
-        // user's own view would otherwise stay up while no other client
-        // ever sees it (no server record).
-        setWeapon({ kind: "inactive" });
+      if (placeInFlightRef.current) return;
+      placeInFlightRef.current = true;
+      try {
+        const ok = await postCombat("/api/combat/highlight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            weaponId,
+            axis,
+            expectedMoveCount: moveCountRef.current,
+          }),
+        });
+        if (!ok) {
+          showError("Failed to place weapon highlight");
+          // Revert local placed state to inactive — the visible cone in the
+          // user's own view would otherwise stay up while no other client
+          // ever sees it (no server record).
+          setWeapon({ kind: "inactive" });
+        }
+      } finally {
+        placeInFlightRef.current = false;
       }
     },
     [postCombat, showError],
