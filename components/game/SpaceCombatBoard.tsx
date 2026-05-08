@@ -138,8 +138,11 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   // handled at each call site below.
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const errorTimerRef = useRef<number | null>(null);
-  const showError = useCallback((msg: string) => {
-    setErrorMsg(msg);
+  // `detail` comes from the server's `error` field via postCombat; appended
+  // so the toast surfaces the actual reason (e.g. "Lattice cannot be raised
+  // while Flip is charging") instead of a generic local context.
+  const showError = useCallback((msg: string, detail?: string | null) => {
+    setErrorMsg(detail ? `${msg}: ${detail}` : msg);
     if (errorTimerRef.current) window.clearTimeout(errorTimerRef.current);
     errorTimerRef.current = window.setTimeout(() => setErrorMsg(null), 4000);
   }, []);
@@ -147,19 +150,31 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     if (errorTimerRef.current) window.clearTimeout(errorTimerRef.current);
   }, []);
 
-  // Wraps fetch with consistent failure handling. Returns true on success.
+  // Wraps fetch with consistent failure handling. Returns null on success,
+  // otherwise a short error message — typically the server's `error` field
+  // from a 4xx/5xx JSON response, falling back to HTTP status / exception.
+  // Call sites combine this with their own context message ("Failed to X: ...").
   const postCombat = useCallback(
-    async (url: string, init?: RequestInit): Promise<boolean> => {
+    async (url: string, init?: RequestInit): Promise<string | null> => {
       try {
         const res = await fetch(url, init);
         if (!res.ok) {
-          console.warn(`[combat] ${url} failed: HTTP ${res.status}`);
-          return false;
+          let detail = `HTTP ${res.status}`;
+          try {
+            const body = (await res.json()) as { error?: unknown };
+            if (typeof body.error === "string" && body.error.trim()) {
+              detail = body.error;
+            }
+          } catch {
+            /* response had no JSON body — keep HTTP-status fallback */
+          }
+          console.warn(`[combat] ${url} failed: ${detail}`);
+          return detail;
         }
-        return true;
+        return null;
       } catch (e) {
         console.warn(`[combat] ${url} fetch error:`, e);
-        return false;
+        return "Network error";
       }
     },
     [],
@@ -212,7 +227,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const placeInFlightRef = useRef(false);
 
   const postClearHighlight = useCallback(async () => {
-    const ok = await postCombat("/api/combat/highlight", {
+    const err = await postCombat("/api/combat/highlight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -221,7 +236,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         expectedMoveCount: moveCountRef.current,
       }),
     });
-    if (!ok) showError("Failed to clear weapon highlight");
+    if (err) showError("Failed to clear weapon highlight", err);
   }, [postCombat, showError]);
 
   const postPlaceHighlight = useCallback(
@@ -229,7 +244,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       if (placeInFlightRef.current) return;
       placeInFlightRef.current = true;
       try {
-        const ok = await postCombat("/api/combat/highlight", {
+        const err = await postCombat("/api/combat/highlight", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -238,8 +253,8 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
             expectedMoveCount: moveCountRef.current,
           }),
         });
-        if (!ok) {
-          showError("Failed to place weapon highlight");
+        if (err) {
+          showError("Failed to place weapon highlight", err);
           // Revert local placed state to inactive — the visible cone in the
           // user's own view would otherwise stay up while no other client
           // ever sees it (no server record).
@@ -288,12 +303,12 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     if (flipInFlightRef.current) return;
     flipInFlightRef.current = true;
     try {
-      const ok = await postCombat("/api/combat/flip", {
+      const err = await postCombat("/api/combat/flip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expectedMoveCount: moveCountRef.current }),
       });
-      if (!ok) showError("Failed to invoke Flip");
+      if (err) showError("Failed to invoke Flip", err);
     } finally {
       flipInFlightRef.current = false;
     }
@@ -326,7 +341,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
           }
         }
       }
-      const ok = await postCombat("/api/combat/lattice", {
+      const err = await postCombat("/api/combat/lattice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -334,14 +349,14 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
           expectedMoveCount: moveCountRef.current,
         }),
       });
-      if (!ok) showError("Failed to toggle Lattice");
+      if (err) showError("Failed to toggle Lattice", err);
     } finally {
       latticeInFlightRef.current = false;
     }
   }, [postCombat, postClearHighlight, showError, weapon]);
 
   const handleDisarmLattice = useCallback(async () => {
-    const ok = await postCombat("/api/combat/lattice", {
+    const err = await postCombat("/api/combat/lattice", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -349,7 +364,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         expectedMoveCount: moveCountRef.current,
       }),
     });
-    if (!ok) showError("Failed to disarm Lattice");
+    if (err) showError("Failed to disarm Lattice", err);
   }, [postCombat, showError]);
 
   // ─── GM interactions ───────────────────────────────────────────────
@@ -405,12 +420,12 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       staging.editStaged(id, changes);
       return;
     }
-    const ok = await postCombat(`/api/combat/enemy/${id}`, {
+    const err = await postCombat(`/api/combat/enemy/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(changes),
     });
-    if (!ok) showError("Failed to save edit — server may have stale state");
+    if (err) showError("Failed to save edit", err);
   };
 
   // Esc / Cancel — discard pending edits for this ship by reverting staged to original.
@@ -428,8 +443,8 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     const id = selectedEnemyId;
     setSelectedEnemyId(null);
     staging.removeFromStaging(id);
-    const ok = await postCombat(`/api/combat/enemy/${id}`, { method: "DELETE" });
-    if (!ok) showError("Failed to delete — will reappear on next sync");
+    const err = await postCombat(`/api/combat/enemy/${id}`, { method: "DELETE" });
+    if (err) showError("Failed to delete", err);
   };
 
   // GM drag — updates staged azimuth/elevation as cursor moves.
@@ -445,12 +460,12 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       staging.editStaged(id, { range });
       return;
     }
-    const ok = await postCombat(`/api/combat/enemy/${id}`, {
+    const err = await postCombat(`/api/combat/enemy/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ range }),
     });
-    if (!ok) showError("Failed to change range");
+    if (err) showError("Failed to change range", err);
   };
   const handleContextChangeFacing = async (facing: CombatFace) => {
     if (!contextMenu) return;
@@ -459,34 +474,34 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       staging.editStaged(id, { facing });
       return;
     }
-    const ok = await postCombat(`/api/combat/enemy/${id}`, {
+    const err = await postCombat(`/api/combat/enemy/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ facing }),
     });
-    if (!ok) showError("Failed to change facing");
+    if (err) showError("Failed to change facing", err);
   };
   const handleContextDelete = async () => {
     if (!contextMenu) return;
     const id = contextMenu.enemyId;
     staging.removeFromStaging(id);
     if (selectedEnemyId === id) setSelectedEnemyId(null);
-    const ok = await postCombat(`/api/combat/enemy/${id}`, { method: "DELETE" });
-    if (!ok) showError("Failed to delete — will reappear on next sync");
+    const err = await postCombat(`/api/combat/enemy/${id}`, { method: "DELETE" });
+    if (err) showError("Failed to delete", err);
   };
 
   // End Turn — gm-phase POSTs the full staged list; player-phase POSTs no body.
   // Failures here are the most user-visible: the GM thinks the turn ended but
   // the server didn't get it. Surface a clear error so they can retry.
   const handleEndTurn = async () => {
-    const ok = inGmPhase
+    const err = inGmPhase
       ? await postCombat("/api/combat/end-turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enemies: staging.stagedEnemies }),
       })
       : await postCombat("/api/combat/end-turn", { method: "POST" });
-    if (!ok) showError("End Turn failed — try again");
+    if (err) showError("End Turn failed", err);
   };
 
   // Esc — priority cascade.

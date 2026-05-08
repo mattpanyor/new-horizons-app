@@ -80,9 +80,11 @@ export default function GMPanel({
         opacity: shown ? 1 : 0,
       }}
     >
-      {/* Disarm Aegis Graviton Lattice — visible to GM whenever the shield is
-         up, in either phase. Narratively: enemy ships breaking through. */}
-      {latticeActive && !selectedEnemy && (
+      {/* Disarm Aegis Graviton Lattice — visible to GM whenever the shield
+         is up, in either phase. Available even while editing a ship so the
+         GM can disarm in-flow without first having to deselect. Narrative:
+         enemy ships breaking through. */}
+      {latticeActive && (
         <button
           type="button"
           onClick={onDisarmLattice}

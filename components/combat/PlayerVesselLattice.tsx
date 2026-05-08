@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 // Aegis Graviton Lattice — six nodes in a horizontal hexagon (XZ plane)
@@ -47,6 +47,12 @@ export default function PlayerVesselLattice() {
     );
     return geom;
   }, [nodePositions]);
+
+  // Release the geometry's GPU buffers when the lattice toggles off so
+  // repeated raise/lower cycles don't accumulate WebGL memory.
+  useEffect(() => {
+    return () => lineGeometry.dispose();
+  }, [lineGeometry]);
 
   return (
     <group>

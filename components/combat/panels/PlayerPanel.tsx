@@ -240,15 +240,16 @@ export default function PlayerPanel({
               : "Flip"}
           </button>
 
-          {/* Graviton Lattice toggle — disabled while Flip is in any
-             non-ready state (mutex). Stays on until commander or GM
-             disarms it. */}
+          {/* Graviton Lattice toggle — disabled only while Flip is actively
+             charging (mutex). Flip cooldown does NOT block lattice; once the
+             teleport is committed, the shield can come up. Stays on until
+             commander or GM disarms it. */}
           <button
             type="button"
-            disabled={!enabled || flipState.kind !== "ready"}
+            disabled={!enabled || flipState.kind === "charging"}
             onClick={onToggleLattice}
             className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.2em] uppercase transition-all ${
-              !enabled || flipState.kind !== "ready"
+              !enabled || flipState.kind === "charging"
                 ? latticeActive
                   ? "border-violet-300/70 bg-violet-300/25 text-violet-100 cursor-not-allowed"
                   : "border-white/5 text-white/15 cursor-not-allowed"

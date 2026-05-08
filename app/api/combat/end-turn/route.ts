@@ -80,9 +80,16 @@ export async function POST(req: NextRequest) {
 
   // Round number — bumped at each player → gm transition (start of a new
   // round of combat). gm → player transitions stay in the same round.
-  const currentRound = state.roundNumber ?? 1;
+  // For legacy sessions that predate this field, the first end-turn after
+  // deploy seeds it at 1 instead of jumping to 2 — we have no idea what
+  // round the legacy session was actually on, so treating "first contact"
+  // as round 1 is the safest default.
   const nextRound =
-    state.phase === "player" ? currentRound + 1 : currentRound;
+    state.roundNumber === undefined
+      ? 1
+      : state.phase === "player"
+        ? state.roundNumber + 1
+        : state.roundNumber;
 
   // Build next state. End Turn always:
   //  - increments moveCount (drives client animation)

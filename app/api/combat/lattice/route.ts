@@ -59,10 +59,12 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
-    // Mutex with flip — can't activate lattice while a flip is in any cycle.
-    if (state.flip) {
+    // Mutex with flip — only the in-progress charge blocks Lattice. Flip
+    // cooldown does NOT prevent raising the shield (the teleport is already
+    // committed; the lattice doesn't interfere with it).
+    if (state.flip?.status === "charging") {
       return NextResponse.json(
-        { error: "Lattice cannot be raised while Flip is in cycle" },
+        { error: "Lattice cannot be raised while Flip is charging" },
         { status: 409 },
       );
     }
