@@ -24,6 +24,7 @@ import AssemblySplash from "@/components/combat/AssemblySplash";
 import HUDBezel from "@/components/combat/HUDBezel";
 import SceneErrorBoundary from "@/components/combat/SceneErrorBoundary";
 import { useCombatStaging } from "@/hooks/useCombatStaging";
+import { useDerivedReset } from "@/hooks/useDerivedReset";
 
 const Scene = dynamic(() => import("@/components/combat/Scene"), { ssr: false });
 
@@ -70,26 +71,22 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const staging = useCombatStaging(state.enemies ?? []);
 
   // Phase change → reset everything local AND resync staging from polled state.
-  const [prevPhase, setPrevPhase] = useState(state.phase);
-  if (prevPhase !== state.phase) {
-    setPrevPhase(state.phase);
+  useDerivedReset(state.phase, () => {
     setView(emptyView);
     setWeapon({ kind: "inactive" });
     setSelectedEnemyId(null);
     setAddModalOpen(false);
     setContextMenu(null);
     staging.resyncOriginal(state.enemies ?? []);
-  }
+  });
 
   // Resync staging when the server-side enemies list changes via player-phase
   // direct edits (PATCH/DELETE). We use moveCount as the change signal since
   // immediate edits bump it on every write. Also drives the End-Turn animation:
   // when moveCount jumps and we're now in player phase, kick off interpolation
   // of polled enemies from `prevEnemies` → `enemies` over endTurnAnimMs.
-  const [prevMoveCount, setPrevMoveCount] = useState(state.moveCount);
   const [animStartMs, setAnimStartMs] = useState<number | null>(null);
-  if (prevMoveCount !== state.moveCount) {
-    setPrevMoveCount(state.moveCount);
+  useDerivedReset(state.moveCount, () => {
     if (state.phase === "player") {
       staging.resyncOriginal(state.enemies ?? []);
       // Trigger animation only if we have a previous snapshot to lerp from.
@@ -97,7 +94,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         setAnimStartMs(performance.now());
       }
     }
-  }
+  });
   // Clear animStart after the animation window closes so subsequent renders
   // snap to canonical (avoids stuttering on later moveCount bumps).
   useEffect(() => {
