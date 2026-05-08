@@ -526,16 +526,23 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       {/* Turn indicator — big text inside the top bezel notch.
          GM phase is presented to players as "ENEMY TURN" (the GM is the
          narrative adversary). Glow tint distinguishes the two: blue when it
-         belongs to the players, red when the enemy is acting. */}
+         belongs to the players, red when the enemy is acting.
+         Font size and letter-spacing scale with viewport via clamp() so the
+         label fits comfortably from mobile to ultrawide without clipping. */}
       {hudShouldShow && (
         <div
           className="fixed left-1/2 -translate-x-1/2 z-10 pointer-events-none text-center"
-          style={{ top: 78 }}
+          style={{
+            top: 78,
+            maxWidth: "calc(100vw - 1rem)",
+          }}
         >
           <p
-            className="text-2xl md:text-3xl font-bold tracking-[0.5em] uppercase"
+            className="font-bold uppercase whitespace-nowrap"
             style={{
               ...cinzel,
+              fontSize: "clamp(0.95rem, 2.4vw, 1.75rem)",
+              letterSpacing: "clamp(2px, 0.5vw, 9px)",
               color: inGmPhase ? "#ff8a8a" : "#a8c8ff",
               textShadow: inGmPhase
                 ? "0 0 14px rgba(239,68,68,0.55), 0 0 4px rgba(239,68,68,0.4)"
