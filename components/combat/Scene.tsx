@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -111,8 +111,14 @@ export default function Scene({
 
   // Build the starfield texture once on mount. Shared between the visible
   // skybox sphere and the PMREM-filtered environment map (image-based
-  // lighting on metallic ship surfaces).
+  // lighting on metallic ship surfaces). Disposed on unmount so the 4096×2048
+  // CanvasTexture doesn't accumulate in GPU memory across remounts.
   const [skyboxTexture] = useState<THREE.Texture | null>(() => buildStarfield());
+  useEffect(() => {
+    return () => {
+      if (skyboxTexture) skyboxTexture.dispose();
+    };
+  }, [skyboxTexture]);
 
   // Hemisphere check — when a face is active, ships on the opposite half are
   // marked as `dim` so they render in a darkened palette. We don't hide them;
