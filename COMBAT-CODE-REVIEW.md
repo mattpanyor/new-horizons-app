@@ -9,10 +9,17 @@ Snapshot of issues found in the combat feature. Two were shipped before pausing;
 - **#3** — Gate `AnimatedEnemyShip` mount to animation window only (commit `a079ddb`)
 - **#5** — `HUDBezel` paths recompute on viewport resize (commit `3f155ff`)
 - **#6** — `SceneErrorBoundary` around the 3D tree (commit `379b0c7`)
+- **#4** — Drop `castShadow` from small detail meshes (commit `bc56100`)
+- **#7** — Dispose skybox texture on Scene unmount (commit `4535c64`)
+- **#8** — Optimistic concurrency on weapon-highlight writes (commit `be58197`)
+- **#10** — `StatusOverlay` pulse via CSS keyframe (commit `ecbdc11`)
+- **#11** — Spatial-bucket `AssemblySplash` connection lines (commit `9ea283d`)
+- **#13** — Extract `useDerivedReset` hook (commit `16ea906`)
+- **#16** — In-flight guard on weapon-place POST (commit `5f6e838`)
 
 ---
 
-## Medium priority — pick up next
+## Remaining (low impact / known)
 
 ### #4 — Shadow-cost scales linearly with mesh count
 
@@ -118,7 +125,4 @@ Each turret pair uses an outer `<group position>` with two child meshes. With ~5
 
 ## Suggested execution order
 
-1. **#4** (shadow-mesh diet)
-2. **#7** (texture lifecycle)
-3. **#8** (sync edge case)
-4. **#10**, **#11**, **#13**, **#16** (polish)
+All recommended items shipped. Remaining backlog (#9, #12, #14, #15, #17, #18) is either non-issues or only matters if scope expands (multi-GM, asset variation). No further action recommended.
