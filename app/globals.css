@@ -117,7 +117,9 @@ body {
 }
 
 /* Combat status overlay — slow opacity pulse driven by CSS instead of an
-   rAF setState loop, so it doesn't trigger React re-renders at 60 fps. */
+   rAF setState loop, so it doesn't trigger React re-renders at 60 fps. Used
+   by the top-of-screen status overlay AND the bottom-right "Graviton Flip
+   Commencing" indicator. */
 @keyframes combat-status-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }

@@ -22,6 +22,11 @@ interface GMPanelProps {
   onDelete: () => void;
   // Called when the GM presses Esc or clicks "Cancel" to discard pending edits.
   onCancelEdit: () => void;
+  // Player ship's Graviton Lattice — when active, the GM can disarm it
+  // (narratively: the enemy "shoots it off"). Button only renders when the
+  // shield is up.
+  latticeActive: boolean;
+  onDisarmLattice: () => void;
 }
 
 export default function GMPanel({
@@ -32,6 +37,8 @@ export default function GMPanel({
   onSaveEdit,
   onDelete,
   onCancelEdit,
+  latticeActive,
+  onDisarmLattice,
 }: GMPanelProps) {
   // Local draft state for the editing section. Resets when selectedEnemy.id changes.
   const [draftLabel, setDraftLabel] = useState("");
@@ -73,6 +80,19 @@ export default function GMPanel({
         opacity: shown ? 1 : 0,
       }}
     >
+      {/* Disarm Aegis Graviton Lattice — visible to GM whenever the shield is
+         up, in either phase. Narratively: enemy ships breaking through. */}
+      {latticeActive && !selectedEnemy && (
+        <button
+          type="button"
+          onClick={onDisarmLattice}
+          className="w-full px-3 py-2 rounded border border-violet-300/50 text-[9px] tracking-[0.2em] uppercase text-violet-200/85 hover:text-violet-100 hover:border-violet-300/80 hover:bg-violet-300/10 cursor-pointer transition-all"
+          style={cinzel}
+        >
+          ⚡ Disarm Lattice
+        </button>
+      )}
+
       {inGmPhase && !selectedEnemy && (
         <button
           type="button"

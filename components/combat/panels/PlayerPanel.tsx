@@ -26,6 +26,23 @@ interface PlayerPanelProps {
   activeWeaponId: string | null;
   onToggleWeapon: (weaponId: string) => void;
 
+  // Aegis "Flip" ability — commander-only. Three derived states:
+  //   ready: button live, click invokes
+  //   charging: button shows "Flip Charging", disabled
+  //   cooldown(N): button disabled, shows turns left
+  isCommander: boolean;
+  flipState:
+    | { kind: "ready" }
+    | { kind: "charging" }
+    | { kind: "cooldown"; turnsLeft: number };
+  onInvokeFlip: () => void;
+
+  // Aegis "Graviton Lattice" ability — commander toggle, on/off.
+  // While active, the Graviton Lance weapon button is disabled
+  // (interference). Mutex with Flip enforced server-side.
+  latticeActive: boolean;
+  onToggleLattice: () => void;
+
   // Whether the panel buttons should respond. False during GM phase / non-player.
   enabled: boolean;
 }
@@ -95,6 +112,11 @@ export default function PlayerPanel({
   onHoverRange,
   activeWeaponId,
   onToggleWeapon,
+  isCommander,
+  flipState,
+  onInvokeFlip,
+  latticeActive,
+  onToggleLattice,
   enabled,
 }: PlayerPanelProps) {
   // Slide-in on first mount: starts off-screen-left + fully transparent,
@@ -161,23 +183,85 @@ export default function PlayerPanel({
           Weapons
         </p>
         <div className="flex flex-col gap-1.5">
-          {PLAYER_SHIP.weapons.map((w) => (
-            <ToggleButton
-              key={w.id}
-              label={w.displayName}
-              active={activeWeaponId === w.id}
-              enabled={enabled}
-              onClick={() => onToggleWeapon(w.id)}
-              onMouseEnter={() => {
-                /* no preview-on-hover for weapons; aim mode follows cursor */
-              }}
-              onMouseLeave={() => {
-                /* no preview-on-hover for weapons */
-              }}
-            />
-          ))}
+          {PLAYER_SHIP.weapons.map((w) => {
+            // Graviton Lance is jammed by the active Lattice — interference.
+            const jammedByLattice = latticeActive && w.id === "graviton-lance";
+            return (
+              <ToggleButton
+                key={w.id}
+                label={
+                  jammedByLattice ? `${w.displayName} · Jammed` : w.displayName
+                }
+                active={activeWeaponId === w.id}
+                enabled={enabled && !jammedByLattice}
+                onClick={() => onToggleWeapon(w.id)}
+                onMouseEnter={() => {
+                  /* no preview-on-hover for weapons; aim mode follows cursor */
+                }}
+                onMouseLeave={() => {
+                  /* no preview-on-hover for weapons */
+                }}
+              />
+            );
+          })}
         </div>
       </div>
+
+      {/* Abilities — commander-only. Hidden from non-commanders so the
+         buttons only appear for the user who can actually invoke them.
+         Flip and Lattice are mutex (server-enforced); when one is in use
+         the other's button is disabled. */}
+      {isCommander && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[8px] tracking-[0.3em] uppercase text-white/30 mb-1" style={cinzel}>
+            Abilities
+          </p>
+          <button
+            type="button"
+            disabled={
+              !enabled || flipState.kind === "cooldown" || latticeActive
+            }
+            onClick={onInvokeFlip}
+            className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.2em] uppercase transition-all ${
+              !enabled || latticeActive
+                ? "border-white/5 text-white/15 cursor-not-allowed"
+                : flipState.kind === "charging"
+                ? "border-purple-300/70 bg-purple-300/25 text-purple-100 hover:bg-purple-300/35 hover:border-purple-300/90 cursor-pointer"
+                : flipState.kind === "cooldown"
+                ? "border-white/10 text-white/30 cursor-not-allowed"
+                : "border-purple-300/40 text-purple-200/80 hover:text-purple-200 hover:border-purple-300/70 hover:bg-purple-300/10 cursor-pointer"
+            }`}
+            style={cinzel}
+          >
+            {flipState.kind === "charging"
+              ? "Cancel Flip"
+              : flipState.kind === "cooldown"
+              ? `Flip · ${flipState.turnsLeft}`
+              : "Flip"}
+          </button>
+
+          {/* Graviton Lattice toggle — disabled while Flip is in any
+             non-ready state (mutex). Stays on until commander or GM
+             disarms it. */}
+          <button
+            type="button"
+            disabled={!enabled || flipState.kind !== "ready"}
+            onClick={onToggleLattice}
+            className={`px-3 py-1.5 rounded border text-[9px] tracking-[0.2em] uppercase transition-all ${
+              !enabled || flipState.kind !== "ready"
+                ? latticeActive
+                  ? "border-violet-300/70 bg-violet-300/25 text-violet-100 cursor-not-allowed"
+                  : "border-white/5 text-white/15 cursor-not-allowed"
+                : latticeActive
+                ? "border-violet-300/70 bg-violet-300/25 text-violet-100 hover:bg-violet-300/35 hover:border-violet-300/90 cursor-pointer"
+                : "border-violet-300/40 text-violet-200/80 hover:text-violet-200 hover:border-violet-300/70 hover:bg-violet-300/10 cursor-pointer"
+            }`}
+            style={cinzel}
+          >
+            {latticeActive ? "Lower Lattice" : "Raise Lattice"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

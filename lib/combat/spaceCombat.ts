@@ -21,6 +21,7 @@ export function getDefaultState(): SpaceCombatState {
     enemies: [],
     weaponHighlights: {},
     moveCount: 0,
+    roundNumber: 1,
   };
 }
 

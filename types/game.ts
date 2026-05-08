@@ -198,12 +198,32 @@ export interface SpaceCombatConfig {
   opponentEntityId: null;          // unused, kept null for GamesPanel uniformity
 }
 
+// Aegis "Flip" ability state — short-range teleport. Visualized as a purple
+// aura + portal ring around the player vessel. Lifecycle:
+//   undefined → ready (commander can invoke)
+//   { status: "charging" } → aura visible, persists through gm phase so the
+//     GM can reposition enemies relative to the impending flip
+//   { status: "cooldown", cooldownLeft } → aura hidden, decremented at each
+//     gm→player transition, cleared when reaches 0
+export interface CombatFlipState {
+  status: "charging" | "cooldown";
+  cooldownLeft: number;
+}
+
 export interface SpaceCombatState {
   phase: "player" | "gm";
   enemies: CombatEnemyShip[];
   weaponHighlights: Record<string, CombatPlacedHighlight | null>;
   moveCount: number;
   prevEnemies?: CombatEnemyShip[]; // pre-EndTurn snapshot, drives client animation
+  flip?: CombatFlipState;
+  roundNumber?: number;            // bumped at each player→gm transition
+  // Aegis Graviton Lattice — toggleable shield. When true, a 6-node violet
+  // hex lattice renders around the player vessel and the Graviton Lance
+  // weapon is disabled (interference). Mutually exclusive with `flip`.
+  // Commander toggles in player phase; GM can disarm in any phase
+  // (narratively: enemy ships shooting it off).
+  latticeActive?: boolean;
 }
 
 // ─── Session ───

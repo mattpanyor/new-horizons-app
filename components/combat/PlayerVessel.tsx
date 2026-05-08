@@ -1,6 +1,15 @@
 "use client";
 
 import { PLAYER_SHIP } from "@/lib/combat/playerShip";
+import PlayerVesselFlipAura from "./PlayerVesselFlipAura";
+import PlayerVesselLattice from "./PlayerVesselLattice";
+
+interface PlayerVesselProps {
+  // When true, renders the purple Flip aura + portal ring around the ship.
+  flipCharging?: boolean;
+  // When true, renders the violet Graviton Lattice around the ship.
+  latticeActive?: boolean;
+}
 
 // Streamlined hero ship: stretched ellipsoid hull with sharp cone tips fore (+X)
 // and aft (-X). Reads as "ours" against the angular enemies. Bow always points +X.
@@ -9,7 +18,10 @@ import { PLAYER_SHIP } from "@/lib/combat/playerShip";
 // (cone tips shadow the hull behind them, antenna shadows the bridge area,
 // etc.). Engine emissives don't cast shadows (would look weird from a
 // glowing source) but do receive them.
-export default function PlayerVessel() {
+export default function PlayerVessel({
+  flipCharging = false,
+  latticeActive = false,
+}: PlayerVesselProps) {
   const hull = PLAYER_SHIP.color;
   const accent = PLAYER_SHIP.accentColor;
   const engine = PLAYER_SHIP.engineColor;
@@ -67,6 +79,9 @@ export default function PlayerVessel() {
         <sphereGeometry args={[0.06, 12, 8]} />
         <meshStandardMaterial color={hull} metalness={0.9} roughness={0.2} />
       </mesh>
+
+      {flipCharging && <PlayerVesselFlipAura />}
+      {latticeActive && <PlayerVesselLattice />}
     </group>
   );
 }

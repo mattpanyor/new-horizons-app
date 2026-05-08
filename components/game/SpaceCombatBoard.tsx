@@ -42,6 +42,13 @@ type WeaponLocalState =
   | { kind: "aiming"; weaponId: string }
   | { kind: "placed"; placement: CombatPlacedHighlight };
 
+// Flip-button display states (kept local to this file — the panel doesn't
+// need to know about server-side cooldown internals).
+type PlayerPanelFlipState =
+  | { kind: "ready" }
+  | { kind: "charging" }
+  | { kind: "cooldown"; turnsLeft: number };
+
 const GM_ACCESS_LEVEL = 127;
 
 export default function SpaceCombatBoard({ session, username, viewer }: GameBoardProps) {
@@ -271,6 +278,80 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     postPlaceHighlight(weaponId, axis);
   };
 
+  // ─── Aegis abilities (Flip + Lattice) ───────────────────────────────
+
+  // In-flight guard for Flip — same reasoning as weapon-place: a fast
+  // double-click otherwise queues two charging POSTs before state syncs.
+  const flipInFlightRef = useRef(false);
+
+  const handleInvokeFlip = useCallback(async () => {
+    if (flipInFlightRef.current) return;
+    flipInFlightRef.current = true;
+    try {
+      const ok = await postCombat("/api/combat/flip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedMoveCount: moveCountRef.current }),
+      });
+      if (!ok) showError("Failed to invoke Flip");
+    } finally {
+      flipInFlightRef.current = false;
+    }
+  }, [postCombat, showError]);
+
+  // Latest lattice state — read by the toggle handler so it knows whether
+  // it's an arm or disarm request.
+  const latticeRef = useRef<boolean>(!!state.latticeActive);
+  latticeRef.current = !!state.latticeActive;
+  const latticeInFlightRef = useRef(false);
+
+  const handleToggleLattice = useCallback(async () => {
+    if (latticeInFlightRef.current) return;
+    latticeInFlightRef.current = true;
+    try {
+      const wantActive = !latticeRef.current;
+      // If activating Lattice while Graviton Lance is in use, clear the
+      // local weapon state — its button is about to disable on the panel.
+      if (wantActive) {
+        const currentWeaponId =
+          weapon.kind === "aiming"
+            ? weapon.weaponId
+            : weapon.kind === "placed"
+              ? weapon.placement.weaponId
+              : null;
+        if (currentWeaponId === "graviton-lance") {
+          setWeapon({ kind: "inactive" });
+          if (weapon.kind === "placed") {
+            await postClearHighlight();
+          }
+        }
+      }
+      const ok = await postCombat("/api/combat/lattice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          active: wantActive,
+          expectedMoveCount: moveCountRef.current,
+        }),
+      });
+      if (!ok) showError("Failed to toggle Lattice");
+    } finally {
+      latticeInFlightRef.current = false;
+    }
+  }, [postCombat, postClearHighlight, showError, weapon]);
+
+  const handleDisarmLattice = useCallback(async () => {
+    const ok = await postCombat("/api/combat/lattice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        active: false,
+        expectedMoveCount: moveCountRef.current,
+      }),
+    });
+    if (!ok) showError("Failed to disarm Lattice");
+  }, [postCombat, showError]);
+
   // ─── GM interactions ───────────────────────────────────────────────
 
   const handleEnemyClick = (id: string) => {
@@ -400,10 +481,10 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
   const handleEndTurn = async () => {
     const ok = inGmPhase
       ? await postCombat("/api/combat/end-turn", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ enemies: staging.stagedEnemies }),
-        })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enemies: staging.stagedEnemies }),
+      })
       : await postCombat("/api/combat/end-turn", { method: "POST" });
     if (!ok) showError("End Turn failed — try again");
   };
@@ -444,6 +525,18 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     .map(([, h]) => h as CombatPlacedHighlight);
 
   const localPlaced = weapon.kind === "placed" ? weapon.placement : null;
+
+  // Flip state for the player panel + visual aura. Server holds canonical
+  // state; clients translate it into the panel's three-way display.
+  const flipPanelState: PlayerPanelFlipState =
+    state.flip?.status === "charging"
+      ? { kind: "charging" }
+      : state.flip?.status === "cooldown"
+        ? { kind: "cooldown", turnsLeft: state.flip.cooldownLeft }
+        : { kind: "ready" };
+  const flipCharging = state.flip?.status === "charging";
+  const latticeActive = !!state.latticeActive;
+  const roundNumber = state.roundNumber ?? 1;
 
   const statusFace = view.hoveredFace ?? view.activeFace;
   const statusRange = view.hoveredRange ?? view.activeRange;
@@ -507,18 +600,26 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
             prevEnemies={state.prevEnemies}
             animStartMs={inPlayerPhase ? animStartMs : null}
             skyboxSeed={session.id}
+            flipCharging={flipCharging}
+            latticeActive={latticeActive}
           />
         </SceneErrorBoundary>
       </div>
 
-      {/* Top-left flavor text — quiet sci-fi chrome. */}
+      {/* Top-left flavor text — quiet sci-fi chrome + round counter. */}
       {hudShouldShow && (
-        <div className="fixed top-20 left-4 pointer-events-none z-10">
+        <div className="fixed top-20 left-4 pointer-events-none z-10 flex flex-col gap-0.5">
           <p
             className="text-xs tracking-[0.55em] uppercase text-white/40"
             style={cinzel}
           >
             Aegis Systems Initialized
+          </p>
+          <p
+            className="text-[10px] tracking-[0.4em] uppercase text-white/25"
+            style={cinzel}
+          >
+            Round {roundNumber}
           </p>
         </div>
       )}
@@ -555,6 +656,47 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
       )}
 
       <StatusOverlay face={statusFace} range={statusRange} weapon={statusWeapon} />
+
+      {/* "Graviton Flip Commencing" status — pulsing purple text in the
+         bottom-right while the commander has Flip armed during their turn.
+         Hidden during gm phase (the flip is past the cancel point and the
+         on-ship aura carries the message instead). Reuses the same proven
+         `combat-status-pulse` class as the top-of-screen status overlay. */}
+      {hudShouldShow && inPlayerPhase && state.flip?.status === "charging" && (
+        <div className="fixed bottom-6 right-6 pointer-events-none z-10 combat-status-pulse">
+          <p
+            className="text-sm font-bold uppercase whitespace-nowrap"
+            style={{
+              ...cinzel,
+              color: "#c084fc",
+              letterSpacing: "0.45em",
+              textShadow: "0 0 10px rgba(168,85,247,0.55)",
+            }}
+          >
+            Graviton Flip Commencing
+          </p>
+        </div>
+      )}
+
+      {/* "Graviton Lattice Active" status — pulsing violet text mirrored on
+         the bottom-left whenever the lattice shield is up (any phase, since
+         it persists across turns until disarmed). Cooler violet than Flip's
+         pink-purple so the two abilities read as distinct. */}
+      {hudShouldShow && state.latticeActive && (
+        <div className="fixed bottom-6 left-6 pointer-events-none z-10 combat-status-pulse">
+          <p
+            className="text-sm font-bold uppercase whitespace-nowrap"
+            style={{
+              ...cinzel,
+              color: "#a78bfa",
+              letterSpacing: "0.45em",
+              textShadow: "0 0 10px rgba(139,92,246,0.55)",
+            }}
+          >
+            Graviton Lattice Engaged
+          </p>
+        </div>
+      )}
 
       {/* Auto-dismissing error toast for failed network calls. */}
       {errorMsg && (
@@ -595,6 +737,11 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
           onHoverRange={setHoveredRange}
           activeWeaponId={activeWeaponId}
           onToggleWeapon={toggleWeapon}
+          isCommander={isCommander}
+          flipState={flipPanelState}
+          onInvokeFlip={handleInvokeFlip}
+          latticeActive={latticeActive}
+          onToggleLattice={handleToggleLattice}
           enabled={playerToolsEnabled}
         />
       )}
@@ -607,6 +754,8 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
         onSaveEdit={handleSaveEdit}
         onDelete={handleDelete}
         onCancelEdit={handleCancelEdit}
+        latticeActive={latticeActive}
+        onDisarmLattice={handleDisarmLattice}
       />
 
       <AddShipModal

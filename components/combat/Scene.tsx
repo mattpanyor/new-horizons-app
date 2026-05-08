@@ -76,6 +76,14 @@ interface SceneProps {
   // paints the same sky and reloads keep it consistent.
   skyboxSeed?: number;
 
+  // Renders the purple Flip aura + portal ring around the player vessel
+  // while Aegis's Flip ability is charging.
+  flipCharging?: boolean;
+
+  // Renders the violet Graviton Lattice around the player vessel while
+  // Aegis's Lattice shield is active.
+  latticeActive?: boolean;
+
   children?: React.ReactNode;
 }
 
@@ -104,6 +112,8 @@ export default function Scene({
   prevEnemies,
   animStartMs,
   skyboxSeed,
+  flipCharging = false,
+  latticeActive = false,
   children,
 }: SceneProps) {
   const editingShip = editingShipId
@@ -193,7 +203,7 @@ export default function Scene({
       {skyboxTexture && (
         <Environment map={skyboxTexture as THREE.Texture} background={false} />
       )}
-      <PlayerVessel />
+      <PlayerVessel flipCharging={flipCharging} latticeActive={latticeActive} />
 
       {/* Enemy ships. Ships on the inactive half-space (when a face filter is
          active) render `dim` — present but visually demoted. While editing,

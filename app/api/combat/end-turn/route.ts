@@ -63,6 +63,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Flip lifecycle:
+  //   gm → player transition: charging → cooldown(2); cooldown decrements,
+  //     reaching 0 clears the field entirely.
+  //   player → gm transition: leave flip alone (aura persists through gm
+  //     phase so the GM can position enemies around the impending teleport).
+  let nextFlip = state.flip;
+  if (state.phase === "gm") {
+    if (state.flip?.status === "charging") {
+      nextFlip = { status: "cooldown", cooldownLeft: 2 };
+    } else if (state.flip?.status === "cooldown") {
+      const left = state.flip.cooldownLeft - 1;
+      nextFlip = left <= 0 ? undefined : { status: "cooldown", cooldownLeft: left };
+    }
+  }
+
+  // Round number — bumped at each player → gm transition (start of a new
+  // round of combat). gm → player transitions stay in the same round.
+  const currentRound = state.roundNumber ?? 1;
+  const nextRound =
+    state.phase === "player" ? currentRound + 1 : currentRound;
+
   // Build next state. End Turn always:
   //  - increments moveCount (drives client animation)
   //  - clears weaponHighlights (per spec: phase change resets all measurements)
@@ -75,6 +96,8 @@ export async function POST(req: NextRequest) {
     weaponHighlights: {},
     enemies: state.phase === "gm" ? nextEnemies : state.enemies,
     prevEnemies: state.phase === "gm" ? (state.enemies ?? []) : state.prevEnemies,
+    flip: nextFlip,
+    roundNumber: nextRound,
   };
 
   const updated = await updateGameState(
