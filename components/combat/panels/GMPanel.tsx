@@ -13,8 +13,12 @@ interface GMPanelProps {
   inGmPhase: boolean;
   onAdd: () => void;
   selectedEnemy: CombatEnemyShip | null;
-  // Called with the new label/faction values when the GM presses Done.
-  onSaveEdit: (changes: { label: string; factionId: string | null }) => void;
+  // Called with the new label/faction/shields values when the GM presses Done.
+  onSaveEdit: (changes: {
+    label: string;
+    factionId: string | null;
+    shieldsUp: boolean;
+  }) => void;
   onDelete: () => void;
   // Called when the GM presses Esc or clicks "Cancel" to discard pending edits.
   onCancelEdit: () => void;
@@ -32,11 +36,13 @@ export default function GMPanel({
   // Local draft state for the editing section. Resets when selectedEnemy.id changes.
   const [draftLabel, setDraftLabel] = useState("");
   const [draftFactionId, setDraftFactionId] = useState<string | null>(null);
+  const [draftShieldsUp, setDraftShieldsUp] = useState(false);
   const [seededId, setSeededId] = useState<string | null>(null);
   if (selectedEnemy && selectedEnemy.id !== seededId) {
     setSeededId(selectedEnemy.id);
     setDraftLabel(selectedEnemy.label);
     setDraftFactionId(selectedEnemy.factionId);
+    setDraftShieldsUp(!!selectedEnemy.shieldsUp);
   }
   if (!selectedEnemy && seededId !== null) {
     setSeededId(null);
@@ -135,6 +141,25 @@ export default function GMPanel({
             </div>
           </div>
 
+          {/* Shields toggle — staged like label/faction. Commits on Done. */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[7px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
+              Shields
+            </label>
+            <button
+              type="button"
+              onClick={() => setDraftShieldsUp((v) => !v)}
+              className={`px-2 py-1.5 rounded border text-[8px] tracking-[0.15em] uppercase cursor-pointer transition-all ${
+                draftShieldsUp
+                  ? "border-cyan-300/60 bg-cyan-300/15 text-cyan-200/90 hover:border-cyan-300/80"
+                  : "border-white/15 text-white/50 hover:border-white/30 hover:text-white/80"
+              }`}
+              style={cinzel}
+            >
+              {draftShieldsUp ? "Shields Up" : "Shields Down"}
+            </button>
+          </div>
+
           <div className="flex gap-1.5 pt-1">
             <button
               type="button"
@@ -154,7 +179,7 @@ export default function GMPanel({
             </button>
             <button
               type="button"
-              onClick={() => onSaveEdit({ label: draftLabel, factionId: draftFactionId })}
+              onClick={() => onSaveEdit({ label: draftLabel, factionId: draftFactionId, shieldsUp: draftShieldsUp })}
               className="px-3 py-1.5 rounded border border-indigo-300/40 text-[8px] tracking-[0.15em] uppercase text-indigo-200/80 hover:text-indigo-200 hover:border-indigo-300/70 hover:bg-indigo-300/10 cursor-pointer transition-all"
               style={cinzel}
             >

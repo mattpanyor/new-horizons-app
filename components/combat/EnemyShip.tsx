@@ -16,6 +16,7 @@ import Destroyer from "./ships/Destroyer";
 import Cruiser from "./ships/Cruiser";
 import Battlecruiser from "./ships/Battlecruiser";
 import ObjectShip from "./ships/ObjectShip";
+import ShipShield from "./ShipShield";
 
 interface EnemyShipProps {
   enemy: CombatEnemyShip;
@@ -125,6 +126,7 @@ export default function EnemyShip({
       }
     >
       <ShipMesh sizeClass={enemy.sizeClass} color={color} />
+      {enemy.shieldsUp && !ghost && <ShipShield radii={sizeDef.shieldRadii} />}
       {showLabel && enemy.label && (
         <Html
           position={[0, sizeDef.scale * 1.1, 0]}

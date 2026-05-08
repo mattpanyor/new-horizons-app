@@ -82,19 +82,30 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
 
   // Resync staging when the server-side enemies list changes via player-phase
   // direct edits (PATCH/DELETE). We use moveCount as the change signal since
-  // immediate edits bump it on every write. Also drives the End-Turn animation:
-  // when moveCount jumps and we're now in player phase, kick off interpolation
-  // of polled enemies from `prevEnemies` → `enemies` over endTurnAnimMs.
+  // immediate edits bump it on every write.
+  //
+  // The End-Turn animation must ONLY fire when the bump represents the
+  // gm→player transition — not every PATCH/DELETE that happens during the
+  // player phase (e.g. GM toggling shields, renaming a label). We detect the
+  // transition by tracking the phase observed at the previous render: if it
+  // was "gm" and the current is "player", the bump is the End Turn commit.
   const [animStartMs, setAnimStartMs] = useState<number | null>(null);
+  const lastSeenPhaseRef = useRef(state.phase);
   useDerivedReset(state.moveCount, () => {
-    if (state.phase === "player") {
-      staging.resyncOriginal(state.enemies ?? []);
-      // Trigger animation only if we have a previous snapshot to lerp from.
-      if (state.prevEnemies && state.prevEnemies.length > 0) {
-        setAnimStartMs(performance.now());
-      }
+    if (state.phase !== "player") return;
+    staging.resyncOriginal(state.enemies ?? []);
+    const wasInGmPhase = lastSeenPhaseRef.current === "gm";
+    if (
+      wasInGmPhase &&
+      state.prevEnemies &&
+      state.prevEnemies.length > 0
+    ) {
+      setAnimStartMs(performance.now());
     }
   });
+  // Update the phase tracker AFTER the derived-reset hooks have run (so they
+  // can read the prior phase) but during render, before JSX returns.
+  lastSeenPhaseRef.current = state.phase;
   // Clear animStart after the animation window closes so subsequent renders
   // snap to canonical (avoids stuttering on later moveCount bumps).
   useEffect(() => {
@@ -298,18 +309,21 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
     setSelectedEnemyId(newShip.id);
   };
 
-  // Done in panel — commit local staged edits to the buffer (already applied
-  // to staged via editStaged calls) and exit edit mode.
-  const handleSaveEdit = async (changes: { label: string; factionId: string | null }) => {
+  // Done in panel — commit panel-draft edits (label / faction / shields). In
+  // GM phase the changes go to the staging buffer (committed at End Turn);
+  // in player phase they PATCH directly.
+  const handleSaveEdit = async (changes: {
+    label: string;
+    factionId: string | null;
+    shieldsUp: boolean;
+  }) => {
     if (!selectedEnemyId) return;
     const id = selectedEnemyId;
     setSelectedEnemyId(null);
     if (inGmPhase) {
-      // Stage label/faction edits client-side; End Turn commits the full list.
       staging.editStaged(id, changes);
       return;
     }
-    // Player phase: PATCH directly (no End Turn from GM in this phase).
     const ok = await postCombat(`/api/combat/enemy/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

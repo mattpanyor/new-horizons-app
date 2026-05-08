@@ -10,6 +10,7 @@ import { SIZE_CLASS_BY_ID } from "@/lib/combat/sizeClasses";
 import { resolveFactionColor } from "@/lib/combat/factions";
 import { shadeColor } from "./ships/shipColor";
 import { shipWorldPosition } from "./EnemyShip";
+import ShipShield from "./ShipShield";
 import Corvette from "./ships/Corvette";
 import Frigate from "./ships/Frigate";
 import Destroyer from "./ships/Destroyer";
@@ -134,6 +135,7 @@ export default function AnimatedEnemyShip({
       }
     >
       <ShipMesh sizeClass={current.sizeClass} color={color} />
+      {current.shieldsUp && <ShipShield radii={sizeDef.shieldRadii} />}
       {current.label && (
         <Html
           position={[0, sizeDef.scale * 1.1, 0]}

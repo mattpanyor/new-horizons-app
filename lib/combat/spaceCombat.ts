@@ -48,6 +48,10 @@ export function validateEnemy(input: unknown): CombatEnemyShip | null {
   if (typeof o.facing !== "string" || !VALID_FACES.has(o.facing as CombatFace)) return null;
   if (typeof o.azimuthDeg !== "number" || !Number.isFinite(o.azimuthDeg)) return null;
   if (typeof o.elevationDeg !== "number" || !Number.isFinite(o.elevationDeg)) return null;
+  // shieldsUp is optional — only accept booleans, ignore everything else
+  // (treat absence / garbage as "shields down").
+  const shieldsUp =
+    typeof o.shieldsUp === "boolean" ? o.shieldsUp : undefined;
   return {
     id: o.id,
     label: o.label,
@@ -57,6 +61,7 @@ export function validateEnemy(input: unknown): CombatEnemyShip | null {
     facing: o.facing as CombatFace,
     azimuthDeg: ((o.azimuthDeg as number) % 360 + 360) % 360,
     elevationDeg: Math.max(-90, Math.min(90, o.elevationDeg as number)),
+    ...(shieldsUp !== undefined ? { shieldsUp } : {}),
   };
 }
 

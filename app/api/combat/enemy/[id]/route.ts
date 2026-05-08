@@ -58,6 +58,7 @@ export async function PATCH(
     ...(typeof o.facing === "string" ? { facing: o.facing } : {}),
     ...(typeof o.azimuthDeg === "number" ? { azimuthDeg: o.azimuthDeg } : {}),
     ...(typeof o.elevationDeg === "number" ? { elevationDeg: o.elevationDeg } : {}),
+    ...(typeof o.shieldsUp === "boolean" ? { shieldsUp: o.shieldsUp } : {}),
   };
   const validated = validateEnemy(merged);
   if (!validated) return NextResponse.json({ error: "Invalid update" }, { status: 400 });

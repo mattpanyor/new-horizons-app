@@ -183,6 +183,7 @@ export interface CombatEnemyShip {
   azimuthDeg: number;              // 0..360, 0 = +X (north), increases clockwise from above
   elevationDeg: number;            // -90..90, 0 = equator, +90 = directly above player
   facing: CombatFace;              // which face of the enemy points at the player
+  shieldsUp?: boolean;             // optional; renders a glowing hex shield net around the ship
 }
 
 export interface CombatPlacedHighlight {
