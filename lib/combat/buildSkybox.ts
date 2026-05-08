@@ -1,22 +1,40 @@
 import * as THREE from "three";
 
+// Tiny seedable PRNG (mulberry32). Replaces Math.random for the starfield
+// painter so every client given the same seed paints the same sky.
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // Procedurally paint a high-resolution starfield + nebula canvas. Returns a
 // CanvasTexture suitable for use as the visible skybox AND as the scene's
 // environment map (mapping is set to EquirectangularReflectionMapping so a
 // PMREM generator can pick it up for IBL).
 //
+// `seed` makes the output deterministic: pass the combat session id and every
+// player in that session sees the same sky (and reloads keep it stable).
+//
 // Painting layers (in order):
 //  1. Deep-space gradient (slight horizon brightening)
-//  2. Stamped nebula cores (5-7 random positions, varied palettes)
+//  2. Stamped nebula cores (varied palettes, seeded random positions)
 //     a) Background diffuse layer
 //     b) Cloud detail via many overlapping radial gradients
-//     c) Dark dust lanes (multiply blend) cutting through cores
+//     c) Dark patches (multiply blend) for shadowy depth
 //     d) Bright inner highlights (screen blend)
 //  3. Star halos for the brightest stars
 //  4. Tiny pinpoint stars across whole canvas (varied colors)
 //  5. Dense star clusters near nebula cores (sky looks lived-in)
-export function buildStarfield(): THREE.Texture | null {
+export function buildStarfield(seed: number = 1): THREE.Texture | null {
   if (typeof document === "undefined") return null;
+
+  const random = mulberry32(seed || 1);
 
   const W = 4096;
   const H = 2048;
@@ -51,10 +69,10 @@ export function buildStarfield(): THREE.Texture | null {
   const NEBULA_COUNT = 5;
   const nebulaCenters: { cx: number; cy: number; r: number; pal: Palette }[] = [];
   for (let i = 0; i < NEBULA_COUNT; i++) {
-    const cx = 200 + Math.random() * (W - 400);
-    const cy = H * 0.25 + Math.random() * H * 0.5;
-    const r = 280 + Math.random() * 320;
-    const pal = PALETTES[Math.floor(Math.random() * PALETTES.length)];
+    const cx = 200 + random() * (W - 400);
+    const cy = H * 0.25 + random() * H * 0.5;
+    const r = 280 + random() * 320;
+    const pal = PALETTES[Math.floor(random() * PALETTES.length)];
     nebulaCenters.push({ cx, cy, r, pal });
   }
 
@@ -70,13 +88,13 @@ export function buildStarfield(): THREE.Texture | null {
 
     // (b) Cloud detail — 35-50 small overlapping radial blobs of varied size
     //     and slight position offsets. Stamping like this gives organic shape.
-    const blobCount = 35 + Math.floor(Math.random() * 16);
+    const blobCount = 35 + Math.floor(random() * 16);
     for (let b = 0; b < blobCount; b++) {
-      const ang = Math.random() * Math.PI * 2;
-      const dist = Math.random() * r;
+      const ang = random() * Math.PI * 2;
+      const dist = random() * r;
       const bx = cx + Math.cos(ang) * dist;
       const by = cy + Math.sin(ang) * dist * 0.85; // slight vertical squash
-      const br = 30 + Math.random() * 90;
+      const br = 30 + random() * 90;
       const blob = ctx.createRadialGradient(bx, by, 0, bx, by, br);
       blob.addColorStop(0, pal.mid);
       blob.addColorStop(0.6, pal.diffuse);
@@ -86,13 +104,13 @@ export function buildStarfield(): THREE.Texture | null {
     }
 
     // (c) Hot inner core — a few brighter highlights (screen blend).
-    const coreCount = 4 + Math.floor(Math.random() * 4);
+    const coreCount = 4 + Math.floor(random() * 4);
     for (let h = 0; h < coreCount; h++) {
-      const ang = Math.random() * Math.PI * 2;
-      const dist = Math.random() * r * 0.4;
+      const ang = random() * Math.PI * 2;
+      const dist = random() * r * 0.4;
       const hx = cx + Math.cos(ang) * dist;
       const hy = cy + Math.sin(ang) * dist;
-      const hr = 18 + Math.random() * 36;
+      const hr = 18 + random() * 36;
       const hot = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
       hot.addColorStop(0, pal.hot);
       hot.addColorStop(1, "rgba(0,0,0,0)");
@@ -106,13 +124,13 @@ export function buildStarfield(): THREE.Texture | null {
     //     overlapping patches read as cloudy darkness rather than brush
     //     marks.
     ctx.globalCompositeOperation = "multiply";
-    const patchCount = 12 + Math.floor(Math.random() * 10);
+    const patchCount = 12 + Math.floor(random() * 10);
     for (let p = 0; p < patchCount; p++) {
-      const ang = Math.random() * Math.PI * 2;
-      const dist = Math.random() * r * 0.85;
+      const ang = random() * Math.PI * 2;
+      const dist = random() * r * 0.85;
       const px = cx + Math.cos(ang) * dist;
       const py = cy + Math.sin(ang) * dist;
-      const pr = 30 + Math.random() * 80;
+      const pr = 30 + random() * 80;
       const patch = ctx.createRadialGradient(px, py, 0, px, py, pr);
       patch.addColorStop(0, pal.dust);
       patch.addColorStop(1, "rgba(255,255,255,0)"); // transparent white = neutral for multiply
@@ -132,9 +150,9 @@ export function buildStarfield(): THREE.Texture | null {
   ctx.globalCompositeOperation = "screen";
   const HALO_COUNT = 60;
   for (let i = 0; i < HALO_COUNT; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H;
-    const r = 4 + Math.random() * 6;
+    const x = random() * W;
+    const y = random() * H;
+    const r = 4 + random() * 6;
     const halo = ctx.createRadialGradient(x, y, 0, x, y, r);
     const tint = i % 4 === 0 ? "rgba(220, 200, 255, 0.55)" :
                  i % 4 === 1 ? "rgba(255, 230, 200, 0.55)" :
@@ -161,14 +179,14 @@ export function buildStarfield(): THREE.Texture | null {
   ];
   const PINPOINT_COUNT = 4500;
   for (let i = 0; i < PINPOINT_COUNT; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H;
-    const sizeR = Math.random();
+    const x = random() * W;
+    const y = random() * H;
+    const sizeR = random();
     const size = sizeR < 0.7 ? 0.6 :
                  sizeR < 0.92 ? 1.0 :
                  sizeR < 0.99 ? 1.6 : 2.4;
-    const alpha = 0.35 + Math.random() * 0.55;
-    const colorIdx = Math.random() < 0.55 ? 0 : Math.floor(Math.random() * STAR_COLORS.length);
+    const alpha = 0.35 + random() * 0.55;
+    const colorIdx = random() < 0.55 ? 0 : Math.floor(random() * STAR_COLORS.length);
     ctx.fillStyle = STAR_COLORS[colorIdx].replace("X", alpha.toFixed(2));
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -177,18 +195,18 @@ export function buildStarfield(): THREE.Texture | null {
 
   // ── Layer 5: extra-dense star clusters near nebulae ──────────────────
   for (const n of nebulaCenters) {
-    const clusterStars = 200 + Math.floor(Math.random() * 200);
+    const clusterStars = 200 + Math.floor(random() * 200);
     for (let i = 0; i < clusterStars; i++) {
       // Bias star placement toward the nebula center using sqrt distribution.
-      const ang = Math.random() * Math.PI * 2;
-      const dist = Math.sqrt(Math.random()) * n.r * 1.1;
+      const ang = random() * Math.PI * 2;
+      const dist = Math.sqrt(random()) * n.r * 1.1;
       const x = n.cx + Math.cos(ang) * dist;
       const y = n.cy + Math.sin(ang) * dist;
       if (x < 0 || x >= W || y < 0 || y >= H) continue;
-      const sizeR = Math.random();
+      const sizeR = random();
       const size = sizeR < 0.85 ? 0.6 : sizeR < 0.97 ? 1.2 : 1.8;
-      const alpha = 0.45 + Math.random() * 0.5;
-      const colorIdx = Math.random() < 0.5 ? 0 : Math.floor(Math.random() * STAR_COLORS.length);
+      const alpha = 0.45 + random() * 0.5;
+      const colorIdx = random() < 0.5 ? 0 : Math.floor(random() * STAR_COLORS.length);
       ctx.fillStyle = STAR_COLORS[colorIdx].replace("X", alpha.toFixed(2));
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);

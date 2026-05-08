@@ -71,6 +71,11 @@ interface SceneProps {
   prevEnemies?: CombatEnemyShip[];
   animStartMs?: number | null;
 
+  // Deterministic seed for the procedural starfield. Pass the combat session
+  // id (or any stable per-encounter integer) so every player in the session
+  // paints the same sky and reloads keep it consistent.
+  skyboxSeed?: number;
+
   children?: React.ReactNode;
 }
 
@@ -98,6 +103,7 @@ export default function Scene({
   onEnemyDrag,
   prevEnemies,
   animStartMs,
+  skyboxSeed,
   children,
 }: SceneProps) {
   const editingShip = editingShipId
@@ -112,8 +118,12 @@ export default function Scene({
   // Build the starfield texture once on mount. Shared between the visible
   // skybox sphere and the PMREM-filtered environment map (image-based
   // lighting on metallic ship surfaces). Disposed on unmount so the 4096×2048
-  // CanvasTexture doesn't accumulate in GPU memory across remounts.
-  const [skyboxTexture] = useState<THREE.Texture | null>(() => buildStarfield());
+  // CanvasTexture doesn't accumulate in GPU memory across remounts. Seed
+  // captured at first render only — changing skyboxSeed after mount won't
+  // repaint (we don't want the sky to flicker).
+  const [skyboxTexture] = useState<THREE.Texture | null>(() =>
+    buildStarfield(skyboxSeed ?? 1),
+  );
   useEffect(() => {
     return () => {
       if (skyboxTexture) skyboxTexture.dispose();

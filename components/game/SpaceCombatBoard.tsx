@@ -492,6 +492,7 @@ export default function SpaceCombatBoard({ session, username, viewer }: GameBoar
             onEnemyDrag={inGmPhase ? handleEnemyDrag : undefined}
             prevEnemies={state.prevEnemies}
             animStartMs={inPlayerPhase ? animStartMs : null}
+            skyboxSeed={session.id}
           />
         </SceneErrorBoundary>
       </div>
