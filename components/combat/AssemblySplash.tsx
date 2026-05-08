@@ -187,6 +187,11 @@ export default function AssemblySplash({
     };
     assignTargets();
 
+    // Connection-line distance threshold. Cells in the spatial grid are sized
+    // to this so each particle only checks its 3×3 cell neighborhood.
+    const CONNECT_DIST = 30;
+    const CELL_SIZE = CONNECT_DIST;
+
     let raf = 0;
     const draw = () => {
       phaseTimer++;
@@ -204,8 +209,18 @@ export default function AssemblySplash({
 
       ctx.clearRect(0, 0, w, h);
 
-      for (const p of particles) {
-        if (phase === "assemble") {
+      // Spatial bucket: cell key → particle indices in that cell. Only built
+      // during assemble phase since connection lines aren't drawn during
+      // scatter. Replaces the prior O(N²) all-pairs distance check.
+      const buckets = new Map<number, number[]>();
+      const cellsX = Math.max(1, Math.ceil(w / CELL_SIZE));
+      const keyOf = (cx: number, cy: number) => cy * cellsX + cx;
+      const lockednessByIdx = new Float32Array(particles.length);
+      const ASSEMBLING = phase === "assemble";
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (ASSEMBLING) {
           p.vx += (p.targetX - p.x) * 0.02;
           p.vy += (p.targetY - p.y) * 0.02;
           p.vx *= 0.9;
@@ -226,30 +241,65 @@ export default function AssemblySplash({
         const dx = p.x - p.targetX;
         const dy = p.y - p.targetY;
         const distToTarget = Math.hypot(dx, dy);
-        const lockedness =
-          phase === "assemble" ? Math.max(0, 1 - distToTarget / 50) : 0;
+        const lockedness = ASSEMBLING ? Math.max(0, 1 - distToTarget / 50) : 0;
+        lockednessByIdx[i] = lockedness;
         const alpha = 0.2 + lockedness * 0.5;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(100, 180, 255, ${alpha})`;
         ctx.fill();
 
-        if (lockedness > 0.5 && phase === "assemble") {
-          for (const p2 of particles) {
-            const d = Math.hypot(p.x - p2.x, p.y - p2.y);
-            if (d > 0 && d < 30) {
-              const d2 = Math.hypot(p2.x - p2.targetX, p2.y - p2.targetY);
-              const lock2 = Math.max(0, 1 - d2 / 50);
-              if (lock2 > 0.5) {
-                ctx.beginPath();
-                ctx.moveTo(p.x, p.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.strokeStyle = `rgba(100, 180, 255, ${
-                  lockedness * lock2 * 0.15
-                })`;
-                ctx.lineWidth = 0.5;
-                ctx.stroke();
-              }
+        if (ASSEMBLING && lockedness > 0.5) {
+          // Only well-locked particles bucket — saves work if scatter hasn't
+          // settled yet.
+          const cx2 = Math.floor(p.x / CELL_SIZE);
+          const cy2 = Math.floor(p.y / CELL_SIZE);
+          const k = keyOf(cx2, cy2);
+          let arr = buckets.get(k);
+          if (!arr) {
+            arr = [];
+            buckets.set(k, arr);
+          }
+          arr.push(i);
+        }
+      }
+
+      // Connection-line pass — only for well-locked particles, neighbors
+      // looked up via the spatial bucket so we visit ~9 cells per particle
+      // instead of all 200+ particles.
+      if (ASSEMBLING) {
+        for (const [k, idxs] of buckets) {
+          const cy2 = Math.floor(k / cellsX);
+          const cx2 = k - cy2 * cellsX;
+          // Gather candidate neighbors from this cell + 8 adjacent cells.
+          const candidates: number[] = [];
+          for (let oy = -1; oy <= 1; oy++) {
+            for (let ox = -1; ox <= 1; ox++) {
+              const nk = keyOf(cx2 + ox, cy2 + oy);
+              const list = buckets.get(nk);
+              if (list) candidates.push(...list);
+            }
+          }
+          for (const i of idxs) {
+            const p = particles[i];
+            const lockI = lockednessByIdx[i];
+            for (const j of candidates) {
+              if (j <= i) continue; // each pair only once
+              const p2 = particles[j];
+              const dx2 = p.x - p2.x;
+              const dy2 = p.y - p2.y;
+              const dSq = dx2 * dx2 + dy2 * dy2;
+              if (dSq <= 0 || dSq >= CONNECT_DIST * CONNECT_DIST) continue;
+              const lockJ = lockednessByIdx[j];
+              if (lockJ <= 0.5) continue;
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.strokeStyle = `rgba(100, 180, 255, ${
+                lockI * lockJ * 0.15
+              })`;
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
             }
           }
         }
