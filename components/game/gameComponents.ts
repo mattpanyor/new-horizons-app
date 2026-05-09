@@ -6,11 +6,13 @@ import EngineeringChallengeBoard from "./EngineeringChallengeBoard";
 import RunePokerBoard from "./RunePokerBoard";
 import ArcaneCardBoard from "./ArcaneCardBoard";
 import IsolationProtocolBoard from "./IsolationProtocolBoard";
+import SpaceCombatBoard from "./SpaceCombatBoard";
 
 export interface GameBoardProps {
   session: ActiveGameResponse["session"];
   player: ActiveGameResponse["player"];
   opponent: ActiveGameResponse["opponent"];
+  viewer: ActiveGameResponse["viewer"];
   isDesignatedPlayer: boolean;
   isMyTurn: boolean;
   username: string;
@@ -25,4 +27,5 @@ export const GAME_COMPONENTS: Record<GameType, ComponentType<GameBoardProps>> = 
   "rune-poker": RunePokerBoard,
   "arcane-card": ArcaneCardBoard,
   "isolation-protocol": IsolationProtocolBoard,
+  "space-combat": SpaceCombatBoard,
 };

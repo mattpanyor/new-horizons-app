@@ -67,5 +67,10 @@ export async function GET() {
       group: designatedUser?.group ?? null,
     },
     opponent,
+    viewer: {
+      username: user.username,
+      color: user.color ?? null,
+      accessLevel: user.accessLevel,
+    },
   });
 }

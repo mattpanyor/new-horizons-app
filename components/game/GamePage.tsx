@@ -67,7 +67,7 @@ export default function GamePage({ username }: GamePageProps) {
   }
 
   // Active game
-  const { session, player, opponent } = data as ActiveGameResponse;
+  const { session, player, opponent, viewer } = data as ActiveGameResponse;
   const isDesignatedPlayer = username === session.designatedPlayer;
   const isMyTurn = isDesignatedPlayer && "turn" in session.state && session.state.turn === "player";
 
@@ -91,6 +91,7 @@ export default function GamePage({ username }: GamePageProps) {
         session={session}
         player={player}
         opponent={opponent}
+        viewer={viewer}
         isDesignatedPlayer={isDesignatedPlayer}
         isMyTurn={isMyTurn}
         username={username}

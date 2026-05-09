@@ -158,3 +158,31 @@ export async function patchGameState(
   `;
   return rows.length > 0;
 }
+
+// Atomically set ONE key at a deep path inside state via jsonb_set. Required
+// when many users write to sibling keys concurrently (e.g. each user's own
+// weapon-highlight slot under state.weaponHighlights[username]) — the
+// read-merge-write pattern in JS would lose updates.
+//
+// `path` is the key sequence from the state root: ["weaponHighlights", "alice"].
+// The function only writes if the row is launched; intermediate object levels
+// (e.g. state.weaponHighlights itself) are expected to already exist.
+export async function setStateAtPath(
+  id: number,
+  path: string[],
+  value: unknown,
+): Promise<boolean> {
+  if (path.length === 0) return false;
+  const rows = await sql`
+    UPDATE game_sessions SET
+      state = jsonb_set(
+        state,
+        ${path}::text[],
+        ${JSON.stringify(value)}::jsonb,
+        true
+      )
+    WHERE id = ${id} AND status = 'launched'
+    RETURNING id
+  `;
+  return rows.length > 0;
+}

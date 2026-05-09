@@ -1,0 +1,15 @@
+export const VISUAL = {
+  endTurnAnimMs: 800,
+  blinkPeriodMs: 2000,
+  blinkOpacityMin: 0.5,
+  blinkOpacityMax: 1.0,
+  rangeShellDotCount: 220,
+  rangeShellDotSize: 0.12,
+  rangeShellDotColor: "#ffffff",
+  weaponVolumeBaseOpacity: 0.45,
+  defaultUserColor: "#ffffff",
+  stagingGhostColor: "#ef4444",
+  stagingDistanceLineColor: "#ef4444",
+  stagingDistanceLineWidth: 1.5,
+  faceFilterDarkenOpacity: 0.4,
+} as const;
