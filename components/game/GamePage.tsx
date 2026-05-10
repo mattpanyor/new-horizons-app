@@ -14,7 +14,7 @@ interface GamePageProps {
 }
 
 export default function GamePage({ username }: GamePageProps) {
-  const { data, loading } = useGamePolling();
+  const { data, loading, applyServerState } = useGamePolling();
 
   if (loading) {
     return (
@@ -96,6 +96,7 @@ export default function GamePage({ username }: GamePageProps) {
         isMyTurn={isMyTurn}
         username={username}
         victoryText={gameDef.victoryText}
+        applyServerState={applyServerState}
       />
     </div>
   );
