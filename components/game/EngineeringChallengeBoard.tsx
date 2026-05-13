@@ -18,6 +18,7 @@ export default function EngineeringChallengeBoard({
   opponent,
   isDesignatedPlayer,
   victoryText,
+  applyServerState,
 }: GameBoardProps) {
   const config = session.config as EngineeringChallengeConfig;
   const state = session.state as EngineeringChallengeState;
@@ -126,6 +127,7 @@ export default function EngineeringChallengeBoard({
     try {
       const res = await fetch("/api/games/move", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: session.id,
@@ -135,22 +137,27 @@ export default function EngineeringChallengeBoard({
           complete,
         }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         console.error("Wire placement failed:", data?.error);
+        return;
+      }
+      if (applyServerState && data && "state" in data) {
+        applyServerState(data.state, data.winner ?? null);
       }
     } finally {
       setSubmitting(false);
       setSelectedWire(null);
       setCurrentPath([]);
     }
-  }, [session.id]);
+  }, [session.id, applyServerState]);
 
   const removeWire = useCallback(async (wireIndex: number) => {
     setSubmitting(true);
     try {
       const res = await fetch("/api/games/move", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: session.id,
@@ -158,14 +165,18 @@ export default function EngineeringChallengeBoard({
           wireIndex,
         }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         console.error("Wire removal failed:", res.status, data?.error);
+        return;
+      }
+      if (applyServerState && data && "state" in data) {
+        applyServerState(data.state, data.winner ?? null);
       }
     } finally {
       setSubmitting(false);
     }
-  }, [session.id]);
+  }, [session.id, applyServerState]);
 
   // ─── Try to extend the current path to a cell ───
 

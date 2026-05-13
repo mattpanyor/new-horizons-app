@@ -17,6 +17,7 @@ export interface GameBoardProps {
   isMyTurn: boolean;
   username: string;
   victoryText: VictoryText;
+  applyServerState?: (state: unknown, winner: string | null) => void;
 }
 
 // ─── Register game board components here ───
