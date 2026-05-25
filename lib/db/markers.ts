@@ -100,15 +100,18 @@ export async function updateMarker(
 ): Promise<void> {
   // Non-positional fields can be updated independently.
   if (fields.slug !== undefined) {
+    // Update row first; cascade only if the rename actually committed.
     const rows = await sql`SELECT slug, sector_id FROM markers WHERE id = ${id}`;
     if (rows.length > 0) {
       const oldSlug = rows[0].slug as string;
       const sectorId = rows[0].sector_id as number;
+      await sql`UPDATE markers SET slug = ${fields.slug} WHERE id = ${id}`;
       if (oldSlug !== fields.slug) {
         await cascadeSlugRename(sectorId, oldSlug, fields.slug);
       }
+    } else {
+      await sql`UPDATE markers SET slug = ${fields.slug} WHERE id = ${id}`;
     }
-    await sql`UPDATE markers SET slug = ${fields.slug} WHERE id = ${id}`;
   }
   if (fields.name !== undefined) await sql`UPDATE markers SET name = ${fields.name} WHERE id = ${id}`;
   if (fields.type !== undefined) await sql`UPDATE markers SET type = ${fields.type} WHERE id = ${id}`;
@@ -117,12 +120,12 @@ export async function updateMarker(
   if (fields.territoryRadius !== undefined) await sql`UPDATE markers SET territory_radius = ${fields.territoryRadius} WHERE id = ${id}`;
   if (fields.layer !== undefined) await sql`UPDATE markers SET layer = ${fields.layer} WHERE id = ${id}`;
 
-  // Positional fields (connection_id, position, x, y, angle) must be updated
-  // atomically because the table CHECK enforces the XOR between
-  // (connection_id + position) and (x + y). A per-field sequence would
-  // transiently violate the constraint when swapping between free-floating
-  // and connection-attached shapes. Touching ANY of these triggers a single
-  // UPDATE that includes all unchanged values from the current row.
+  // Positional fields must be updated atomically because the table CHECK
+  // enforces a strict XOR between (connection_id + position) and (x + y).
+  // The previous version naively preserved current x/y when only
+  // connection_id was passed, which produced rows with BOTH shapes set and
+  // violated the constraint. We now decide the target shape first
+  // (attached vs free) and explicitly NULL the other side.
   const positionalTouched =
     fields.connectionId !== undefined ||
     fields.position !== undefined ||
@@ -136,20 +139,44 @@ export async function updateMarker(
     `;
     if (rows.length === 0) return;
     const cur = rows[0];
-    const connectionId = fields.connectionId !== undefined ? fields.connectionId : cur.connection_id;
-    const position    = fields.position    !== undefined ? fields.position    : cur.position;
-    const x           = fields.x           !== undefined ? fields.x           : cur.x;
-    const y           = fields.y           !== undefined ? fields.y           : cur.y;
-    const angle       = fields.angle       !== undefined ? fields.angle       : cur.angle;
-    await sql`
-      UPDATE markers
-      SET connection_id = ${connectionId},
-          position      = ${position},
-          x             = ${x},
-          y             = ${y},
-          angle         = ${angle}
-      WHERE id = ${id}
-    `;
+
+    // Decide shape: explicit connection_id wins; else infer from explicit
+    // x/y; else keep current shape.
+    let attached: boolean;
+    if (fields.connectionId !== undefined) {
+      attached = fields.connectionId !== null;
+    } else if (fields.x !== undefined || fields.y !== undefined) {
+      attached = false;
+    } else {
+      attached = cur.connection_id !== null;
+    }
+
+    if (attached) {
+      const cidValue = fields.connectionId !== undefined ? fields.connectionId : cur.connection_id;
+      const pos      = fields.position    !== undefined ? fields.position    : cur.position ?? 0.5;
+      await sql`
+        UPDATE markers
+        SET connection_id = ${cidValue},
+            position      = ${pos},
+            x             = NULL,
+            y             = NULL,
+            angle         = NULL
+        WHERE id = ${id}
+      `;
+    } else {
+      const xv  = fields.x     !== undefined ? fields.x     : cur.x ?? 0;
+      const yv  = fields.y     !== undefined ? fields.y     : cur.y ?? 0;
+      const ang = fields.angle !== undefined ? fields.angle : cur.angle;
+      await sql`
+        UPDATE markers
+        SET connection_id = NULL,
+            position      = NULL,
+            x             = ${xv},
+            y             = ${yv},
+            angle         = ${ang}
+        WHERE id = ${id}
+      `;
+    }
   }
 }
 

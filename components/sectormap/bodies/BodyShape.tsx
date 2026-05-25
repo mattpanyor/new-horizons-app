@@ -34,10 +34,9 @@ export function BodyShape({
   const activeStroke = isBodyActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)";
   const glowStyle = isBodyActive ? { filter: `drop-shadow(0 0 8px ${bodyColor})` } : undefined;
 
-  const labelR =
-    bodyType === "fleet" ? 22 :
-      bodyType === "asteroid-field" ? 32 :
-        bodyType === "station" ? 10 : 12;
+  // Reuses the exported bodyLabelR (defined below) instead of duplicating
+  // the per-type constants. Kept this way historically; consolidating here.
+  const labelR = bodyLabelR(bodyType);
   const highlightR = labelR + 6;
 
   return (

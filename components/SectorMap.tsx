@@ -140,13 +140,18 @@ function SectorMapInner({ sector: propsSector, systemsData = {}, children, stati
   // systemsData prop. Critical after a save: router.refresh() pulls new DB
   // values, but the hook's local snapshot was frozen at enter() time, so
   // forms would otherwise revert to pre-save values when `pending` clears.
+  //
+  // Destructure stable primitives instead of depending on the whole
+  // `systemEdit` object (which is recreated every render and would fire
+  // this effect on every render).
+  const { active: systemEditActive, systemSlug: systemEditSlug, baseSystem: systemEditBase, syncBase } = systemEdit;
   useEffect(() => {
-    if (!systemEdit.active || !systemEdit.systemSlug) return;
-    const fresh = systemsData[systemEdit.systemSlug];
-    if (fresh && fresh !== systemEdit.baseSystem) {
-      systemEdit.syncBase(fresh);
+    if (!systemEditActive || !systemEditSlug) return;
+    const fresh = systemsData[systemEditSlug];
+    if (fresh && fresh !== systemEditBase) {
+      syncBase(fresh);
     }
-  }, [systemsData, systemEdit]);
+  }, [systemsData, systemEditActive, systemEditSlug, systemEditBase, syncBase]);
 
   // When system-edit is active for the focused system, project pending changes
   // (system metadata, star fields, body updates/creates/deletes, plus live
@@ -232,7 +237,11 @@ function SectorMapInner({ sector: propsSector, systemsData = {}, children, stati
     return { x: d.x, y: d.y };
   };
 
-  const initialViewBox = useMemo(() => computeContentViewBox(sector), [sector]);
+  // The viewport bounds are a function of the sector's territory geometry,
+  // not the live editor positions. Memoize on the base prop so the camera
+  // doesn't snap back to bounds every time `pending` updates the projected
+  // sector.
+  const initialViewBox = useMemo(() => computeContentViewBox(propsSector), [propsSector]);
 
   const {
     containerRef, svgRef, vb, zoom, cursorGrab, didDragRef,
@@ -256,18 +265,15 @@ function SectorMapInner({ sector: propsSector, systemsData = {}, children, stati
   const isDev = process.env.NODE_ENV === "development";
   const [activeLayer, setActiveLayer] = useState("None");
 
-  // Auto-detect which layers exist in this sector's content.
-  // Compare by the .slug VALUE (what's stored on data), not by MAP_LAYERS
-  // keys — they only match by coincidence for movement/story/invasion.
-  // The "war" entry's slug is "conflict", so iterating keys filters Conflict
-  // out even when data uses it.
+  // Auto-detect which layers exist in this sector's content. Compare by
+  // slug value (what's stored on data) — MAP_LAYERS keys now match those
+  // values 1:1, so this is straightforward.
   const sectorLayers = useMemo(() => {
     const usedSlugs = new Set<string>();
     for (const c of sector.connections ?? []) if (c.layer) usedSlugs.add(c.layer);
     for (const m of sector.markers ?? []) if (m.layer) usedSlugs.add(m.layer);
     for (const v of sector.vortexes ?? []) if (v.layer) usedSlugs.add(v.layer);
-    return (Object.values(MAP_LAYERS) as Array<{ slug: LayerSlug; label: string }>)
-      .filter(layer => usedSlugs.has(layer.slug));
+    return Object.values(MAP_LAYERS).filter((layer) => usedSlugs.has(layer.slug));
   }, [sector.connections, sector.markers, sector.vortexes]);
 
   // Filter layered elements — items without a layer always show, items with a layer only show when selected

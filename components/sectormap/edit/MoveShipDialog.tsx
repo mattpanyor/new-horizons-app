@@ -134,7 +134,7 @@ export function MoveShipDialog({ source, onClose }: Props) {
               <option value="">— pick a system —</option>
               {systems.map((s) => (
                 <option key={s.slug} value={s.id}>
-                  {s.slug}
+                  {s.name ?? s.slug}
                 </option>
               ))}
             </select>

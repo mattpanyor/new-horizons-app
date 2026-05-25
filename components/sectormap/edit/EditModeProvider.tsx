@@ -49,6 +49,8 @@ interface ProviderState {
   updateField: (kind: EntityKind, ref: { id?: number; tempId?: string }, fields: Record<string, unknown>) => void;
   createEntity: (kind: EntityKind, fields: Record<string, unknown>) => string; // returns tempId
   deleteEntity: (kind: EntityKind, ref: { id?: number; tempId?: string }) => void;
+  restoreEntity: (kind: EntityKind, id: number) => void;
+  isPendingDelete: (kind: EntityKind, id: number) => boolean;
   discard: () => void;
   save: () => Promise<void>;
 }
@@ -105,14 +107,15 @@ export function EditModeProvider({ sector, userAccessLevel, children }: Provider
         const upd = id !== undefined ? pending.systems.updates.get(id) : undefined;
         return upd ? ({ ...s, ...upd } as SystemPin) : s;
       });
+    // Spread the entire create record so the side-panel sees ALL the staged
+    // fields (name, centerKind, etc.), not just the pin-position subset.
     const systems = [
       ...baseSystems,
       ...pending.systems.creates.map((c) => ({
+        ...c,
         slug: c.slug,
         x: c.x ?? 600,
         y: c.y ?? 400,
-        ...(c.allegiance && { allegiance: c.allegiance }),
-        ...(c.territoryRadius !== undefined && { territoryRadius: c.territoryRadius }),
       }) as SystemPin),
     ];
 
@@ -219,6 +222,40 @@ export function EditModeProvider({ sector, userAccessLevel, children }: Provider
         const key = entityKey(kind);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cs: any = { ...prev[key] };
+
+        // Capture the old slug BEFORE mutating, so we can cascade pending
+        // creates that reference it (fixes the case where the GM renames a
+        // system/vortex/marker whose old slug is used by a pending-create
+        // connection's from/to).
+        let oldSlug: string | undefined;
+        let newSlug: string | undefined;
+        if (typeof fields.slug === "string") {
+          newSlug = fields.slug;
+          if (ref.tempId) {
+            const c = (cs.creates as Array<{ tempId?: string; slug?: string }>).find(
+              (x) => x.tempId === ref.tempId
+            );
+            oldSlug = c?.slug;
+          } else if (ref.id !== undefined) {
+            // For id-bearing entities, look up the current slug in the
+            // effective sector via the base sector (sector prop in scope).
+            const list =
+              kind === "system" ? sector.systems
+              : kind === "vortex" ? sector.vortexes ?? []
+              : kind === "marker" ? sector.markers ?? []
+              : [];
+            const existing = list.find((x) => x.id === ref.id);
+            // marker slug is optional in the type; the others are required
+            const existingSlug = (existing as { slug?: string } | undefined)?.slug;
+            // Also fold in any prior pending rename so consecutive renames
+            // (foo → bar → baz) don't lose the original old slug.
+            const priorPatch = ref.id !== undefined
+              ? (cs.updates as Map<number, { slug?: string }>).get(ref.id)
+              : undefined;
+            oldSlug = priorPatch?.slug ?? existingSlug;
+          }
+        }
+
         if (ref.tempId) {
           cs.creates = cs.creates.map((c: { tempId?: string }) =>
             c.tempId === ref.tempId ? { ...c, ...fields } : c
@@ -228,10 +265,28 @@ export function EditModeProvider({ sector, userAccessLevel, children }: Provider
           updMap.set(ref.id, { ...(updMap.get(ref.id) ?? {}), ...fields });
           cs.updates = updMap;
         }
-        return { ...prev, [key]: cs };
+
+        let next = { ...prev, [key]: cs };
+
+        // Pending-side cascade: when a system/vortex/marker is renamed in
+        // pending state, rewrite any pending-create connection endpoints
+        // referencing the old slug. (Saved connections are cascaded
+        // server-side via cascadeSlugRename — see lib/db/connections.ts.)
+        if (oldSlug && newSlug && oldSlug !== newSlug && (kind === "system" || kind === "vortex" || kind === "marker")) {
+          const conns = { ...next.connections };
+          conns.creates = conns.creates.map((c) => {
+            let out = c;
+            if (out.from === oldSlug) out = { ...out, from: newSlug };
+            if (out.to === oldSlug) out = { ...out, to: newSlug };
+            return out;
+          });
+          next = { ...next, connections: conns };
+        }
+
+        return next;
       });
     },
-    []
+    [sector]
   );
 
   const createEntity = useCallback(
@@ -256,6 +311,33 @@ export function EditModeProvider({ sector, userAccessLevel, children }: Provider
         const key = entityKey(kind);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cs: any = { ...prev[key] };
+
+        // Capture the slug being deleted (if any) so we can also drop
+        // pending-create connections that point at it. No-op for
+        // connections themselves.
+        // NOTE: we leave the selection alive for id-bearing deletes (see
+        // setSelection below) so the panel can offer a Restore action; for
+        // tempId creates we clear since the row is gone entirely.
+        let deletedSlug: string | undefined;
+        if (kind === "system" || kind === "vortex" || kind === "marker") {
+          if (ref.tempId) {
+            const c = (cs.creates as Array<{ tempId?: string; slug?: string }>).find(
+              (x) => x.tempId === ref.tempId
+            );
+            deletedSlug = c?.slug;
+          } else if (ref.id !== undefined) {
+            const list =
+              kind === "system" ? sector.systems
+              : kind === "vortex" ? sector.vortexes ?? []
+              : sector.markers ?? [];
+            const existing = list.find((x) => x.id === ref.id);
+            deletedSlug = (existing as { slug?: string } | undefined)?.slug;
+            // Honor any pending rename
+            const priorPatch = (cs.updates as Map<number, { slug?: string }>).get(ref.id);
+            if (priorPatch?.slug) deletedSlug = priorPatch.slug;
+          }
+        }
+
         if (ref.tempId) {
           cs.creates = cs.creates.filter((c: { tempId?: string }) => c.tempId !== ref.tempId);
         } else if (ref.id !== undefined) {
@@ -266,11 +348,55 @@ export function EditModeProvider({ sector, userAccessLevel, children }: Provider
           delSet.add(ref.id);
           cs.deletes = delSet;
         }
-        return { ...prev, [key]: cs };
+
+        let next = { ...prev, [key]: cs };
+
+        // Pending-create connections referencing the deleted slug as an
+        // endpoint would insert as orphans on save — drop them so the
+        // editor's intent matches the eventual DB state. Note: this does
+        // NOT delete already-saved connections that point at this slug
+        // (those become orphans server-side and surface in the
+        // ConnectionsByLayerPanel for manual cleanup).
+        if (deletedSlug) {
+          const conns = { ...next.connections };
+          conns.creates = conns.creates.filter(
+            (c) => c.from !== deletedSlug && c.to !== deletedSlug
+          );
+          next = { ...next, connections: conns };
+        }
+
+        return next;
       });
-      setSelection(null);
+      // Clear selection only for tempId-create deletes (the row is gone).
+      // For id-bearing deletes, keep the selection so the panel can show a
+      // Restore button.
+      if (ref.tempId) setSelection(null);
     },
-    []
+    [sector]
+  );
+
+  // Reverse of deleteEntity: remove an id from the pending deletes set so
+  // the entity stays alive on save. Only meaningful for id-bearing entities
+  // (tempId creates are discarded outright on delete, not staged).
+  const restoreEntity = useCallback((kind: EntityKind, id: number) => {
+    setPending((prev) => {
+      const key = entityKey(kind);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cs: any = { ...prev[key] };
+      if (!cs.deletes.has(id)) return prev;
+      const next = new Set(cs.deletes as Set<number>);
+      next.delete(id);
+      cs.deletes = next;
+      return { ...prev, [key]: cs };
+    });
+  }, []);
+
+  const isPendingDelete = useCallback(
+    (kind: EntityKind, id: number) => {
+      const cs = pending[entityKey(kind)] as { deletes: Set<number> };
+      return cs.deletes.has(id);
+    },
+    [pending]
   );
 
   const discard = useCallback(() => {
@@ -315,6 +441,8 @@ export function EditModeProvider({ sector, userAccessLevel, children }: Provider
     updateField,
     createEntity,
     deleteEntity,
+    restoreEntity,
+    isPendingDelete,
     discard,
     save,
   };
@@ -332,10 +460,11 @@ function entityKey(k: EntityKind): "systems" | "vortexes" | "markers" | "connect
 }
 
 // Helper used by selection panel + other consumers: resolve the currently
-// selected entity to its underlying data (base or pending create).
+// selected entity to its underlying data (base, pending create, OR
+// pending-delete fallback from the base sector).
 export function resolveSelected(
   state: ProviderState
-): { kind: EntityKind; data: unknown; ref: { id?: number; tempId?: string } } | null {
+): { kind: EntityKind; data: unknown; ref: { id?: number; tempId?: string }; pendingDelete?: boolean } | null {
   const sel = state.selection;
   if (!sel) return null;
   if (sel.tempId) {
@@ -346,6 +475,7 @@ export function resolveSelected(
     return { kind: sel.kind, data: found, ref: { tempId: sel.tempId } };
   }
   if (sel.id !== null) {
+    // Effective-sector lookup: returns the live view including pending updates.
     let data: unknown;
     switch (sel.kind) {
       case "system":     data = state.effectiveSector.systems.find((s) => s.id === sel.id); break;
@@ -360,8 +490,26 @@ export function resolveSelected(
       }
       case "connection": data = state.effectiveSector.connections?.find((c) => c.id === sel.id); break;
     }
-    if (!data) return null;
-    return { kind: sel.kind, data, ref: { id: sel.id } };
+    if (data) return { kind: sel.kind, data, ref: { id: sel.id } };
+
+    // Not found in the effective sector — it might be queued for delete in
+    // pending. Fall back to the BASE sector so the panel can show a Restore
+    // button instead of an empty state.
+    if (state.isPendingDelete(sel.kind, sel.id)) {
+      let baseData: unknown;
+      switch (sel.kind) {
+        case "system":     baseData = state.baseSector.systems.find((s) => s.id === sel.id); break;
+        case "vortex":     baseData = state.baseSector.vortexes?.find((v) => v.id === sel.id); break;
+        case "marker":
+          baseData =
+            state.baseSector.markers?.find((m) => m.id === sel.id)
+            ?? state.baseSector.connections?.find((c) => c.marker?.id === sel.id)?.marker;
+          break;
+        case "connection": baseData = state.baseSector.connections?.find((c) => c.id === sel.id); break;
+      }
+      if (baseData) return { kind: sel.kind, data: baseData, ref: { id: sel.id }, pendingDelete: true };
+    }
+    return null;
   }
   return null;
 }

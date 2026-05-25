@@ -34,6 +34,30 @@ export function SelectionPanel() {
     );
   }
 
+  // Special state: the selected entity is queued for delete. Show a Restore
+  // affordance instead of the form — undoing a single delete without losing
+  // every other pending edit (which is what a full Discard would do).
+  if (resolved.pendingDelete && resolved.ref.id !== undefined) {
+    const id = resolved.ref.id;
+    return (
+      <div className="space-y-2.5">
+        <h3 className="text-rose-300 text-xs uppercase tracking-widest" style={{ fontFamily: "var(--font-cinzel), serif" }}>
+          Queued for delete
+        </h3>
+        <p className="text-xs text-slate-400">
+          This {resolved.kind} will be removed on Save. Restore to keep it.
+        </p>
+        <button
+          onClick={() => state.restoreEntity(resolved.kind, id)}
+          className="w-full px-3 py-1.5 rounded bg-emerald-500/15 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/25 text-xs transition"
+          style={{ fontFamily: "var(--font-cinzel), serif" }}
+        >
+          Restore
+        </button>
+      </div>
+    );
+  }
+
   const onChange = (fields: Record<string, unknown>) => {
     state.updateField(resolved.kind, resolved.ref, fields);
   };
@@ -211,7 +235,10 @@ function VortexForm({ data, onChange, onDelete }: FormProps<VortexPin>) {
 
 // ── MARKER ──
 function MarkerForm({ data, onChange, onDelete }: FormProps<MapMarker>) {
-  const isAttached = data.position !== undefined && data.x === undefined;
+  // connectionId is set by the loader for attached markers (and on creates
+  // that target a connection). Far more reliable than the old heuristic of
+  // "has position but no x/y", which flipped state mid-edit.
+  const isAttached = data.connectionId !== undefined;
   const canMove = (data.type === "ship" || data.type === "fleet") && data.id !== undefined;
   const [moveOpen, setMoveOpen] = useState(false);
   return (

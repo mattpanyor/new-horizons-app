@@ -66,7 +66,12 @@ export function ConnectionMarkerLayer({
         );
 
         const marker = conn.marker;
-        const isActive = activeMarkerId === String(connIdx);
+        // Tooltip identity keyed by marker.id when present so reordering the
+        // connections array (layer filter change, etc.) doesn't swap the
+        // active tooltip onto a different marker. Falls back to connIdx for
+        // pending-create markers that don't have a DB id yet.
+        const tooltipKey = marker.id !== undefined ? `m${marker.id}` : `c${connIdx}`;
+        const isActive = activeMarkerId === tooltipKey;
         const t = Math.max(0, Math.min(1, marker.position ?? 0.5));
         const mp = bezierAt(p0t, p1, p2t, t);
         const tan = bezierTangent(p0t, p1, p2t, t);
@@ -88,9 +93,9 @@ export function ConnectionMarkerLayer({
             onClick={(e) => {
               e.stopPropagation();
               if (isEditing && editPick) editPick(marker);
-              else showMarker(String(connIdx));
+              else showMarker(tooltipKey);
             }}
-            onMouseEnter={() => { if (!isEditing) showMarker(String(connIdx)); }}
+            onMouseEnter={() => { if (!isEditing) showMarker(tooltipKey); }}
             onMouseLeave={scheduleHideMarker}>
             {/* Fat invisible hit target in edit mode — ships/fleets are small
                 and the line they sit on grabs nearby clicks. This gives a

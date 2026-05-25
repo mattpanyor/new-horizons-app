@@ -95,12 +95,17 @@ async function loadSectorFromDb(slug: string): Promise<SectorMetadata | null> {
     else freeMarkers.push(m);
   }
 
-  const systems: SystemPin[] = systemRows.map((s) => {
-    const pin: SystemPin = { id: s.id, slug: s.slug, x: s.x, y: s.y };
-    if (s.allegianceSlug) pin.allegiance = s.allegianceSlug as AllegianceKey;
-    if (s.territoryRadius !== null) pin.territoryRadius = s.territoryRadius;
-    return pin;
-  });
+  // Drop unpublished systems at the loader so they never reach viewers.
+  // (Editor-mode reads use the same loader today; if we ever want
+  // superadmins to see drafts in edit mode, add a flag here.)
+  const systems: SystemPin[] = systemRows
+    .filter((s) => s.published !== false)
+    .map((s) => {
+      const pin: SystemPin = { id: s.id, slug: s.slug, name: s.name, x: s.x, y: s.y };
+      if (s.allegianceSlug) pin.allegiance = s.allegianceSlug as AllegianceKey;
+      if (s.territoryRadius !== null) pin.territoryRadius = s.territoryRadius;
+      return pin;
+    });
 
   const vortexes: VortexPin[] = vortexRows.map((v) => {
     const pin: VortexPin = { id: v.id, slug: v.slug, name: v.name, x: v.x, y: v.y };
@@ -121,7 +126,12 @@ async function loadSectorFromDb(slug: string): Promise<SectorMetadata | null> {
     if (c.layer) line.layer = c.layer as LayerSlug;
     const attached = markersByConnection.get(c.id);
     if (attached) {
-      const m: MapMarker = { id: attached.id, type: attached.type as MarkerType, name: attached.name };
+      const m: MapMarker = {
+        id: attached.id,
+        connectionId: c.id,
+        type: attached.type as MarkerType,
+        name: attached.name,
+      };
       if (attached.slug) m.slug = attached.slug;
       if (attached.allegianceSlug) m.allegiance = attached.allegianceSlug as AllegianceKey;
       if (attached.externalUrl) m.externalUrl = attached.externalUrl;

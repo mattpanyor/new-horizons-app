@@ -60,15 +60,29 @@ async function loadStarSystemFromDb(
 
   const primaryRow = stars.find((s) => s.role === "primary");
   const secondaryRow = stars.find((s) => s.role === "secondary");
-  if (!primaryRow) {
-    throw new Error(`System ${sectorSlug}/${systemSlug} has no primary star`);
-  }
+  // A system created via the editor without a primary star row used to throw
+  // here, which the page's catch swallows — the pin then renders as a dead
+  // placeholder and can't be drilled into. Synthesize a default star using
+  // the centerKind-appropriate palette so the system is at least loadable.
+  // (Users authoring via the editor still see + can fix the missing data.)
+  const effectivePrimary = primaryRow ?? {
+    id: -1,
+    systemId: systemRow.id,
+    role: "primary" as const,
+    name: systemRow.name,
+    fantasyLabel: null,
+    color: "#FFE87A",
+    secondaryColor: "#7C5F00",
+    externalUrl: null,
+  };
 
   // Build Star objects. The renderer still uses `star.type` (substring matcher),
   // so we revive it from the DB's fantasy_label column. New systems created via
   // the future editor will have fantasy_label optional; renderer migration to
   // center_kind happens in a later phase (map-migration.md §3.4.4).
-  const buildStar = (row: typeof primaryRow): Star => {
+  // The function signature uses NonNullable so callers don't have to null-
+  // check; effectivePrimary above is the always-defined shim.
+  const buildStar = (row: NonNullable<typeof primaryRow>): Star => {
     const star: Star = {
       name: row.name,
       type: row.fantasyLabel ?? "",
@@ -79,7 +93,9 @@ async function loadStarSystemFromDb(
     return star;
   };
 
-  const bodies: CelestialBody[] = bodyRows.map((b) => {
+  const bodies: CelestialBody[] = bodyRows
+    .filter((b) => b.published !== false)
+    .map((b) => {
     const body: CelestialBody = {
       id: b.bodyId,
       dbId: b.id,
@@ -102,7 +118,7 @@ async function loadStarSystemFromDb(
     slug: systemRow.slug,
     name: systemRow.name,
     centerKind: systemRow.centerKind,
-    star: buildStar(primaryRow),
+    star: buildStar(effectivePrimary),
     bodies,
   };
   if (secondaryRow) result.secondaryStar = buildStar(secondaryRow);

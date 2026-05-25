@@ -89,7 +89,7 @@ export async function PUT(
       const [target] = await sql`
         SELECT id FROM systems WHERE id = ${dstSystem} AND sector_id = ${sector.id}
       `;
-      if (!target) return bad("Target system not in this sector");
+      if (!target) return bad("Target system not in this sector", 404);
       if (target.id === body.system_id) return bad("Source and destination system are the same");
       await sql`
         UPDATE celestial_bodies
@@ -101,9 +101,23 @@ export async function PUT(
       const [target] = await sql`
         SELECT id FROM connections WHERE id = ${dstConn} AND sector_id = ${sector.id}
       `;
-      if (!target) return bad("Target connection not in this sector");
-      const markerSlug = `${body.body_id ?? `ship-${srcBody}`}-${Date.now().toString(36)}`;
-      // Position 0.5 = midpoint, GM can tweak after.
+      if (!target) return bad("Target connection not in this sector", 404);
+      // Prefer the source body_id as the marker slug — avoids the accumulating
+      // -<date-suffix>-<date-suffix> growth on round-trip moves. Only append a
+      // disambiguation suffix if the slug is already taken in this sector's
+      // markers table.
+      const baseSlug = (body.body_id ?? `ship-${srcBody}`).toString();
+      let markerSlug = baseSlug;
+      const [collision] = await sql`
+        SELECT 1 FROM markers WHERE sector_id = ${sector.id} AND slug = ${markerSlug} LIMIT 1
+      `;
+      if (collision) {
+        markerSlug = `${baseSlug}-${Date.now().toString(36).slice(-4)}`;
+      }
+      // Carry every field that has a sensible analogue on a marker. Biome,
+      // lore, label_position, special_attribute don't apply to a moving ship,
+      // so they're dropped here (and a body→marker→body round-trip is a
+      // documented one-way trim — see map-migration.md if/when re-exported).
       await sql`
         INSERT INTO markers (
           sector_id, slug, name, type, allegiance_slug, external_url,
@@ -129,8 +143,31 @@ export async function PUT(
       const [target] = await sql`
         SELECT id, slug FROM systems WHERE id = ${dstSystem} AND sector_id = ${sector.id}
       `;
-      if (!target) return bad("Target system not in this sector");
-      const bodyId = (marker.slug ?? marker.name).toString().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      if (!target) return bad("Target system not in this sector", 404);
+      // Use the marker slug as-is when possible; fall back to slugified name
+      // for legacy markers without a slug. If the (system_id, body_id) pair
+      // collides we'd hit a UNIQUE violation — pre-check and either error
+      // out with 409 or dedupe.
+      const baseSlug = (marker.slug ?? marker.name).toString().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      let bodyId = baseSlug;
+      const [collision] = await sql`
+        SELECT 1 FROM celestial_bodies
+        WHERE system_id = ${dstSystem} AND body_id = ${bodyId}
+        LIMIT 1
+      `;
+      if (collision) {
+        // Append a short suffix and retry the check once. Two retries are
+        // sufficient unless the GM has a wildly unusual setup.
+        bodyId = `${baseSlug}-${Date.now().toString(36).slice(-4)}`;
+        const [stillColliding] = await sql`
+          SELECT 1 FROM celestial_bodies
+          WHERE system_id = ${dstSystem} AND body_id = ${bodyId}
+          LIMIT 1
+        `;
+        if (stillColliding) {
+          return NextResponse.json({ error: `Target system already has a body with id '${baseSlug}'` }, { status: 409 });
+        }
+      }
       await sql`
         INSERT INTO celestial_bodies (
           system_id, body_id, name, type, allegiance_slug, external_url,
@@ -147,7 +184,7 @@ export async function PUT(
       const [target] = await sql`
         SELECT id FROM connections WHERE id = ${dstConn} AND sector_id = ${sector.id}
       `;
-      if (!target) return bad("Target connection not in this sector");
+      if (!target) return bad("Target connection not in this sector", 404);
       if (target.id === marker.connection_id) return bad("Marker is already on this connection");
       await sql`
         UPDATE markers

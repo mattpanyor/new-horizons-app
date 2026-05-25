@@ -23,6 +23,12 @@ import { ALLEGIANCES } from "@/lib/allegiances";
 import { SpecialAttributeIcon } from "@/components/specialAttributes/SpecialAttributeIcon";
 import { ImperialCoreCluster, SYSTEM_OVERRIDES } from "./ImperialCoreCluster";
 
+// Multiplier applied to `bodyHitRadius` when in system-edit mode. The bodies
+// live inside a 0.25× scaled <g>, so the on-screen hit zone is small. 1.5×
+// brings click/drag targeting into a comfortable range without overlapping
+// adjacent bodies at typical orbit spacings.
+const EDIT_HIT_TARGET_SCALE = 1.5;
+
 interface StarSystemViewProps {
   pin: SystemPin;
   sys: StarSystemMetadata | undefined;
@@ -514,7 +520,7 @@ export const StarSystemView = memo(function StarSystemView({
                 // inner system <g> applies scale(0.25), so we need a generous
                 // local radius for the on-screen hit zone to feel right.
                 const hitR = isSystemEditing
-                  ? Math.max(bodyHitRadius(body.type), labelR + 6) * 1.5
+                  ? Math.max(bodyHitRadius(body.type), labelR + 6) * EDIT_HIT_TARGET_SCALE
                   : 0;
 
                 return (

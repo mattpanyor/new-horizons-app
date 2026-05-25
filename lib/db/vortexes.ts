@@ -83,15 +83,19 @@ export async function updateVortex(
   }>
 ): Promise<void> {
   if (fields.slug !== undefined) {
+    // Update row first; cascade only if the rename actually committed (see
+    // lib/db/systems.ts updateSystem for rationale).
     const rows = await sql`SELECT slug, sector_id FROM vortexes WHERE id = ${id}`;
     if (rows.length > 0) {
       const oldSlug = rows[0].slug as string;
       const sectorId = rows[0].sector_id as number;
+      await sql`UPDATE vortexes SET slug = ${fields.slug} WHERE id = ${id}`;
       if (oldSlug !== fields.slug) {
         await cascadeSlugRename(sectorId, oldSlug, fields.slug);
       }
+    } else {
+      await sql`UPDATE vortexes SET slug = ${fields.slug} WHERE id = ${id}`;
     }
-    await sql`UPDATE vortexes SET slug = ${fields.slug} WHERE id = ${id}`;
   }
   if (fields.name !== undefined) await sql`UPDATE vortexes SET name = ${fields.name} WHERE id = ${id}`;
   if (fields.x !== undefined) await sql`UPDATE vortexes SET x = ${fields.x} WHERE id = ${id}`;

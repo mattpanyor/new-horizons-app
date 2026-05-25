@@ -102,17 +102,21 @@ export async function updateSystem(
   }>
 ): Promise<void> {
   if (fields.slug !== undefined) {
-    // Slug rename — also rewrite any connection that referenced the old slug
-    // as an endpoint, so the GM doesn't have to fix orphans manually.
+    // Entity rename. Order matters: update the row FIRST, then cascade
+    // connection slugs. If the row update fails (e.g. UNIQUE (sector_id, slug)
+    // collision), we never rewrite connections — so they keep pointing at
+    // the still-correct old slug instead of being orphaned.
     const rows = await sql`SELECT slug, sector_id FROM systems WHERE id = ${id}`;
     if (rows.length > 0) {
       const oldSlug = rows[0].slug as string;
       const sectorId = rows[0].sector_id as number;
+      await sql`UPDATE systems SET slug = ${fields.slug} WHERE id = ${id}`;
       if (oldSlug !== fields.slug) {
         await cascadeSlugRename(sectorId, oldSlug, fields.slug);
       }
+    } else {
+      await sql`UPDATE systems SET slug = ${fields.slug} WHERE id = ${id}`;
     }
-    await sql`UPDATE systems SET slug = ${fields.slug} WHERE id = ${id}`;
   }
   if (fields.name !== undefined) await sql`UPDATE systems SET name = ${fields.name} WHERE id = ${id}`;
   if (fields.x !== undefined) await sql`UPDATE systems SET x = ${fields.x} WHERE id = ${id}`;

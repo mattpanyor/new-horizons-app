@@ -48,7 +48,8 @@ export async function getBodiesBySystem(systemId: number): Promise<BodyRow[]> {
     SELECT id, system_id, body_id, name, type, biome_slug, lore,
            orbit_position, orbit_distance, label_position, special_attribute,
            allegiance_slug, external_url, published
-    FROM celestial_bodies WHERE system_id = ${systemId} ORDER BY orbit_distance
+    FROM celestial_bodies WHERE system_id = ${systemId}
+    ORDER BY orbit_distance, id
   `;
   return rows.map(rowToBody);
 }

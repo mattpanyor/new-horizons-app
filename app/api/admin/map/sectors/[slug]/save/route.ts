@@ -120,23 +120,66 @@ export async function PUT(
   }
 
   // ── UPDATES ──
+  // Build a validated allowlist for each entity's field set rather than
+  // blind-casting the raw payload. Stops a malformed/malicious client from
+  // sending unexpected shapes (e.g. `{ x: { weird: 1 } }`) into a column
+  // UPDATE — the lib/db helpers' tagged-template binding would reject most
+  // such cases at the wire, but a structured 400 here is friendlier.
+  const str  = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const num  = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  const bool = (v: unknown) => (typeof v === "boolean" ? v : undefined);
+  const nullable = <T>(v: unknown, pick: (x: unknown) => T | undefined): T | null | undefined => {
+    if (v === null) return null;
+    return pick(v);
+  };
+
   for (const u of payload.systems?.update ?? []) {
     if (typeof u.id !== "number") return bad("system update missing id");
     if (u.centerKind !== undefined && !isCenterKind(u.centerKind))
       return bad(`Invalid center_kind: ${u.centerKind}`);
-    await updateSystem(u.id, u as Parameters<typeof updateSystem>[1]);
+    await updateSystem(u.id, {
+      slug: str(u.slug),
+      name: str(u.name),
+      x: num(u.x),
+      y: num(u.y),
+      allegianceSlug: nullable(u.allegianceSlug, str),
+      territoryRadius: nullable(u.territoryRadius, num),
+      centerKind: u.centerKind as CenterKind | undefined,
+      binaryAngle: nullable(u.binaryAngle, num),
+      externalUrl: nullable(u.externalUrl, str),
+      published: bool(u.published),
+    });
   }
   for (const u of payload.vortexes?.update ?? []) {
     if (typeof u.id !== "number") return bad("vortex update missing id");
     if (u.layer !== undefined && u.layer !== null && !isLayer(u.layer))
       return bad(`Invalid vortex layer: ${u.layer}`);
-    await updateVortex(u.id, u as Parameters<typeof updateVortex>[1]);
+    await updateVortex(u.id, {
+      slug: str(u.slug),
+      name: str(u.name),
+      x: num(u.x),
+      y: num(u.y),
+      color: nullable(u.color, str),
+      radius: nullable(u.radius, num),
+      ratioW: nullable(u.ratioW, num),
+      ratioH: nullable(u.ratioH, num),
+      layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
+    });
   }
   for (const u of payload.connections?.update ?? []) {
     if (typeof u.id !== "number") return bad("connection update missing id");
     if (u.layer !== undefined && u.layer !== null && !isLayer(u.layer))
       return bad(`Invalid connection layer: ${u.layer}`);
-    await updateConnection(u.id, u as Parameters<typeof updateConnection>[1]);
+    await updateConnection(u.id, {
+      fromSlug: str(u.fromSlug),
+      toSlug: str(u.toSlug),
+      curvature: nullable(u.curvature, num),
+      label: nullable(u.label, str),
+      color: nullable(u.color, str),
+      dashes: nullable(u.dashes, str),
+      opacity: nullable(u.opacity, num),
+      layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
+    });
   }
   for (const u of payload.markers?.update ?? []) {
     if (typeof u.id !== "number") return bad("marker update missing id");
@@ -144,7 +187,20 @@ export async function PUT(
       return bad(`Invalid marker type: ${u.type}`);
     if (u.layer !== undefined && u.layer !== null && !isLayer(u.layer))
       return bad(`Invalid marker layer: ${u.layer}`);
-    await updateMarker(u.id, u as Parameters<typeof updateMarker>[1]);
+    await updateMarker(u.id, {
+      slug: str(u.slug),
+      name: str(u.name),
+      type: u.type as MarkerType | undefined,
+      allegianceSlug: nullable(u.allegianceSlug, str),
+      externalUrl: nullable(u.externalUrl, str),
+      territoryRadius: nullable(u.territoryRadius, num),
+      layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
+      connectionId: nullable(u.connectionId, num),
+      position: nullable(u.position, num),
+      x: nullable(u.x, num),
+      y: nullable(u.y, num),
+      angle: nullable(u.angle, num),
+    });
   }
 
   // ── CREATES ──

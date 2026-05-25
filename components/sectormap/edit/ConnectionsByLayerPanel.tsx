@@ -7,17 +7,16 @@
 
 import { useMemo } from "react";
 import { useEditMode } from "./EditModeProvider";
-import type { ConnectionLine } from "@/types/sector";
+import type { ConnectionLine, LayerSlug } from "@/types/sector";
+import { MAP_LAYERS } from "@/types/sector";
 
-// Use the DB-correct layer slugs (matches lib/mapEnums.ts LAYERS).
-// The legacy `LayerSlug` type from types/sector.ts is keyed by `MAP_LAYERS`
-// keys ("war" instead of "conflict"), which differs from the stored slug.
-type LayerKey = "movement" | "story" | "conflict" | "invasion" | "none";
+// MAP_LAYERS keys now match their slug values (see types/sector.ts), so
+// LayerSlug | "none" is the canonical key set.
+type LayerKey = LayerSlug | "none";
 const LAYER_LABELS: Record<LayerKey, string> = {
-  movement: "Movement",
-  story: "Story",
-  conflict: "Conflict",
-  invasion: "Invasion",
+  ...(Object.fromEntries(
+    Object.values(MAP_LAYERS).map((l) => [l.slug, l.label])
+  ) as Record<LayerSlug, string>),
   none: "No Layer",
 };
 
