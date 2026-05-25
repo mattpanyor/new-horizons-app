@@ -34,12 +34,19 @@ interface ConnectionMarkerLayerProps {
   markerCardEnter: () => void;
   markerCardLeave: () => void;
   vb: SvgViewBox;
+  // Edit-mode passthroughs. When isEditing, the visible marker click no
+  // longer pops the tooltip card — instead it calls editPick so the right-
+  // rail Selection panel opens with this marker's form (and its Move button).
+  isEditing?: boolean;
+  editPick?: (m: MapMarker) => void;
+  selectedMarkerId?: number | null;
 }
 
 export function ConnectionMarkerLayer({
   connections, systems, vortexes, markers, sectorSlug, orbitDataMap,
   activeMarkerId, showMarker, scheduleHideMarker,
   markerCardEnter, markerCardLeave, vb,
+  isEditing, editPick, selectedMarkerId,
 }: ConnectionMarkerLayerProps) {
   return (
     <>
@@ -69,13 +76,26 @@ export function ConnectionMarkerLayer({
         const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
         const shipSecondary = allegiance?.color ?? SHIP_COLORS.secondaryColor;
 
+        const isSelectedInEdit = isEditing && selectedMarkerId !== undefined && selectedMarkerId === marker.id;
         return (
           <g key={`marker-${connIdx}`}
             transform={`translate(${mp.x.toFixed(1)},${mp.y.toFixed(1)}) rotate(${rotAngle.toFixed(1)})`}
-            style={{ cursor: "pointer", pointerEvents: "all" }}
-            onClick={(e) => { e.stopPropagation(); showMarker(String(connIdx)); }}
-            onMouseEnter={() => showMarker(String(connIdx))}
+            style={{
+              cursor: isEditing ? "pointer" : "pointer",
+              pointerEvents: "all",
+              filter: isSelectedInEdit ? "drop-shadow(0 0 6px rgba(251,191,36,0.8))" : undefined,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isEditing && editPick) editPick(marker);
+              else showMarker(String(connIdx));
+            }}
+            onMouseEnter={() => { if (!isEditing) showMarker(String(connIdx)); }}
             onMouseLeave={scheduleHideMarker}>
+            {/* Fat invisible hit target in edit mode — ships/fleets are small
+                and the line they sit on grabs nearby clicks. This gives a
+                reliable selection area. */}
+            {isEditing && <circle cx={0} cy={0} r={16} fill="transparent" />}
 
             {marker.type === "ship" && (
               <>
@@ -134,7 +154,7 @@ export function ConnectionMarkerLayer({
         const connColors = MARKER_COLORS[marker.type] ?? SHIP_COLORS;
         const cardAccent = allegiance?.color ?? connColors.color;
         const cardW = 220;
-        const cardH = 50 + (marker.kankaUrl ? 34 : 0);
+        const cardH = 50 + (marker.externalUrl ? 34 : 0);
 
         return (
           <g transform={`translate(${mp.x.toFixed(1)},${mp.y.toFixed(1)}) scale(${SYS_SCALE * 2})`}>
@@ -168,8 +188,8 @@ export function ConnectionMarkerLayer({
                   </div>
                 )}
               </div>
-              {marker.kankaUrl && (
-                <a href={marker.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
+              {marker.externalUrl && (
+                <a href={marker.externalUrl} target="_blank" rel="noopener noreferrer" style={{
                   display: "block", marginTop: "8px", padding: "4px 8px",
                   background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)",
                   borderRadius: "4px", color: "rgba(165,180,252,0.9)", fontSize: "9px",

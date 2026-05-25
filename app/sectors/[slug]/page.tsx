@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { getSectorSlugs, getSectorBySlug } from "@/lib/sectors";
 import { getStarSystemBySlug } from "@/lib/starsystems";
 import { getKankaUrlMap } from "@/lib/db/kankaEntities";
+import { getUserByUsername } from "@/lib/db/users";
+import { getAllBiomes } from "@/lib/db/biomes";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import SectorMap from "@/components/SectorMap";
@@ -11,7 +14,7 @@ import { SectorMapGrid } from "@/components/sectormap/SectorMapGrid";
 import { SectorMapSvgLayer } from "@/components/sectormap/SectorMapSvgLayer";
 
 export async function generateStaticParams() {
-  const slugs = getSectorSlugs();
+  const slugs = await getSectorSlugs();
   return slugs.map((slug) => ({ slug }));
 }
 
@@ -21,13 +24,13 @@ export default async function SectorPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const slugs = getSectorSlugs();
+  const slugs = await getSectorSlugs();
 
   if (!slugs.includes(slug)) {
     notFound();
   }
 
-  const sector = getSectorBySlug(slug);
+  const sector = await getSectorBySlug(slug);
 
   if (sector.published === false) {
     notFound();
@@ -37,28 +40,40 @@ export default async function SectorPage({
   const systemsData: Record<string, StarSystemMetadata> = {};
   for (const pin of sector.systems) {
     try {
-      systemsData[pin.slug] = getStarSystemBySlug(slug, pin.slug);
+      systemsData[pin.slug] = await getStarSystemBySlug(slug, pin.slug);
     } catch {
-      // Star system JSON not found — pin will still appear on the map, just won't be expandable
+      // Star system not found — pin will still appear on the map, just won't be expandable
     }
   }
+
+  // Read the current user for the edit-mode gate. Page is already dynamic
+  // (DB-backed loader), so reading cookies doesn't cost static generation.
+  const cookieStore = await cookies();
+  const username = cookieStore.get("nh_user")?.value;
+  const user = username ? await getUserByUsername(username) : null;
+  const userAccessLevel = user?.accessLevel ?? 0;
+
+  // Biomes for the system-edit modal's dropdown. Cheap query; only used by
+  // superadmins, but rendered statically with the page so the client doesn't
+  // need a separate fetch.
+  const biomes = userAccessLevel >= 127 ? await getAllBiomes() : [];
 
   // Enrich with Kanka URLs by name-matching entities from DB
   const kankaMap = await getKankaUrlMap();
   if (kankaMap.size > 0) {
     for (const sys of Object.values(systemsData)) {
-      if (!sys.kankaUrl) sys.kankaUrl = kankaMap.get(sys.name.toLowerCase());
-      if (!sys.star.kankaUrl) sys.star.kankaUrl = kankaMap.get(sys.star.name.toLowerCase());
+      if (!sys.externalUrl) sys.externalUrl = kankaMap.get(sys.name.toLowerCase());
+      if (!sys.star.externalUrl) sys.star.externalUrl = kankaMap.get(sys.star.name.toLowerCase());
       for (const body of sys.bodies) {
-        if (!body.kankaUrl) body.kankaUrl = kankaMap.get(body.name.toLowerCase());
+        if (!body.externalUrl) body.externalUrl = kankaMap.get(body.name.toLowerCase());
       }
     }
     for (const marker of sector.markers ?? []) {
-      if (!marker.kankaUrl) marker.kankaUrl = kankaMap.get(marker.name.toLowerCase());
+      if (!marker.externalUrl) marker.externalUrl = kankaMap.get(marker.name.toLowerCase());
     }
     for (const conn of sector.connections ?? []) {
-      if (conn.marker && !conn.marker.kankaUrl) {
-        conn.marker.kankaUrl = kankaMap.get(conn.marker.name.toLowerCase());
+      if (conn.marker && !conn.marker.externalUrl) {
+        conn.marker.externalUrl = kankaMap.get(conn.marker.name.toLowerCase());
       }
     }
   }
@@ -83,6 +98,8 @@ export default async function SectorPage({
           <SectorMap
             sector={sector}
             systemsData={systemsData}
+            userAccessLevel={userAccessLevel}
+            biomes={biomes}
             staticSvgLayers={
               <SectorMapSvgLayer sector={sector} systemsData={systemsData} />
             }

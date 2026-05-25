@@ -152,7 +152,7 @@ export const ImperialCoreCluster = memo(function ImperialCoreCluster({
       {wardPlanets.map((body) => {
         const pos = wardPos(body.orbitPosition, body.orbitDistance);
         const isBodyActive = isActive && activeBodyId === body.id;
-        const { color: bodyColor } = getBodyColors(body);
+        const { color: bodyColor, secondaryColor: bodySecondaryColor } = getBodyColors(body);
         const labelR = bodyLabelR(body.type);
 
         // Push label radially outward from cluster center
@@ -177,6 +177,7 @@ export const ImperialCoreCluster = memo(function ImperialCoreCluster({
               pinSlug={pin.slug}
               sectorSlug={sectorSlug}
               bodyColor={bodyColor}
+              bodySecondaryColor={bodySecondaryColor}
               isBodyActive={isBodyActive}
               isActive={isActive}
             />
@@ -284,7 +285,7 @@ export const ImperialCoreCluster = memo(function ImperialCoreCluster({
         const anchorY = isCoreSegment ? clusterCenter.y : wardP!.y;
         const { color: bodyColor } = getBodyColors(body);
         const cardW = 220;
-        const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl, body.allegiance);
+        const cardH = bodyCardHeight(body.special_attribute, body.externalUrl, body.allegiance);
         const clearance = isCoreSegment ? CORE_R + 16 : bodyLabelR(body.type) + 16;
 
         return (
@@ -303,7 +304,7 @@ export const ImperialCoreCluster = memo(function ImperialCoreCluster({
               type={body.type}
               biome={body.biome}
               specialAttribute={body.special_attribute}
-              kankaUrl={body.kankaUrl}
+              externalUrl={body.externalUrl}
               bodyColor={bodyColor}
               allegiance={body.allegiance ? ALLEGIANCES[body.allegiance] : undefined}
             />

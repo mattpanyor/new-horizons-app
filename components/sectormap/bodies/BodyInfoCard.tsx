@@ -8,12 +8,12 @@ interface BodyInfoCardProps {
   type: string;
   biome?: string;
   specialAttribute?: string;
-  kankaUrl?: string;
+  externalUrl?: string;
   bodyColor: string;
   allegiance?: Allegiance;
 }
 
-export function BodyInfoCard({ name, type, biome, specialAttribute, kankaUrl, bodyColor, allegiance }: BodyInfoCardProps) {
+export function BodyInfoCard({ name, type, biome, specialAttribute, externalUrl, bodyColor, allegiance }: BodyInfoCardProps) {
   return (
     <>
       {allegiance ? (
@@ -42,8 +42,8 @@ export function BodyInfoCard({ name, type, biome, specialAttribute, kankaUrl, bo
         </>
       )}
       <SpecialAttributeCardLine type={specialAttribute} />
-      {kankaUrl && (
-        <a href={kankaUrl} target="_blank" rel="noopener noreferrer" style={{
+      {externalUrl && (
+        <a href={externalUrl} target="_blank" rel="noopener noreferrer" style={{
           display: "block", marginTop: "8px", padding: "4px 8px",
           background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)",
           borderRadius: "4px", color: "rgba(165,180,252,0.9)", fontSize: "9px",
@@ -58,9 +58,9 @@ export function BodyInfoCard({ name, type, biome, specialAttribute, kankaUrl, bo
 }
 
 /** Compute the card height based on body properties */
-export function bodyCardHeight(specialAttribute?: string, kankaUrl?: string, allegiance?: string): number {
+export function bodyCardHeight(specialAttribute?: string, externalUrl?: string, allegiance?: string): number {
   return 50
     + (allegiance ? 6 : 0)
     + (specialAttribute ? 20 : 0)
-    + (kankaUrl ? 34 : 0);
+    + (externalUrl ? 34 : 0);
 }

@@ -1,6 +1,7 @@
 import type { AllegianceKey } from "@/lib/allegiances";
 
 export interface SystemPin {
+  id?: number;               // DB id when loaded from DB; absent for JSON-loaded entities
   slug: string;
   x: number;  // canvas coordinate 0–1200
   y: number;  // canvas coordinate 0–800
@@ -10,6 +11,7 @@ export interface SystemPin {
 }
 
 export interface VortexPin {
+  id?: number;
   slug: string;
   name: string;
   x: number;
@@ -33,11 +35,12 @@ export const MAP_LAYERS = {
 export type LayerSlug = keyof typeof MAP_LAYERS;
 
 export interface MapMarker {
+  id?: number;
   type: MarkerType;
   name: string;
   slug?: string;      // unique id, required for use as connection line endpoint
   allegiance?: AllegianceKey;
-  kankaUrl?: string;
+  externalUrl?: string;
   // Connection-line placement (used inside ConnectionLine.marker)
   position?: number;  // 0–1 along the visible (trimmed) line
   // Free-floating placement (used inside SectorMetadata.markers)
@@ -54,6 +57,7 @@ export interface MapMarker {
 export type ConnectionMarker = MapMarker;
 
 export interface ConnectionLine {
+  id?: number;
   from: string;       // slug of a system or vortex
   to: string;         // slug of a system or vortex
   curvature?: number; // perpendicular offset of the bezier control point (default 0, positive = left of from→to)

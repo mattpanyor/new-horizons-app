@@ -4,8 +4,8 @@ import GalacticMap from "@/components/GalacticMap";
 import { GalacticMapBackground } from "@/components/galacticmap/GalacticMapBackground";
 import NavIcon from "@/components/NavIcon";
 
-export default function SectorsPage() {
-  const sectors = getAllSectors();
+export default async function SectorsPage() {
+  const sectors = await getAllSectors();
   const coreSector = sectors.find((s) => s.slug === "core");
   const outerSectors = sectors.filter((s) => s.slug !== "core");
 

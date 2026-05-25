@@ -18,12 +18,20 @@ interface FreeMarkerLayerProps {
   markerCardEnter: () => void;
   markerCardLeave: () => void;
   vb: SvgViewBox;
+  // Edit-mode passthroughs. When `isEditing` is true, clicks call `editPick`
+  // (select for the side panel) instead of showing the tooltip card, and
+  // mousedown calls `editDragStart` to begin a drag-to-reposition gesture.
+  isEditing?: boolean;
+  editPick?: (m: MapMarker) => void;
+  editDragStart?: (e: React.MouseEvent, m: MapMarker) => void;
+  selectedMarkerId?: number | null;
 }
 
 export function FreeMarkerLayer({
   markers, sectorSlug,
   activeMarkerId, showMarker, scheduleHideMarker,
   markerCardEnter, markerCardLeave, vb,
+  isEditing, editPick, editDragStart, selectedMarkerId,
 }: FreeMarkerLayerProps) {
   return (
     <>
@@ -57,13 +65,22 @@ export function FreeMarkerLayer({
         const markerColor = allegiance?.color ?? colors.color;
         const gradId = `free-marker-grad-${sectorSlug}-${idx}`;
 
+        const isSelectedInEdit = isEditing && selectedMarkerId !== undefined && selectedMarkerId === marker.id;
         return (
           <g key={id}
             transform={`translate(${marker.x.toFixed(1)},${marker.y.toFixed(1)}) rotate(${angle.toFixed(1)})`}
-            style={{ cursor: "pointer", pointerEvents: "all" }}
-            onClick={(e) => { e.stopPropagation(); showMarker(id); }}
-            onMouseEnter={() => showMarker(id)}
+            style={{ cursor: isEditing ? "move" : "pointer", pointerEvents: "all", filter: isSelectedInEdit ? "drop-shadow(0 0 6px rgba(251,191,36,0.8))" : undefined }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isEditing && editPick) editPick(marker);
+              else showMarker(id);
+            }}
+            onMouseDown={isEditing && editDragStart ? (e) => editDragStart(e, marker) : undefined}
+            onMouseEnter={() => { if (!isEditing) showMarker(id); }}
             onMouseLeave={scheduleHideMarker}>
+            {/* Generous transparent hit target in edit mode — beats nearby
+                system pins for the click and gives drag-from-center behavior. */}
+            {isEditing && <circle cx={0} cy={0} r={18} fill="transparent" />}
 
             {marker.type === "ship" && (
               <>
@@ -201,7 +218,7 @@ export function FreeMarkerLayer({
         const allegiance = marker.allegiance ? ALLEGIANCES[marker.allegiance] : undefined;
         const cardAccent = allegiance?.color ?? colors.color;
         const cardW = 220;
-        const cardH = 50 + (marker.kankaUrl ? 34 : 0);
+        const cardH = 50 + (marker.externalUrl ? 34 : 0);
 
         const typeLabels: Record<string, string> = {
           ship: "Ship",
@@ -243,8 +260,8 @@ export function FreeMarkerLayer({
                   </div>
                 )}
               </div>
-              {marker.kankaUrl && (
-                <a href={marker.kankaUrl} target="_blank" rel="noopener noreferrer" style={{
+              {marker.externalUrl && (
+                <a href={marker.externalUrl} target="_blank" rel="noopener noreferrer" style={{
                   display: "block", marginTop: "8px", padding: "4px 8px",
                   background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)",
                   borderRadius: "4px", color: "rgba(165,180,252,0.9)", fontSize: "9px",

@@ -4,7 +4,7 @@
 
 import type { SectorMetadata } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
-import { getBodyColors, FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
+import { FLEET_GRAD_TIP, FLEET_GRAD_BASE } from "@/lib/bodyColors";
 import { SectorArcLayer } from "./SectorArcLayer";
 import { TerritoryLayer } from "./TerritoryLayer";
 
@@ -42,16 +42,8 @@ export function SectorMapSvgLayer({ sector, systemsData }: SectorMapSvgLayerProp
                 </radialGradient>,
               ];
             }).flat(),
-            ...sys.bodies.map((b) => {
-              const { color, secondaryColor } = getBodyColors(b);
-              return (
-                <radialGradient key={`body-${pin.slug}-${b.id}`} id={`body-${pin.slug}-${b.id}`}>
-                  <stop offset="0%" stopColor={color} stopOpacity="1" />
-                  <stop offset="70%" stopColor={secondaryColor} stopOpacity="0.9" />
-                  <stop offset="100%" stopColor={secondaryColor} stopOpacity="0.7" />
-                </radialGradient>
-              );
-            }),
+            // Body fill gradients are now emitted client-side inside BodyShape
+            // so live system-edit changes (type, biome) reflect immediately.
           ];
         })}
       </defs>

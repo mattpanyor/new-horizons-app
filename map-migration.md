@@ -77,9 +77,10 @@ CREATE TABLE IF NOT EXISTS allegiances (
 );
 
 CREATE TABLE IF NOT EXISTS biomes (
-  slug      VARCHAR(30) PRIMARY KEY,
-  label     VARCHAR(60) NOT NULL,
-  color     VARCHAR(7)  NOT NULL
+  slug            VARCHAR(30) PRIMARY KEY,
+  label           VARCHAR(60) NOT NULL,
+  color           VARCHAR(7)  NOT NULL,
+  secondary_color VARCHAR(7)  NOT NULL   -- inner gradient color, matches BodyColors.secondaryColor
 );
 ```
 
@@ -117,7 +118,7 @@ CREATE TABLE IF NOT EXISTS systems (
   center_kind       VARCHAR(20) NOT NULL DEFAULT 'single'
                     CHECK (center_kind IN ('single','binary','pulsar','neutron','black-hole')),
   binary_angle      DOUBLE PRECISION,             -- used only when center_kind='binary'
-  kanka_url         TEXT,
+  external_url         TEXT,
   published         BOOLEAN NOT NULL DEFAULT true,
   UNIQUE (sector_id, slug)
 );
@@ -131,7 +132,7 @@ CREATE TABLE IF NOT EXISTS stars (
   fantasy_label     VARCHAR(80),                  -- optional flavor copy, e.g. "Red Supergiant" — never affects rendering
   color             VARCHAR(7)   NOT NULL,        -- accent/rim color, picked up by all center_kind renderers
   secondary_color   VARCHAR(7),                   -- inner-gradient color (single/binary only)
-  kanka_url         TEXT,
+  external_url         TEXT,
   UNIQUE (system_id, role)
 );
 -- Rules enforced at the API layer (not as DB constraints, to keep CHECKs readable):
@@ -154,7 +155,7 @@ CREATE TABLE IF NOT EXISTS celestial_bodies (
   special_attribute VARCHAR(20) CHECK (special_attribute IN
     ('lathanium','nobility','purified','lightbringer','cult','alien_int')),
   allegiance_slug   VARCHAR(40) REFERENCES allegiances(slug) ON DELETE SET NULL,
-  kanka_url         TEXT,
+  external_url         TEXT,
   published         BOOLEAN NOT NULL DEFAULT true,
   UNIQUE (system_id, body_id)
 );
@@ -198,7 +199,7 @@ CREATE TABLE IF NOT EXISTS markers (
   type              VARCHAR(20) NOT NULL CHECK (type IN
     ('ship','fleet','anomaly','poi','black-hole')),
   allegiance_slug   VARCHAR(40) REFERENCES allegiances(slug) ON DELETE SET NULL,
-  kanka_url         TEXT,
+  external_url         TEXT,
   territory_radius  DOUBLE PRECISION,
   layer             VARCHAR(20) CHECK (layer IN ('movement','story','conflict','invasion')),
   -- Either attached to a connection (position 0–1) or free-floating (x/y/angle).
@@ -400,7 +401,7 @@ Body shape — explicit changesets (smaller payload, clearer intent):
 ```ts
 {
   systems: {
-    create: Array<{ slug, name, x, y, allegiance_slug?, territory_radius?, binary_angle?, kanka_url?, published? }>,
+    create: Array<{ slug, name, x, y, allegiance_slug?, territory_radius?, binary_angle?, external_url?, published? }>,
     update: Array<{ id, ...fields }>,   // partial; only-touch-passed-fields rule (see lib/db/users.ts)
     delete: number[]                    // ids
   },
@@ -426,11 +427,11 @@ Body shape:
     name?, x?, y?, allegiance_slug?, territory_radius?,
     center_kind?,        // 'single' | 'binary' | 'pulsar' | 'neutron' | 'black-hole'
     binary_angle?,       // required if center_kind === 'binary'; ignored otherwise
-    kanka_url?, published?
+    external_url?, published?
   },
   stars: {
-    primary:   { name?, fantasy_label?, color?, secondary_color?, kanka_url? },  // always present
-    secondary: { name?, fantasy_label?, color?, secondary_color?, kanka_url? } | null,
+    primary:   { name?, fantasy_label?, color?, secondary_color?, external_url? },  // always present
+    secondary: { name?, fantasy_label?, color?, secondary_color?, external_url? } | null,
                           // null = delete the secondary row (issued automatically when center_kind switches away from 'binary')
                           // object = upsert (used when center_kind === 'binary')
   },
@@ -488,17 +489,17 @@ Always visible in edit mode. Tabs:
 
 Reached only when sector-edit is OFF and the GM has drilled into a system. Toggle `View | Edit` appears in the focused-system view.
 
-Active scope: stars (primary/secondary), bodies, system-level metadata (binaryAngle, kanka_url, allegiance).
+Active scope: stars (primary/secondary), bodies, system-level metadata (binaryAngle, external_url, allegiance).
 
 - Drag a body along the orbit ring → changes `orbit_position` (0–360°).
 - Drag a body radially in/out → changes `orbit_distance` (0–1, clamped).
 - Right-click empty space → `Create Body`.
 - Right-click a body → `Edit`, `Delete`.
 - Side panel:
-  - **Selection** — body form (name, type, biome dropdown from `biomes` table, lore, special_attribute, allegiance, label_position, published, kanka_url).
-  - **System** — system metadata (name, allegiance, kanka_url, published) and the **center configuration**:
+  - **Selection** — body form (name, type, biome dropdown from `biomes` table, lore, special_attribute, allegiance, label_position, published, external_url).
+  - **System** — system metadata (name, allegiance, external_url, published) and the **center configuration**:
     - `center_kind` dropdown (Single / Binary / Pulsar / Neutron / Black Hole) with live SVG preview.
-    - **Primary star** form (always visible): name, color, secondary_color, optional fantasy_label, kanka_url. Defaults pre-fill on kind switch when the field has never been edited.
+    - **Primary star** form (always visible): name, color, secondary_color, optional fantasy_label, external_url. Defaults pre-fill on kind switch when the field has never been edited.
     - **Secondary star** form (only when kind=`binary`): same fields. Auto-created with defaults when switching to binary; auto-removed (with confirm if dirty) when switching away.
     - **Binary angle** slider (only when kind=`binary`).
 - SAVE / Discard / dirty guard identical to the sector view.
@@ -560,11 +561,11 @@ No data migration is required because new values are additive — existing rows 
 
 Phased so each step is independently mergeable and reversible until the final cutover.
 
-### Phase 1 — schema + seed (no behavior change)
+### Phase 1 — schema + seed (no behavior change) — ✅ COMPLETED 2026-05-24
 
-1. Append the new tables to `lib/db/schema.sql`. Run on the Neon DB once manually.
-2. Add `lib/db/sectors.ts`, `systems.ts`, `stars.ts`, `bodies.ts`, `vortexes.ts`, `markers.ts`, `connections.ts`, `allegiances.ts`, `biomes.ts` — query modules following the `lib/db/users.ts` pattern.
-3. Add `lib/db/seed-map.ts`:
+1. Append the new tables to `lib/db/schema.sql`. Applied to Neon via one-shot `lib/db/apply-schema.ts` (deleted after running).
+2. Add `lib/db/sectors.ts`, `systems.ts`, `stars.ts`, `bodies.ts`, `vortexes.ts`, `markers.ts`, `connections.ts`, `allegiances.ts`, `biomes.ts` — query modules following the `lib/db/users.ts` pattern. Also added `lib/mapEnums.ts` (runtime enums + per-center-kind default colors).
+3. One-shot `lib/db/seed-map.ts` (deleted after running):
    - Insert `allegiances` rows from `ALLEGIANCES`.
    - Insert `biomes` rows from `bodyColors.ts`.
    - Insert the **Imperial Core sector row** (metadata from `content/sectors/core.json`: slug=`imperial-core`, name, color, description, nebula_color, published). No descendant rows.
@@ -578,43 +579,91 @@ Phased so each step is independently mergeable and reversible until the final cu
        - contains `"black hole"` or `"blackhole"` → `black-hole`
        - otherwise → `single`
      - Original `star.type` string (e.g. `"Red Supergiant"`, `"Blue Pulsar"`) is preserved verbatim in `stars.fantasy_label` so the cosmetic copy survives the migration.
-   - Skip `imperial-core` entirely.
+   - Skip Imperial Core inner content entirely (only its sector row is seeded).
 4. Run seed script once on Neon. Verify counts match.
 5. No app-visible changes yet — JSON loaders still in use.
 
+**Verified counts (2026-05-24 run):** allegiances=11, biomes=16, sectors=5, systems=6, stars=7, bodies=26, vortexes=1, connections=7, markers=4. `center_kind` correctly derived: Pernat=binary, unkown-system=pulsar, rest=single.
+
 **Reversibility:** drop the new tables; no production traffic touched them.
 
-### Phase 2 — read path cutover
+### Phase 2 — read path cutover — ✅ COMPLETED 2026-05-24
 
-1. Replace `lib/sectors.ts` and `lib/starsystems.ts` with the hybrid loaders described in §4.
-2. Verify `/sectors` and `/sectors/atlas-sector` render identically to before (visual diff against the current build).
-3. Verify `/sectors/imperial-core` still uses the JSON cluster (unchanged code path).
-4. Add `/sectors/atlas-sector-legacy` — same `app/sectors/[slug]/page.tsx`, but the loader sees the suffix and reads from JSON. Pin generateStaticParams to include the legacy slug.
-5. **Cleanup commit** (separate from the loader change, easier to revert):
-   - Delete `content/sectors/top-left.json`, `content/sectors/bottom-left.json`, `content/sectors/bottom-right.json`. Their data now lives in DB as empty sector rows.
-   - `SECTOR_TERRITORY` in `lib/sectorMapHelpers.ts` is **not touched** — all five sector slugs still exist as real sectors.
-   - Visual smoke test of `/sectors`: all five sector positions render; the three formerly-placeholder sectors render as empty (no systems, no content), same as they did before.
+1. Replaced `lib/sectors.ts` and `lib/starsystems.ts` with hybrid loaders. Public API is now async: `getSectorBySlug`, `getAllSectors`, `getSectorSlugs`, `getStarSystemBySlug`. The three unused legacy exports (`getAllStarSystems`, `findStarSystem`, `getStarSystemSlugs`) were dropped.
+2. Updated callers in `app/sectors/page.tsx` (became `async`) and `app/sectors/[slug]/page.tsx` (await on every loader call, including inside the systems-data loop).
+3. `/sectors/atlas-sector-legacy` route now generated by `generateStaticParams()` (the loader appends the legacy slug). Loader strips the suffix and reads from `content/sectors/top-right.json` + `atlas-sector/`.
+4. Imperial Core path verified: sector metadata merged from DB row + JSON inner content (`core.json` + `imperial-core/axiom-system.json`).
+5. **Cleanup commit:**
+   - Deleted `content/sectors/top-left.json`, `bottom-left.json`, `bottom-right.json`. Data lives in DB as empty shell rows.
+   - `SECTOR_TERRITORY` in `lib/sectorMapHelpers.ts` not touched — all five sector slugs still exist.
+
+**Verification:** `npm run build` succeeds; 48 static pages generated; no typecheck errors. Pre-existing `swr` dep was missing from node_modules; resolved with `npm install`.
 
 **Reversibility:** revert the loader files; if Step 5 has been merged, restore the deleted JSONs from git history. Keep Step 5 in its own commit so it's a clean revert target.
 
-### Phase 3 — editor backend
+### Phase 3 — editor backend — ✅ COMPLETED 2026-05-24
 
-1. Build the two batch endpoints (§5.1, §5.2) under `/api/admin/map/`. Auth check via the `nh_user` cookie + `accessLevel >= 127`.
-2. Add `revalidatePath` calls on every mutation endpoint.
-3. Smoke test with curl / a throwaway client before any UI.
+1. Built three endpoints under `/api/admin/map/sectors/[slug]/`:
+   - `PUT save` — sector-scope changeset (systems / vortexes / connections / markers create-update-delete)
+   - `PUT systems/[systemSlug]/save` — system-scope changeset (system metadata + stars upsert + bodies CRUD)
+   - `GET searchable` — flat list of all sluggable endpoints (systems + vortexes + markers) for the connection picker
+2. Each route has an inline `requireSuperAdmin()` helper (mirrors `/api/admin/messages` pattern). Returns 403 for non-superadmin, 400 for `imperial-core` / `atlas-sector-legacy` (read-only).
+3. Each save endpoint applies in order: deletes → updates → creates. Calls `revalidatePath('/sectors')` + `revalidatePath('/sectors/${slug}')` on success.
+4. Extended `lib/db/{systems,stars,bodies,vortexes,connections,markers}.ts` with `update*` (per-field, only-touch-passed-fields pattern from `users.ts`) and `delete*` functions. `stars.ts` got `upsertStar` + `deleteStarByRole` for the binary-toggle flow.
 
-**Reversibility:** delete the routes; no client calls them yet.
+**Smoke tested via curl:** all four endpoints return 403 unauthenticated; the deeply-nested system save needed a `.next` cache clear after creation before Turbopack picked it up (one-time dev-server quirk, not a runtime issue).
 
-### Phase 4 — editor frontend
+**Trade-off accepted:** queries are sequential, not wrapped in `sql.transaction()`. Partial failures leave inconsistent state; the editor re-syncs from a fresh GET on next render. Acceptable for a single-superadmin editor; revisit if needed.
 
-1. Add `EditModeContext` (client) that holds `mode: 'view' | 'sector-edit' | 'system-edit'`, pending changesets, and a dirty flag.
-2. Implement the `View | Edit` toggle gated on `accessLevel >= 127`.
-3. Build sector-edit overlay: drag, right-click menu, side panel (Selection / Connections by layer / Add connection), top toolbar.
-4. Build system-edit overlay: orbit drag, body forms.
-5. Wire SAVE to call the batch endpoints, then await the revalidate response.
-6. Add `beforeunload` dirty guard.
+**Reversibility:** delete the three route files + revert the lib/db module extensions. No client calls these yet.
 
-**Reversibility:** the toggle is gated; non-superadmin users never see it. Feature-flag-style guard.
+### Phase 4 — editor frontend — ✅ COMPLETED 2026-05-24 (with Phase 4b deferred)
+
+**Shipped in Phase 4:**
+1. `EditModeProvider` (`components/sectormap/edit/EditModeProvider.tsx`) — context with `mode`, `selection`, `pending` changesets, `dirty` flag, beforeunload guard, save flow that calls the API + `router.refresh()` to re-fetch revalidated pages.
+2. `EditToggle` — View/Edit segmented control, only rendered when `accessLevel >= 127`.
+3. `EditToolbar` — top-center, shows pending count + Save/Discard + any save error.
+4. `SidePanel` — right rail with two tabs: **Selection** (form for the selected entity) and **Connections** (grouped by layer, with orphan badges when an endpoint slug doesn't resolve).
+5. `SelectionPanel` — per-entity forms (system / vortex / marker / connection) with allegiance dropdown, layer dropdown, marker-type dropdown, color/hex inputs, and per-form Delete button.
+6. `ConnectionsByLayerPanel` — orphan management surface (D7).
+7. `AddConnectionDialog` — two-step endpoint picker; index includes systems + vortexes + markers (D12).
+8. `CreateEntityModal` triggered by right-click context menu on the canvas → captures click coords in SVG space, opens a typed form, stages the new entity locally with a temp id.
+9. Click-to-select on systems (existing focus handler overridden in edit mode) and vortexes (added inline `onClick` with conditional `pointerEvents`).
+10. `lib/jsonMigrate.ts` already in place from the earlier rename — JSON-key compatibility shim.
+11. Types `SystemPin` / `VortexPin` / `MapMarker` / `ConnectionLine` gained an optional `id?: number` so the editor can reference DB rows. View-mode renderers are unaffected.
+12. `lib/sectors.ts` loader now attaches the DB id to each emitted entity.
+13. `app/sectors/[slug]/page.tsx` reads the `nh_user` cookie + looks up the user to pass `userAccessLevel` into SectorMap. Page is already dynamic (DB-backed loader), so no static-generation regression.
+
+**Smoke-tested end-to-end:**
+- `GET /api/admin/map/sectors/atlas-sector/searchable` as gm → 200 with all 11 endpoints (6 systems + 1 vortex + 4 markers).
+- `PUT /api/admin/map/sectors/atlas-sector/save` with `{ systems: { update: [{ id: 3, territoryRadius: 172 }] } }` → 200; reverted in a second call.
+- `GET /sectors/atlas-sector` with `nh_user=gm` → 200, page renders cleanly.
+
+### Phase 4b — drag + click + system-edit — ✅ COMPLETED 2026-05-24
+
+**Shipped:**
+1. **`useDragPin` hook** — generic SVG-space drag handler. Captures pin position at mousedown, installs document-level mousemove/mouseup listeners for the duration of the gesture, only commits if mouse actually moved (>0.5 px threshold). Stops propagation to prevent pan-init.
+2. **Drag-to-reposition** wired for **systems**, **vortexes**, and **free markers**. Each pin gets `onMouseDown` and a cursor change (`move`) in edit mode. The dragged entity's rendered position is overridden from the live drag state until commit.
+3. **Click-to-select for free markers** — `FreeMarkerLayer` accepts `isEditing`, `editPick`, `editDragStart`, `selectedMarkerId` props. In edit mode, clicks call `editPick` (selects in side panel) instead of showing the tooltip card; mousedown initiates drag; selection adds a glow filter.
+4. **System-edit modal** (`SystemEditModal.tsx`) — opened by a new "Edit System" button that appears when the GM is zoomed into a system in view mode. Self-contained:
+   - System metadata: name, external URL, published, center kind dropdown, binary angle slider (only when binary).
+   - Primary star form: name, fantasy label (decorative free text), color picker, secondary color picker, external URL.
+   - Secondary star form: same, only visible when `center_kind = binary`. Auto-created on binary toggle, removed on toggle-off.
+   - Body list: each body is a collapsible row with all fields — type, biome (dropdown sourced from DB), allegiance, special attribute, orbit position slider (0–360°), orbit distance slider (0–1), label position, lore, external URL. Bodies can be added (auto temp-id) and deleted.
+   - SAVE button calls `PUT /api/admin/map/sectors/[slug]/systems/[systemSlug]/save` then `router.refresh()`. Dirty guard on close.
+5. **DB primary key on `CelestialBody`** — added `dbId?: number` so the editor can reference rows for update/delete. Loader sets it.
+6. **Biomes prefetched server-side** in `app/sectors/[slug]/page.tsx` and passed through `SectorMap` → `SystemEditModal` (only when `userAccessLevel >= 127`).
+
+**Smoke-tested:**
+- System save no-op (full payload, no changes) → 200.
+- System save with `centerKind: "single"` + `binaryAngle: null` → 200.
+
+**Still deferred to Phase 4c (low priority, all form-based fallbacks work):**
+- **Body orbit drag** in the system-edit view. Bodies are sliders in the modal today.
+- **Live SVG preview of `center_kind`** in the modal dropdown. The change is visible after Save (since the page refreshes).
+- **Editing connection-attached markers' parent connection** while you have the marker selected. They appear in the Connections tab grouped by parent.
+
+**Reversibility:** the entire edit module lives under `components/sectormap/edit/` plus four prop additions to `app/sectors/[slug]/page.tsx` and surgical changes to `components/SectorMap.tsx` (wrapper for provider, drag wiring, modal mount) and `components/sectormap/FreeMarkerLayer.tsx` (edit-mode pass-throughs). Delete the edit directory + revert those edits to drop Phases 4 + 4b cleanly.
 
 ### Phase 5 — cleanup
 
@@ -663,7 +712,7 @@ lib/db/markers.ts
 lib/db/connections.ts
 lib/db/allegiances.ts
 lib/db/biomes.ts
-lib/db/seed-map.ts                                # one-shot seed
+lib/mapEnums.ts                                    # runtime enums + per-kind defaults
 app/api/admin/map/sectors/[slug]/save/route.ts
 app/api/admin/map/sectors/[slug]/systems/[systemSlug]/save/route.ts
 app/api/admin/map/sectors/[slug]/searchable/route.ts

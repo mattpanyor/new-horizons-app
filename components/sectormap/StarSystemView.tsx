@@ -38,12 +38,21 @@ interface StarSystemViewProps {
   tooltipActions: TooltipActions;
   onFocusSystem: (pin: SystemPin) => void;
   onHoverSystem: (slug: string | null) => void;
+  // System-edit affordances. When `isSystemEditing` is true, bodies become
+  // individually clickable + draggable (orbit-angle only) and the proximity
+  // tooltip logic is suppressed.
+  isSystemEditing?: boolean;
+  onBodyPick?: (body: { dbId?: number; tempId?: string }) => void;
+  onBodyDragStart?: (event: React.MouseEvent, body: { dbId?: number; tempId?: string }) => void;
+  selectedBodyDbId?: number | null;
+  selectedBodyTempId?: string | null;
 }
 
 export const StarSystemView = memo(function StarSystemView({
   pin, sys, sectorSlug, sectorColor, isActive, isDimmed, noActiveSystem,
   isHovered, orbitData, vb, activeBodyId, tooltipActions,
   onFocusSystem, onHoverSystem,
+  isSystemEditing, onBodyPick, onBodyDragStart, selectedBodyDbId, selectedBodyTempId,
 }: StarSystemViewProps) {
   const override = SYSTEM_OVERRIDES[pin.slug];
 
@@ -141,9 +150,9 @@ export const StarSystemView = memo(function StarSystemView({
       {sys ? (
         <g
           transform={`translate(${pin.x}, ${pin.y}) scale(${sysScale})`}
-          onMouseMove={isActive ? handleBodyProximity : undefined}
-          onMouseLeave={isActive ? handleMouseLeave : undefined}
-          onClick={isActive ? handleBodyClick : undefined}
+          onMouseMove={isActive && !isSystemEditing ? handleBodyProximity : undefined}
+          onMouseLeave={isActive && !isSystemEditing ? handleMouseLeave : undefined}
+          onClick={isActive && !isSystemEditing ? handleBodyClick : undefined}
         >
           {/* Interaction surface for active system */}
           {isActive && (
@@ -164,8 +173,11 @@ export const StarSystemView = memo(function StarSystemView({
               style={{ transition: "stroke 0.25s, stroke-width 0.25s" }} />
           ))}
 
-          {/* Star(s) */}
-          {sys.secondaryStar ? (
+          {/* Star(s) — dispatched by sys.centerKind (set by the loader from
+              systems.center_kind in DB or derived from star.type for JSON
+              sources). Falls back to single-star render for unknown/missing
+              kinds. */}
+          {((sys.centerKind ?? "single") === "binary" && sys.secondaryStar) ? (
             <>
               {/* Binary star system — positioned on a shared invisible orbit circle */}
               {(() => {
@@ -205,7 +217,7 @@ export const StarSystemView = memo(function StarSystemView({
                 {sys.star.name} &amp; {sys.secondaryStar.name}
               </text>
             </>
-          ) : sys.star.type.toLowerCase().includes("neutron") ? (
+          ) : sys.centerKind === "neutron" ? (
             <>
               {/* Neutron Star — tiny, intense, sharp-edged with expanding heat ripples */}
               <defs>
@@ -256,7 +268,7 @@ export const StarSystemView = memo(function StarSystemView({
                 {sys.star.name}
               </text>
             </>
-          ) : sys.star.type.toLowerCase().includes("pulsar") ? (
+          ) : sys.centerKind === "pulsar" ? (
             <>
               {/* Pulsar — compact neutron star with soft beam cones at fixed angle */}
               <defs>
@@ -360,6 +372,85 @@ export const StarSystemView = memo(function StarSystemView({
                 {sys.star.name}
               </text>
             </>
+          ) : sys.centerKind === "black-hole" ? (
+            <>
+              {/* Black-hole system center — scaled-up version of the body-level black-hole.
+                  Accent color (lensing rim, accretion disk tint, photon ring) pulls from
+                  sys.star.color; event horizon stays pure black. */}
+              <defs>
+                <radialGradient id={`bh-lensing-${pin.slug}`}>
+                  <stop offset="0%" stopColor={sys.star.color} stopOpacity="0" />
+                  <stop offset="60%" stopColor={sys.star.color} stopOpacity="0" />
+                  <stop offset="80%" stopColor={sys.star.color} stopOpacity="0.45" />
+                  <stop offset="90%" stopColor="white" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
+                </radialGradient>
+                <linearGradient id={`bh-disk-${pin.slug}`} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={sys.star.color} stopOpacity="0" />
+                  <stop offset="20%" stopColor={sys.star.color} stopOpacity="0.6" />
+                  <stop offset="50%" stopColor="white" stopOpacity="0.5" />
+                  <stop offset="80%" stopColor={sys.star.color} stopOpacity="0.6" />
+                  <stop offset="100%" stopColor={sys.star.color} stopOpacity="0" />
+                </linearGradient>
+                <clipPath id={`bh-front-${pin.slug}`}>
+                  <rect x={-70} y={0} width={140} height={20} />
+                </clipPath>
+              </defs>
+
+              {/* Lensing halo */}
+              <circle cx={0} cy={0} r={45} fill={`url(#bh-lensing-${pin.slug})`}>
+                <animate attributeName="opacity" values="0.8;1;0.8" dur="4s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Back accretion disk */}
+              <g transform="rotate(-20)">
+                <ellipse cx={0} cy={0} rx={65} ry={9} fill={`url(#bh-disk-${pin.slug})`} opacity="0.5">
+                  <animate attributeName="opacity" values="0.4;0.6;0.4" dur="3s" repeatCount="indefinite" />
+                </ellipse>
+                <ellipse cx={0} cy={0} rx={65} ry={9}
+                  fill="none" stroke={sys.star.color} strokeWidth={1} opacity="0.3" />
+              </g>
+
+              {/* Event horizon — pure void */}
+              <circle cx={0} cy={0} r={22} fill="#000000" />
+
+              {/* Photon rings */}
+              <circle cx={0} cy={0} r={24} fill="none"
+                stroke="white" strokeWidth={0.8} opacity="0.5">
+                <animate attributeName="opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite" />
+              </circle>
+              <circle cx={0} cy={0} r={26} fill="none"
+                stroke={sys.star.color} strokeWidth={1.5} opacity="0.4">
+                <animate attributeName="opacity" values="0.25;0.5;0.25" dur="2s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Front accretion disk arc */}
+              <g transform="rotate(-20)">
+                <ellipse cx={0} cy={0} rx={55} ry={8}
+                  fill={`url(#bh-disk-${pin.slug})`} opacity="0.7"
+                  clipPath={`url(#bh-front-${pin.slug})`}>
+                  <animate attributeName="opacity" values="0.5;0.8;0.5" dur="3s" repeatCount="indefinite" />
+                </ellipse>
+              </g>
+
+              {/* Lensed light arc at top */}
+              <path d={`M ${-28},${-8} A 28,28 0 0,1 ${28},${-8}`}
+                fill="none" stroke={sys.star.color} strokeWidth={3} opacity="0.3">
+                <animate attributeName="opacity" values="0.15;0.4;0.15" dur="3s" repeatCount="indefinite" />
+              </path>
+
+              {/* Hover halo */}
+              <circle cx={0} cy={0} r={50} fill="none"
+                stroke={sys.star.color} strokeWidth={10}
+                strokeOpacity={isHovered ? 0.18 : 0}
+                style={{ transition: "stroke-opacity 0.25s" }} />
+
+              <text x={0} y={62} textAnchor="middle"
+                fill={sys.star.color} fontSize="15"
+                fontFamily="var(--font-cinzel), serif" fontWeight="600">
+                {sys.star.name}
+              </text>
+            </>
           ) : (
             <>
               {/* Single star */}
@@ -384,8 +475,8 @@ export const StarSystemView = memo(function StarSystemView({
               </text>
             </>
           )}
-          {isActive && sys.star.kankaUrl && (
-            <a href={sys.star.kankaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+          {isActive && sys.star.externalUrl && (
+            <a href={sys.star.externalUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
               <text x={0} y={74} textAnchor="middle"
                 fill="rgba(165,180,252,0.6)" fontSize="11"
                 fontFamily="var(--font-cinzel), serif"
@@ -412,11 +503,25 @@ export const StarSystemView = memo(function StarSystemView({
               {sys.bodies.map((body) => {
                 const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
                 const isBodyActive = isActive && activeBodyId === body.id;
-                const { color: bodyColor } = getBodyColors(body);
+                const { color: bodyColor, secondaryColor: bodySecondaryColor } = getBodyColors(body);
                 const labelR = bodyLabelR(body.type);
+                const tempId = (body as { _tempId?: string })._tempId;
+                const isEditSelected = isSystemEditing && (
+                  (body.dbId !== undefined && body.dbId === selectedBodyDbId) ||
+                  (tempId !== undefined && tempId === selectedBodyTempId)
+                );
+                // Comfortable click target in local (pre-scale) units. The
+                // inner system <g> applies scale(0.25), so we need a generous
+                // local radius for the on-screen hit zone to feel right.
+                const hitR = isSystemEditing
+                  ? Math.max(bodyHitRadius(body.type), labelR + 6) * 1.5
+                  : 0;
 
                 return (
-                  <g key={body.id} style={{ cursor: isActive ? "pointer" : "default", pointerEvents: "none" }}>
+                  <g
+                    key={body.dbId ?? tempId ?? body.id}
+                    style={{ cursor: isActive ? "pointer" : "default", pointerEvents: isSystemEditing ? "auto" : "none" }}
+                  >
                     <BodyShape
                       bodyId={body.id}
                       bodyType={body.type}
@@ -425,6 +530,7 @@ export const StarSystemView = memo(function StarSystemView({
                       pinSlug={pin.slug}
                       sectorSlug={sectorSlug}
                       bodyColor={bodyColor}
+                      bodySecondaryColor={bodySecondaryColor}
                       isBodyActive={isBodyActive}
                       isActive={isActive}
                     />
@@ -434,9 +540,34 @@ export const StarSystemView = memo(function StarSystemView({
                     <text x={pos.x} y={body.labelPosition === "top" ? pos.y - labelR - 6 : pos.y + labelR + 18}
                       textAnchor="middle"
                       fill={isBodyActive ? "white" : "rgba(255,255,255,0.6)"} fontSize="14"
-                      fontFamily="var(--font-cinzel), serif">
+                      fontFamily="var(--font-cinzel), serif"
+                      style={{ pointerEvents: "none" }}>
                       {body.name}
                     </text>
+
+                    {/* Selection highlight ring (below the hit target so the
+                        target still catches events on it). */}
+                    {isEditSelected && (
+                      <circle cx={pos.x} cy={pos.y} r={hitR}
+                        fill="none" stroke="rgba(251,191,36,0.8)" strokeWidth={2}
+                        style={{ pointerEvents: "none", filter: "drop-shadow(0 0 5px rgba(251,191,36,0.6))" }} />
+                    )}
+
+                    {/* Edit-mode hit target — rendered LAST so it sits on top
+                        of the body shape and catches every click + mousedown
+                        in the body's neighbourhood. */}
+                    {isSystemEditing && (
+                      <circle
+                        cx={pos.x} cy={pos.y} r={hitR}
+                        fill="transparent"
+                        style={{ cursor: "move" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onBodyPick?.({ dbId: body.dbId, tempId });
+                        }}
+                        onMouseDown={(e) => onBodyDragStart?.(e, { dbId: body.dbId, tempId })}
+                      />
+                    )}
                   </g>
                 );
               })}
@@ -448,7 +579,7 @@ export const StarSystemView = memo(function StarSystemView({
                 const pos = getBodyPos(body.orbitPosition, body.orbitDistance);
                 const { color: bodyColor } = getBodyColors(body);
                 const cardW = 220;
-                const cardH = bodyCardHeight(body.special_attribute, body.kankaUrl, body.allegiance);
+                const cardH = bodyCardHeight(body.special_attribute, body.externalUrl, body.allegiance);
                 const bodyR = bodyLabelR(body.type);
 
                 return (
@@ -467,7 +598,7 @@ export const StarSystemView = memo(function StarSystemView({
                       type={body.type}
                       biome={body.biome}
                       specialAttribute={body.special_attribute}
-                      kankaUrl={body.kankaUrl}
+                      externalUrl={body.externalUrl}
                       bodyColor={bodyColor}
                       allegiance={body.allegiance ? ALLEGIANCES[body.allegiance] : undefined}
                     />
@@ -495,8 +626,8 @@ export const StarSystemView = memo(function StarSystemView({
             style={{ pointerEvents: "none", transition: "fill 0.25s, font-size 0.25s, font-weight 0.25s" }}>
             {sys?.name ?? pin.slug}
           </text>
-          {sys?.kankaUrl && (
-            <a href={sys.kankaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+          {sys?.externalUrl && (
+            <a href={sys.externalUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
               <text x={pin.x} y={labelY + 16} textAnchor="middle"
                 fill="rgba(165,180,252,0.5)" fontSize="9"
                 fontFamily="var(--font-cinzel), serif"
