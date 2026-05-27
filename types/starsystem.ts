@@ -52,9 +52,8 @@ export interface StarSystemMetadata {
   slug: string;
   name: string;
   // Renderer key for the system's central object. Loaded straight from
-  // systems.center_kind in DB; for JSON-loaded systems (Imperial Core /
-  // atlas-sector-legacy) it's derived from star.type substrings at load
-  // time. See lib/centerKind.ts.
+  // systems.center_kind in DB; for JSON-loaded Imperial Core systems it's
+  // derived from star.type substrings at load time. See lib/centerKind.ts.
   centerKind?: "single" | "binary" | "pulsar" | "neutron" | "black-hole";
   star: Star;
   secondaryStar?: Star;

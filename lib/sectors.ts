@@ -1,6 +1,5 @@
-// Hybrid sector loader: DB-backed by default, with two slug-routed exceptions.
-//   - "atlas-sector-legacy" → reads entirely from JSON (frozen Atlas snapshot)
-//   - "imperial-core"       → sector metadata from DB, inner content from JSON
+// Hybrid sector loader: DB-backed by default, with one slug-routed exception.
+//   - "imperial-core" → sector metadata from DB, inner content from JSON
 // Everything else queries the DB. See map-migration.md §4.
 
 import fs from "fs";
@@ -25,7 +24,7 @@ import { getConnectionsBySector } from "@/lib/db/connections";
 const sectorsDirectory = path.join(process.cwd(), "content/sectors");
 const validAllegiances = new Set(Object.keys(ALLEGIANCES));
 
-// ── JSON path helpers (Imperial Core + Atlas legacy) ──
+// ── JSON path helpers (Imperial Core only) ──
 
 function validateSector(data: SectorMetadata, file: string): void {
   for (const sys of data.systems) {
@@ -191,11 +190,6 @@ async function loadImperialCore(): Promise<SectorMetadata> {
 // ── Public API ──
 
 export async function getSectorBySlug(slug: string): Promise<SectorMetadata> {
-  if (slug === "atlas-sector-legacy") {
-    // Frozen snapshot — read JSON, override the slug so URLs resolve correctly.
-    const json = loadSectorFromJsonFile("top-right.json");
-    return { ...json, slug: "atlas-sector-legacy" };
-  }
   if (slug === "imperial-core") {
     return loadImperialCore();
   }
@@ -220,8 +214,5 @@ export async function getAllSectors(): Promise<SectorMetadata[]> {
 
 export async function getSectorSlugs(): Promise<string[]> {
   const rows = await getAllSectorRows();
-  const slugs = rows.map((r) => r.slug);
-  // Legacy fallback is a real route but not in DB.
-  slugs.push("atlas-sector-legacy");
-  return slugs;
+  return rows.map((r) => r.slug);
 }

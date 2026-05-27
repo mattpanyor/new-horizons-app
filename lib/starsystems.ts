@@ -1,6 +1,5 @@
-// Hybrid star system loader: same slug-routing rules as lib/sectors.ts.
-//   - sectorSlug "atlas-sector-legacy" → strip suffix, read from JSON
-//   - sectorSlug "imperial-core"       → read from JSON (the bespoke cluster)
+// Hybrid star system loader: same slug-routing rule as lib/sectors.ts.
+//   - sectorSlug "imperial-core" → read from JSON (the bespoke cluster)
 // Everything else queries the DB. See map-migration.md §4.
 
 import fs from "fs";
@@ -22,7 +21,7 @@ import { getBodiesBySystem } from "@/lib/db/bodies";
 
 const sectorsDir = path.join(process.cwd(), "content/sectors");
 
-// ── JSON path (Imperial Core + Atlas legacy) ──
+// ── JSON path (Imperial Core only) ──
 
 function loadStarSystemFromJson(
   sectorSlugForFs: string,
@@ -134,10 +133,6 @@ export async function getStarSystemBySlug(
   sectorSlug: string,
   systemSlug: string
 ): Promise<StarSystemMetadata> {
-  // Atlas legacy: route slug → underlying JSON dir
-  if (sectorSlug === "atlas-sector-legacy") {
-    return loadStarSystemFromJson("atlas-sector", systemSlug);
-  }
   // Imperial Core stays JSON
   if (sectorSlug === "imperial-core") {
     return loadStarSystemFromJson("imperial-core", systemSlug);

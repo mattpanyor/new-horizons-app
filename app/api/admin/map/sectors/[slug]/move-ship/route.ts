@@ -56,7 +56,7 @@ export async function PUT(
   if (!admin) return bad("Forbidden", 403);
 
   const { slug } = await params;
-  if (slug === "imperial-core" || slug === "atlas-sector-legacy") {
+  if (slug === "imperial-core") {
     return bad(`Sector '${slug}' is not editable through this endpoint.`);
   }
 

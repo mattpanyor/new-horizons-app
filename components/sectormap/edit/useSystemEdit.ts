@@ -58,7 +58,7 @@ function emptyPending(): SystemPending {
 function deriveCenterKind(s: StarSystemMetadata): CenterKind {
   // Prefer the explicit DB-loaded value when present. The substring fallback
   // is only for JSON-loaded systems that pre-date the centerKind column
-  // (Imperial Core, atlas-sector-legacy).
+  // (Imperial Core).
   if (s.centerKind) return s.centerKind;
   if (s.secondaryStar) return "binary";
   const t = (s.star.type ?? "").toLowerCase();

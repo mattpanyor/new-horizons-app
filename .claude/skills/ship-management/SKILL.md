@@ -44,13 +44,7 @@ Inside `content/sectors/<sector-slug>/<system-slug>.json` → `bodies[]`. Has `i
 
 ## Sector file ↔ slug map
 
-The galactic-map slot files (`top-left.json`, `top-right.json`, `bottom-left.json`, `bottom-right.json`, `core.json`) carry a `slug` field that names the sector. Confirm by reading the top of the file — don't assume from the filename. As of this writing:
-
-- `top-right.json` → **atlas-sector**
-- `core.json` → **imperial-core**
-- (others as named in their `slug` field)
-
-System JSON lives at `content/sectors/<sector-slug>/<system-slug>.json`. Note the directory is the sector **slug**, not the layout filename.
+Only Imperial Core remains JSON-backed (`core.json` → **imperial-core**). All other sectors are now stored in the DB and edited through the map editor — JSON-file ship moves only apply to Imperial Core systems at `content/sectors/imperial-core/<system-slug>.json`.
 
 ## Always do — find first
 

@@ -3,7 +3,7 @@
 // system. See map-migration.md §5.2.
 //
 // Auth: superadmin only (accessLevel >= 127).
-// Imperial Core and Atlas legacy slugs are rejected (not editable).
+// Imperial Core is rejected (bespoke cluster, not editable).
 //
 // All writes run inside a single BEGIN/COMMIT transaction via
 // withTransaction — a mid-batch failure (FK violation, slug collision,
@@ -76,7 +76,7 @@ export async function PUT(
 
   const { slug, systemSlug } = await params;
 
-  if (slug === "imperial-core" || slug === "atlas-sector-legacy") {
+  if (slug === "imperial-core") {
     return bad(`Sector '${slug}' is not editable through this endpoint.`);
   }
 

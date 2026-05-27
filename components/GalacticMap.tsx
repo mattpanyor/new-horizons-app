@@ -18,7 +18,6 @@ const BADGE_R = 220;
 const SECTOR_OFFSET = 10;
 
 const SECTOR_LAYOUT: Record<string, { arcStart: number; arcEnd: number }> = {
-  "atlas-sector":   { arcStart: 270, arcEnd: 360 },
   "denerum-sector": { arcStart: 0,   arcEnd: 90  },
   "castell-sector": { arcStart: 90,  arcEnd: 180 },
   "vintar-sector":  { arcStart: 180, arcEnd: 270 },

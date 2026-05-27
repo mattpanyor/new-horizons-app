@@ -846,10 +846,9 @@ function SectorMapInner({ sector: propsSector, systemsData = {}, children, stati
             <span>Sector</span>
           </button>
           {/* Edit System button — only for superadmins in view mode, and only
-              when the focused system is editable (not Imperial Core / legacy). */}
+              when the focused system is editable (Imperial Core is bespoke). */}
           {edit.canEdit && edit.mode === "view"
             && propsSector.slug !== "imperial-core"
-            && propsSector.slug !== "atlas-sector-legacy"
             && systemsData[activeSystemSlug] && !systemEdit.active && (
             <button
               onClick={() => systemEdit.enter(propsSector.slug, systemsData[activeSystemSlug])}

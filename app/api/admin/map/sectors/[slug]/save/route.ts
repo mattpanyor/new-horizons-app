@@ -3,7 +3,7 @@
 // map-migration.md §5.1.
 //
 // Auth: superadmin only (accessLevel >= 127).
-// Imperial Core and the Atlas legacy slug are read-only and rejected.
+// Imperial Core is read-only (bespoke cluster, not schema-driven) and rejected.
 // Operations apply in order: deletes → updates → creates. All writes run
 // inside a single BEGIN/COMMIT transaction via withTransaction — a
 // mid-batch failure rolls back every prior write. revalidatePath fires
@@ -88,7 +88,7 @@ export async function PUT(
 
   const { slug } = await params;
 
-  if (slug === "imperial-core" || slug === "atlas-sector-legacy") {
+  if (slug === "imperial-core") {
     return bad(`Sector '${slug}' is not editable through this endpoint.`);
   }
 

@@ -1,7 +1,7 @@
-// JSON-key compatibility shim. Map content JSON files (Imperial Core,
-// atlas-sector-legacy) still use the legacy `kankaUrl` key. The DB and TS
-// types use `externalUrl`. This walker translates `kankaUrl` → `externalUrl`
-// in-place on a parsed JSON tree before it's typed as a domain object.
+// JSON-key compatibility shim. The Imperial Core content JSON files still
+// use the legacy `kankaUrl` key. The DB and TS types use `externalUrl`.
+// This walker translates `kankaUrl` → `externalUrl` in-place on a parsed
+// JSON tree before it's typed as a domain object.
 //
 // Keep this trivial: the JSON shape isn't a hot path and the data set is small.
 

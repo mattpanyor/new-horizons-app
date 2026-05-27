@@ -1,8 +1,7 @@
 // Centralized center-kind derivation. The DB stores systems.center_kind as
-// an enum; JSON-loaded systems (Imperial Core, atlas-sector-legacy) keep
-// their pre-migration shape with `star.type` as a free-text descriptor, so
-// we substring-match it to pick a kind. See map-migration.md §3.4.4 and the
-// Phase 1 seed mapping in §7.
+// an enum; JSON-loaded Imperial Core systems keep their pre-migration shape
+// with `star.type` as a free-text descriptor, so we substring-match it to
+// pick a kind. See map-migration.md §3.4.4 and the Phase 1 seed mapping in §7.
 
 import type { CenterKind } from "@/lib/mapEnums";
 
