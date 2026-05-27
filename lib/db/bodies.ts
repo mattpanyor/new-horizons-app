@@ -1,11 +1,9 @@
-import { neon } from "@neondatabase/serverless";
 import type {
   BodyType,
   LabelPosition,
   SpecialAttribute,
 } from "@/lib/mapEnums";
-
-const sql = neon(process.env.DATABASE_URL!);
+import { execQuery, type Tx } from "@/lib/db/tx";
 
 export interface BodyRow {
   id: number;
@@ -43,14 +41,15 @@ function rowToBody(row: Record<string, unknown>): BodyRow {
   };
 }
 
-export async function getBodiesBySystem(systemId: number): Promise<BodyRow[]> {
-  const rows = await sql`
-    SELECT id, system_id, body_id, name, type, biome_slug, lore,
-           orbit_position, orbit_distance, label_position, special_attribute,
-           allegiance_slug, external_url, published
-    FROM celestial_bodies WHERE system_id = ${systemId}
-    ORDER BY orbit_distance, id
-  `;
+export async function getBodiesBySystem(systemId: number, tx?: Tx): Promise<BodyRow[]> {
+  const rows = await execQuery(tx,
+    `SELECT id, system_id, body_id, name, type, biome_slug, lore,
+            orbit_position, orbit_distance, label_position, special_attribute,
+            allegiance_slug, external_url, published
+     FROM celestial_bodies WHERE system_id = $1
+     ORDER BY orbit_distance, id`,
+    [systemId]
+  );
   return rows.map(rowToBody);
 }
 
@@ -68,21 +67,22 @@ export async function insertBody(b: {
   allegianceSlug?: string | null;
   externalUrl?: string | null;
   published?: boolean;
-}): Promise<BodyRow> {
-  const rows = await sql`
-    INSERT INTO celestial_bodies (
-      system_id, body_id, name, type, biome_slug, lore,
-      orbit_position, orbit_distance, label_position, special_attribute,
-      allegiance_slug, external_url, published
-    ) VALUES (
-      ${b.systemId}, ${b.bodyId}, ${b.name}, ${b.type}, ${b.biomeSlug ?? null}, ${b.lore ?? null},
-      ${b.orbitPosition}, ${b.orbitDistance}, ${b.labelPosition ?? null}, ${b.specialAttribute ?? null},
-      ${b.allegianceSlug ?? null}, ${b.externalUrl ?? null}, ${b.published ?? true}
-    )
-    RETURNING id, system_id, body_id, name, type, biome_slug, lore,
-              orbit_position, orbit_distance, label_position, special_attribute,
-              allegiance_slug, external_url, published
-  `;
+}, tx?: Tx): Promise<BodyRow> {
+  const rows = await execQuery(tx,
+    `INSERT INTO celestial_bodies (
+       system_id, body_id, name, type, biome_slug, lore,
+       orbit_position, orbit_distance, label_position, special_attribute,
+       allegiance_slug, external_url, published
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     RETURNING id, system_id, body_id, name, type, biome_slug, lore,
+               orbit_position, orbit_distance, label_position, special_attribute,
+               allegiance_slug, external_url, published`,
+    [
+      b.systemId, b.bodyId, b.name, b.type, b.biomeSlug ?? null, b.lore ?? null,
+      b.orbitPosition, b.orbitDistance, b.labelPosition ?? null, b.specialAttribute ?? null,
+      b.allegianceSlug ?? null, b.externalUrl ?? null, b.published ?? true,
+    ]
+  );
   return rowToBody(rows[0]);
 }
 
@@ -101,22 +101,23 @@ export async function updateBody(
     allegianceSlug: string | null;
     externalUrl: string | null;
     published: boolean;
-  }>
+  }>,
+  tx?: Tx
 ): Promise<void> {
-  if (fields.bodyId !== undefined) await sql`UPDATE celestial_bodies SET body_id = ${fields.bodyId} WHERE id = ${id}`;
-  if (fields.name !== undefined) await sql`UPDATE celestial_bodies SET name = ${fields.name} WHERE id = ${id}`;
-  if (fields.type !== undefined) await sql`UPDATE celestial_bodies SET type = ${fields.type} WHERE id = ${id}`;
-  if (fields.biomeSlug !== undefined) await sql`UPDATE celestial_bodies SET biome_slug = ${fields.biomeSlug} WHERE id = ${id}`;
-  if (fields.lore !== undefined) await sql`UPDATE celestial_bodies SET lore = ${fields.lore} WHERE id = ${id}`;
-  if (fields.orbitPosition !== undefined) await sql`UPDATE celestial_bodies SET orbit_position = ${fields.orbitPosition} WHERE id = ${id}`;
-  if (fields.orbitDistance !== undefined) await sql`UPDATE celestial_bodies SET orbit_distance = ${fields.orbitDistance} WHERE id = ${id}`;
-  if (fields.labelPosition !== undefined) await sql`UPDATE celestial_bodies SET label_position = ${fields.labelPosition} WHERE id = ${id}`;
-  if (fields.specialAttribute !== undefined) await sql`UPDATE celestial_bodies SET special_attribute = ${fields.specialAttribute} WHERE id = ${id}`;
-  if (fields.allegianceSlug !== undefined) await sql`UPDATE celestial_bodies SET allegiance_slug = ${fields.allegianceSlug} WHERE id = ${id}`;
-  if (fields.externalUrl !== undefined) await sql`UPDATE celestial_bodies SET external_url = ${fields.externalUrl} WHERE id = ${id}`;
-  if (fields.published !== undefined) await sql`UPDATE celestial_bodies SET published = ${fields.published} WHERE id = ${id}`;
+  if (fields.bodyId !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET body_id = $1 WHERE id = $2`, [fields.bodyId, id]);
+  if (fields.name !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET name = $1 WHERE id = $2`, [fields.name, id]);
+  if (fields.type !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET type = $1 WHERE id = $2`, [fields.type, id]);
+  if (fields.biomeSlug !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET biome_slug = $1 WHERE id = $2`, [fields.biomeSlug, id]);
+  if (fields.lore !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET lore = $1 WHERE id = $2`, [fields.lore, id]);
+  if (fields.orbitPosition !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET orbit_position = $1 WHERE id = $2`, [fields.orbitPosition, id]);
+  if (fields.orbitDistance !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET orbit_distance = $1 WHERE id = $2`, [fields.orbitDistance, id]);
+  if (fields.labelPosition !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET label_position = $1 WHERE id = $2`, [fields.labelPosition, id]);
+  if (fields.specialAttribute !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET special_attribute = $1 WHERE id = $2`, [fields.specialAttribute, id]);
+  if (fields.allegianceSlug !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET allegiance_slug = $1 WHERE id = $2`, [fields.allegianceSlug, id]);
+  if (fields.externalUrl !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET external_url = $1 WHERE id = $2`, [fields.externalUrl, id]);
+  if (fields.published !== undefined) await execQuery(tx, `UPDATE celestial_bodies SET published = $1 WHERE id = $2`, [fields.published, id]);
 }
 
-export async function deleteBody(id: number): Promise<void> {
-  await sql`DELETE FROM celestial_bodies WHERE id = ${id}`;
+export async function deleteBody(id: number, tx?: Tx): Promise<void> {
+  await execQuery(tx, `DELETE FROM celestial_bodies WHERE id = $1`, [id]);
 }

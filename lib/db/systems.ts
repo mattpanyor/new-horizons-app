@@ -1,8 +1,6 @@
-import { neon } from "@neondatabase/serverless";
 import type { CenterKind } from "@/lib/mapEnums";
 import { cascadeSlugRename } from "@/lib/db/connections";
-
-const sql = neon(process.env.DATABASE_URL!);
+import { execQuery, type Tx } from "@/lib/db/tx";
 
 export interface SystemRow {
   id: number;
@@ -36,24 +34,27 @@ function rowToSystem(row: Record<string, unknown>): SystemRow {
   };
 }
 
-export async function getSystemsBySector(sectorId: number): Promise<SystemRow[]> {
-  const rows = await sql`
-    SELECT id, sector_id, slug, name, x, y, allegiance_slug, territory_radius,
-           center_kind, binary_angle, external_url, published
-    FROM systems WHERE sector_id = ${sectorId} ORDER BY id
-  `;
+export async function getSystemsBySector(sectorId: number, tx?: Tx): Promise<SystemRow[]> {
+  const rows = await execQuery(tx,
+    `SELECT id, sector_id, slug, name, x, y, allegiance_slug, territory_radius,
+            center_kind, binary_angle, external_url, published
+     FROM systems WHERE sector_id = $1 ORDER BY id`,
+    [sectorId]
+  );
   return rows.map(rowToSystem);
 }
 
 export async function getSystemBySlug(
   sectorId: number,
-  slug: string
+  slug: string,
+  tx?: Tx
 ): Promise<SystemRow | null> {
-  const rows = await sql`
-    SELECT id, sector_id, slug, name, x, y, allegiance_slug, territory_radius,
-           center_kind, binary_angle, external_url, published
-    FROM systems WHERE sector_id = ${sectorId} AND slug = ${slug}
-  `;
+  const rows = await execQuery(tx,
+    `SELECT id, sector_id, slug, name, x, y, allegiance_slug, territory_radius,
+            center_kind, binary_angle, external_url, published
+     FROM systems WHERE sector_id = $1 AND slug = $2`,
+    [sectorId, slug]
+  );
   return rows.length > 0 ? rowToSystem(rows[0]) : null;
 }
 
@@ -69,20 +70,21 @@ export async function insertSystem(s: {
   binaryAngle?: number | null;
   externalUrl?: string | null;
   published?: boolean;
-}): Promise<SystemRow> {
-  const rows = await sql`
-    INSERT INTO systems (
-      sector_id, slug, name, x, y, allegiance_slug, territory_radius,
-      center_kind, binary_angle, external_url, published
-    ) VALUES (
-      ${s.sectorId}, ${s.slug}, ${s.name}, ${s.x}, ${s.y},
-      ${s.allegianceSlug ?? null}, ${s.territoryRadius ?? null},
-      ${s.centerKind}, ${s.binaryAngle ?? null},
-      ${s.externalUrl ?? null}, ${s.published ?? true}
-    )
-    RETURNING id, sector_id, slug, name, x, y, allegiance_slug, territory_radius,
-              center_kind, binary_angle, external_url, published
-  `;
+}, tx?: Tx): Promise<SystemRow> {
+  const rows = await execQuery(tx,
+    `INSERT INTO systems (
+       sector_id, slug, name, x, y, allegiance_slug, territory_radius,
+       center_kind, binary_angle, external_url, published
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING id, sector_id, slug, name, x, y, allegiance_slug, territory_radius,
+               center_kind, binary_angle, external_url, published`,
+    [
+      s.sectorId, s.slug, s.name, s.x, s.y,
+      s.allegianceSlug ?? null, s.territoryRadius ?? null,
+      s.centerKind, s.binaryAngle ?? null,
+      s.externalUrl ?? null, s.published ?? true,
+    ]
+  );
   return rowToSystem(rows[0]);
 }
 
@@ -99,36 +101,37 @@ export async function updateSystem(
     binaryAngle: number | null;
     externalUrl: string | null;
     published: boolean;
-  }>
+  }>,
+  tx?: Tx
 ): Promise<void> {
   if (fields.slug !== undefined) {
     // Entity rename. Order matters: update the row FIRST, then cascade
     // connection slugs. If the row update fails (e.g. UNIQUE (sector_id, slug)
     // collision), we never rewrite connections — so they keep pointing at
     // the still-correct old slug instead of being orphaned.
-    const rows = await sql`SELECT slug, sector_id FROM systems WHERE id = ${id}`;
+    const rows = await execQuery(tx, `SELECT slug, sector_id FROM systems WHERE id = $1`, [id]);
     if (rows.length > 0) {
       const oldSlug = rows[0].slug as string;
       const sectorId = rows[0].sector_id as number;
-      await sql`UPDATE systems SET slug = ${fields.slug} WHERE id = ${id}`;
+      await execQuery(tx, `UPDATE systems SET slug = $1 WHERE id = $2`, [fields.slug, id]);
       if (oldSlug !== fields.slug) {
-        await cascadeSlugRename(sectorId, oldSlug, fields.slug);
+        await cascadeSlugRename(sectorId, oldSlug, fields.slug, tx);
       }
     } else {
-      await sql`UPDATE systems SET slug = ${fields.slug} WHERE id = ${id}`;
+      await execQuery(tx, `UPDATE systems SET slug = $1 WHERE id = $2`, [fields.slug, id]);
     }
   }
-  if (fields.name !== undefined) await sql`UPDATE systems SET name = ${fields.name} WHERE id = ${id}`;
-  if (fields.x !== undefined) await sql`UPDATE systems SET x = ${fields.x} WHERE id = ${id}`;
-  if (fields.y !== undefined) await sql`UPDATE systems SET y = ${fields.y} WHERE id = ${id}`;
-  if (fields.allegianceSlug !== undefined) await sql`UPDATE systems SET allegiance_slug = ${fields.allegianceSlug} WHERE id = ${id}`;
-  if (fields.territoryRadius !== undefined) await sql`UPDATE systems SET territory_radius = ${fields.territoryRadius} WHERE id = ${id}`;
-  if (fields.centerKind !== undefined) await sql`UPDATE systems SET center_kind = ${fields.centerKind} WHERE id = ${id}`;
-  if (fields.binaryAngle !== undefined) await sql`UPDATE systems SET binary_angle = ${fields.binaryAngle} WHERE id = ${id}`;
-  if (fields.externalUrl !== undefined) await sql`UPDATE systems SET external_url = ${fields.externalUrl} WHERE id = ${id}`;
-  if (fields.published !== undefined) await sql`UPDATE systems SET published = ${fields.published} WHERE id = ${id}`;
+  if (fields.name !== undefined) await execQuery(tx, `UPDATE systems SET name = $1 WHERE id = $2`, [fields.name, id]);
+  if (fields.x !== undefined) await execQuery(tx, `UPDATE systems SET x = $1 WHERE id = $2`, [fields.x, id]);
+  if (fields.y !== undefined) await execQuery(tx, `UPDATE systems SET y = $1 WHERE id = $2`, [fields.y, id]);
+  if (fields.allegianceSlug !== undefined) await execQuery(tx, `UPDATE systems SET allegiance_slug = $1 WHERE id = $2`, [fields.allegianceSlug, id]);
+  if (fields.territoryRadius !== undefined) await execQuery(tx, `UPDATE systems SET territory_radius = $1 WHERE id = $2`, [fields.territoryRadius, id]);
+  if (fields.centerKind !== undefined) await execQuery(tx, `UPDATE systems SET center_kind = $1 WHERE id = $2`, [fields.centerKind, id]);
+  if (fields.binaryAngle !== undefined) await execQuery(tx, `UPDATE systems SET binary_angle = $1 WHERE id = $2`, [fields.binaryAngle, id]);
+  if (fields.externalUrl !== undefined) await execQuery(tx, `UPDATE systems SET external_url = $1 WHERE id = $2`, [fields.externalUrl, id]);
+  if (fields.published !== undefined) await execQuery(tx, `UPDATE systems SET published = $1 WHERE id = $2`, [fields.published, id]);
 }
 
-export async function deleteSystem(id: number): Promise<void> {
-  await sql`DELETE FROM systems WHERE id = ${id}`;
+export async function deleteSystem(id: number, tx?: Tx): Promise<void> {
+  await execQuery(tx, `DELETE FROM systems WHERE id = $1`, [id]);
 }

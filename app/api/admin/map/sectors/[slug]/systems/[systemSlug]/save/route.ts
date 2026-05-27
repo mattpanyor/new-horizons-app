@@ -4,6 +4,11 @@
 //
 // Auth: superadmin only (accessLevel >= 127).
 // Imperial Core and Atlas legacy slugs are rejected (not editable).
+//
+// All writes run inside a single BEGIN/COMMIT transaction via
+// withTransaction — a mid-batch failure (FK violation, slug collision,
+// etc.) rolls back every prior write, so the client's view never desyncs
+// from the DB.
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -13,6 +18,7 @@ import { getSectorRowBySlug } from "@/lib/db/sectors";
 import { getSystemBySlug, updateSystem } from "@/lib/db/systems";
 import { upsertStar, deleteStarByRole } from "@/lib/db/stars";
 import { insertBody, updateBody, deleteBody } from "@/lib/db/bodies";
+import { withTransaction } from "@/lib/db/tx";
 import {
   BODY_TYPES,
   CENTER_KINDS,
@@ -113,53 +119,12 @@ export async function PUT(
     }
   }
 
-  // ── Apply: system metadata, then stars, then bodies (deletes → updates → creates) ──
-
-  if (payload.system) {
-    await updateSystem(system.id, payload.system as Parameters<typeof updateSystem>[1]);
-  }
-
-  if (payload.stars?.primary) {
-    const p = payload.stars.primary;
-    if (typeof p.name !== "string" || typeof p.color !== "string") {
-      return bad("stars.primary requires name and color");
-    }
-    await upsertStar({
-      systemId: system.id,
-      role: "primary",
-      name: p.name,
-      fantasyLabel: (p.fantasyLabel as string | null | undefined) ?? null,
-      color: p.color,
-      secondaryColor: (p.secondaryColor as string | null | undefined) ?? null,
-      externalUrl: (p.externalUrl as string | null | undefined) ?? null,
-    });
-  }
-
-  if (secondaryProvided) {
-    if (payload.stars?.secondary == null) {
-      await deleteStarByRole(system.id, "secondary");
-    } else {
-      const s = payload.stars.secondary;
-      if (typeof s.name !== "string" || typeof s.color !== "string") {
-        return bad("stars.secondary requires name and color");
-      }
-      await upsertStar({
-        systemId: system.id,
-        role: "secondary",
-        name: s.name,
-        fantasyLabel: (s.fantasyLabel as string | null | undefined) ?? null,
-        color: s.color,
-        secondaryColor: (s.secondaryColor as string | null | undefined) ?? null,
-        externalUrl: (s.externalUrl as string | null | undefined) ?? null,
-      });
-    }
-  }
-
+  // Validate body changeset shapes BEFORE opening the transaction. Cheap
+  // structural checks shouldn't pay the cost of a rollback to surface as a
+  // 400. Field-level enum checks live next to the writes inside the tx.
   for (const id of payload.bodies?.delete ?? []) {
     if (typeof id !== "number") return bad("bodies.delete must be number[]");
-    await deleteBody(id);
   }
-
   for (const u of payload.bodies?.update ?? []) {
     if (typeof u.id !== "number") return bad("body update missing id");
     if (u.type !== undefined && !isBodyType(u.type))
@@ -168,9 +133,7 @@ export async function PUT(
       return bad(`Invalid label_position: ${u.labelPosition}`);
     if (u.specialAttribute !== undefined && u.specialAttribute !== null && !isSpecialAttribute(u.specialAttribute))
       return bad(`Invalid special_attribute: ${u.specialAttribute}`);
-    await updateBody(u.id, u as Parameters<typeof updateBody>[1]);
   }
-
   for (const c of payload.bodies?.create ?? []) {
     if (typeof c.bodyId !== "string" || typeof c.name !== "string" || !isBodyType(c.type))
       return bad("body create requires bodyId, name, and a valid type");
@@ -180,23 +143,90 @@ export async function PUT(
       return bad(`Invalid label_position: ${c.labelPosition}`);
     if (c.specialAttribute !== undefined && c.specialAttribute !== null && !isSpecialAttribute(c.specialAttribute))
       return bad(`Invalid special_attribute: ${c.specialAttribute}`);
-    await insertBody({
-      systemId: system.id,
-      bodyId: c.bodyId,
-      name: c.name,
-      type: c.type,
-      biomeSlug: (c.biomeSlug as string | null | undefined) ?? null,
-      lore: (c.lore as string | null | undefined) ?? null,
-      orbitPosition: c.orbitPosition,
-      orbitDistance: c.orbitDistance,
-      labelPosition: (c.labelPosition as LabelPosition | null | undefined) ?? null,
-      specialAttribute: (c.specialAttribute as SpecialAttribute | null | undefined) ?? null,
-      allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
-      externalUrl: (c.externalUrl as string | null | undefined) ?? null,
-      published: (c.published as boolean | undefined) ?? true,
-    });
+  }
+  if (payload.stars?.primary) {
+    const p = payload.stars.primary;
+    if (typeof p.name !== "string" || typeof p.color !== "string") {
+      return bad("stars.primary requires name and color");
+    }
+  }
+  if (secondaryProvided && payload.stars?.secondary != null) {
+    const s = payload.stars.secondary;
+    if (typeof s.name !== "string" || typeof s.color !== "string") {
+      return bad("stars.secondary requires name and color");
+    }
   }
 
+  // ── Apply: system metadata, then stars, then bodies (deletes → updates → creates) ──
+  try {
+    await withTransaction(async (tx) => {
+      if (payload.system) {
+        await updateSystem(system.id, payload.system as Parameters<typeof updateSystem>[1], tx);
+      }
+
+      if (payload.stars?.primary) {
+        const p = payload.stars.primary;
+        await upsertStar({
+          systemId: system.id,
+          role: "primary",
+          name: p.name as string,
+          fantasyLabel: (p.fantasyLabel as string | null | undefined) ?? null,
+          color: p.color as string,
+          secondaryColor: (p.secondaryColor as string | null | undefined) ?? null,
+          externalUrl: (p.externalUrl as string | null | undefined) ?? null,
+        }, tx);
+      }
+
+      if (secondaryProvided) {
+        if (payload.stars?.secondary == null) {
+          await deleteStarByRole(system.id, "secondary", tx);
+        } else {
+          const s = payload.stars.secondary;
+          await upsertStar({
+            systemId: system.id,
+            role: "secondary",
+            name: s.name as string,
+            fantasyLabel: (s.fantasyLabel as string | null | undefined) ?? null,
+            color: s.color as string,
+            secondaryColor: (s.secondaryColor as string | null | undefined) ?? null,
+            externalUrl: (s.externalUrl as string | null | undefined) ?? null,
+          }, tx);
+        }
+      }
+
+      for (const id of payload.bodies?.delete ?? []) {
+        await deleteBody(id, tx);
+      }
+
+      for (const u of payload.bodies?.update ?? []) {
+        await updateBody(u.id, u as Parameters<typeof updateBody>[1], tx);
+      }
+
+      for (const c of payload.bodies?.create ?? []) {
+        await insertBody({
+          systemId: system.id,
+          bodyId: c.bodyId as string,
+          name: c.name as string,
+          type: c.type as BodyType,
+          biomeSlug: (c.biomeSlug as string | null | undefined) ?? null,
+          lore: (c.lore as string | null | undefined) ?? null,
+          orbitPosition: c.orbitPosition as number,
+          orbitDistance: c.orbitDistance as number,
+          labelPosition: (c.labelPosition as LabelPosition | null | undefined) ?? null,
+          specialAttribute: (c.specialAttribute as SpecialAttribute | null | undefined) ?? null,
+          allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
+          externalUrl: (c.externalUrl as string | null | undefined) ?? null,
+          published: (c.published as boolean | undefined) ?? true,
+        }, tx);
+      }
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: `Save failed: ${msg}` }, { status: 500 });
+  }
+
+  // Revalidate only on a committed transaction — never expose half-applied
+  // state to readers.
   revalidatePath("/sectors");
   revalidatePath(`/sectors/${slug}`);
 

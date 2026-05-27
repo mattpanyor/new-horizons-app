@@ -1,8 +1,6 @@
-import { neon } from "@neondatabase/serverless";
 import type { MarkerType, Layer } from "@/lib/mapEnums";
 import { cascadeSlugRename } from "@/lib/db/connections";
-
-const sql = neon(process.env.DATABASE_URL!);
+import { execQuery, type Tx } from "@/lib/db/tx";
 
 export interface MarkerRow {
   id: number;
@@ -40,12 +38,13 @@ function rowToMarker(row: Record<string, unknown>): MarkerRow {
   };
 }
 
-export async function getMarkersBySector(sectorId: number): Promise<MarkerRow[]> {
-  const rows = await sql`
-    SELECT id, sector_id, slug, name, type, allegiance_slug, external_url,
-           territory_radius, layer, connection_id, position, x, y, angle
-    FROM markers WHERE sector_id = ${sectorId} ORDER BY id
-  `;
+export async function getMarkersBySector(sectorId: number, tx?: Tx): Promise<MarkerRow[]> {
+  const rows = await execQuery(tx,
+    `SELECT id, sector_id, slug, name, type, allegiance_slug, external_url,
+            territory_radius, layer, connection_id, position, x, y, angle
+     FROM markers WHERE sector_id = $1 ORDER BY id`,
+    [sectorId]
+  );
   return rows.map(rowToMarker);
 }
 
@@ -63,21 +62,22 @@ export async function insertMarker(m: {
   x?: number | null;
   y?: number | null;
   angle?: number | null;
-}): Promise<MarkerRow> {
-  const rows = await sql`
-    INSERT INTO markers (
-      sector_id, slug, name, type, allegiance_slug, external_url,
-      territory_radius, layer, connection_id, position, x, y, angle
-    ) VALUES (
-      ${m.sectorId}, ${m.slug}, ${m.name}, ${m.type},
-      ${m.allegianceSlug ?? null}, ${m.externalUrl ?? null},
-      ${m.territoryRadius ?? null}, ${m.layer ?? null},
-      ${m.connectionId ?? null}, ${m.position ?? null},
-      ${m.x ?? null}, ${m.y ?? null}, ${m.angle ?? null}
-    )
-    RETURNING id, sector_id, slug, name, type, allegiance_slug, external_url,
-              territory_radius, layer, connection_id, position, x, y, angle
-  `;
+}, tx?: Tx): Promise<MarkerRow> {
+  const rows = await execQuery(tx,
+    `INSERT INTO markers (
+       sector_id, slug, name, type, allegiance_slug, external_url,
+       territory_radius, layer, connection_id, position, x, y, angle
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     RETURNING id, sector_id, slug, name, type, allegiance_slug, external_url,
+               territory_radius, layer, connection_id, position, x, y, angle`,
+    [
+      m.sectorId, m.slug, m.name, m.type,
+      m.allegianceSlug ?? null, m.externalUrl ?? null,
+      m.territoryRadius ?? null, m.layer ?? null,
+      m.connectionId ?? null, m.position ?? null,
+      m.x ?? null, m.y ?? null, m.angle ?? null,
+    ]
+  );
   return rowToMarker(rows[0]);
 }
 
@@ -96,29 +96,30 @@ export async function updateMarker(
     x: number | null;
     y: number | null;
     angle: number | null;
-  }>
+  }>,
+  tx?: Tx
 ): Promise<void> {
   // Non-positional fields can be updated independently.
   if (fields.slug !== undefined) {
     // Update row first; cascade only if the rename actually committed.
-    const rows = await sql`SELECT slug, sector_id FROM markers WHERE id = ${id}`;
+    const rows = await execQuery(tx, `SELECT slug, sector_id FROM markers WHERE id = $1`, [id]);
     if (rows.length > 0) {
       const oldSlug = rows[0].slug as string;
       const sectorId = rows[0].sector_id as number;
-      await sql`UPDATE markers SET slug = ${fields.slug} WHERE id = ${id}`;
+      await execQuery(tx, `UPDATE markers SET slug = $1 WHERE id = $2`, [fields.slug, id]);
       if (oldSlug !== fields.slug) {
-        await cascadeSlugRename(sectorId, oldSlug, fields.slug);
+        await cascadeSlugRename(sectorId, oldSlug, fields.slug, tx);
       }
     } else {
-      await sql`UPDATE markers SET slug = ${fields.slug} WHERE id = ${id}`;
+      await execQuery(tx, `UPDATE markers SET slug = $1 WHERE id = $2`, [fields.slug, id]);
     }
   }
-  if (fields.name !== undefined) await sql`UPDATE markers SET name = ${fields.name} WHERE id = ${id}`;
-  if (fields.type !== undefined) await sql`UPDATE markers SET type = ${fields.type} WHERE id = ${id}`;
-  if (fields.allegianceSlug !== undefined) await sql`UPDATE markers SET allegiance_slug = ${fields.allegianceSlug} WHERE id = ${id}`;
-  if (fields.externalUrl !== undefined) await sql`UPDATE markers SET external_url = ${fields.externalUrl} WHERE id = ${id}`;
-  if (fields.territoryRadius !== undefined) await sql`UPDATE markers SET territory_radius = ${fields.territoryRadius} WHERE id = ${id}`;
-  if (fields.layer !== undefined) await sql`UPDATE markers SET layer = ${fields.layer} WHERE id = ${id}`;
+  if (fields.name !== undefined) await execQuery(tx, `UPDATE markers SET name = $1 WHERE id = $2`, [fields.name, id]);
+  if (fields.type !== undefined) await execQuery(tx, `UPDATE markers SET type = $1 WHERE id = $2`, [fields.type, id]);
+  if (fields.allegianceSlug !== undefined) await execQuery(tx, `UPDATE markers SET allegiance_slug = $1 WHERE id = $2`, [fields.allegianceSlug, id]);
+  if (fields.externalUrl !== undefined) await execQuery(tx, `UPDATE markers SET external_url = $1 WHERE id = $2`, [fields.externalUrl, id]);
+  if (fields.territoryRadius !== undefined) await execQuery(tx, `UPDATE markers SET territory_radius = $1 WHERE id = $2`, [fields.territoryRadius, id]);
+  if (fields.layer !== undefined) await execQuery(tx, `UPDATE markers SET layer = $1 WHERE id = $2`, [fields.layer, id]);
 
   // Positional fields must be updated atomically because the table CHECK
   // enforces a strict XOR between (connection_id + position) and (x + y).
@@ -133,10 +134,10 @@ export async function updateMarker(
     fields.y !== undefined ||
     fields.angle !== undefined;
   if (positionalTouched) {
-    const rows = await sql`
-      SELECT connection_id, position, x, y, angle
-      FROM markers WHERE id = ${id}
-    `;
+    const rows = await execQuery(tx,
+      `SELECT connection_id, position, x, y, angle FROM markers WHERE id = $1`,
+      [id]
+    );
     if (rows.length === 0) return;
     const cur = rows[0];
 
@@ -154,32 +155,34 @@ export async function updateMarker(
     if (attached) {
       const cidValue = fields.connectionId !== undefined ? fields.connectionId : cur.connection_id;
       const pos      = fields.position    !== undefined ? fields.position    : cur.position ?? 0.5;
-      await sql`
-        UPDATE markers
-        SET connection_id = ${cidValue},
-            position      = ${pos},
-            x             = NULL,
-            y             = NULL,
-            angle         = NULL
-        WHERE id = ${id}
-      `;
+      await execQuery(tx,
+        `UPDATE markers
+         SET connection_id = $1,
+             position      = $2,
+             x             = NULL,
+             y             = NULL,
+             angle         = NULL
+         WHERE id = $3`,
+        [cidValue, pos, id]
+      );
     } else {
       const xv  = fields.x     !== undefined ? fields.x     : cur.x ?? 0;
       const yv  = fields.y     !== undefined ? fields.y     : cur.y ?? 0;
       const ang = fields.angle !== undefined ? fields.angle : cur.angle;
-      await sql`
-        UPDATE markers
-        SET connection_id = NULL,
-            position      = NULL,
-            x             = ${xv},
-            y             = ${yv},
-            angle         = ${ang}
-        WHERE id = ${id}
-      `;
+      await execQuery(tx,
+        `UPDATE markers
+         SET connection_id = NULL,
+             position      = NULL,
+             x             = $1,
+             y             = $2,
+             angle         = $3
+         WHERE id = $4`,
+        [xv, yv, ang, id]
+      );
     }
   }
 }
 
-export async function deleteMarker(id: number): Promise<void> {
-  await sql`DELETE FROM markers WHERE id = ${id}`;
+export async function deleteMarker(id: number, tx?: Tx): Promise<void> {
+  await execQuery(tx, `DELETE FROM markers WHERE id = $1`, [id]);
 }

@@ -4,8 +4,10 @@
 //
 // Auth: superadmin only (accessLevel >= 127).
 // Imperial Core and the Atlas legacy slug are read-only and rejected.
-// Operations apply in order: deletes → updates → creates. revalidatePath fires
-// once at the end so viewers see the new state on next request.
+// Operations apply in order: deletes → updates → creates. All writes run
+// inside a single BEGIN/COMMIT transaction via withTransaction — a
+// mid-batch failure rolls back every prior write. revalidatePath fires
+// only on commit.
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -32,6 +34,7 @@ import {
   updateMarker,
   deleteMarker,
 } from "@/lib/db/markers";
+import { withTransaction } from "@/lib/db/tx";
 import {
   CENTER_KINDS,
   LAYERS,
@@ -101,30 +104,26 @@ export async function PUT(
     return bad("Invalid JSON body");
   }
 
-  // ── DELETES ── (CASCADE handles dependent rows)
+  // ── Pre-flight structural validation (cheap, runs outside the tx) ──
+  // Field-level enum checks live here so we 400 early on malformed input
+  // rather than rolling back a partially-applied transaction.
   for (const id of payload.connections?.delete ?? []) {
     if (typeof id !== "number") return bad("connections.delete must be number[]");
-    await deleteConnection(id);
   }
   for (const id of payload.markers?.delete ?? []) {
     if (typeof id !== "number") return bad("markers.delete must be number[]");
-    await deleteMarker(id);
   }
   for (const id of payload.vortexes?.delete ?? []) {
     if (typeof id !== "number") return bad("vortexes.delete must be number[]");
-    await deleteVortex(id);
   }
   for (const id of payload.systems?.delete ?? []) {
     if (typeof id !== "number") return bad("systems.delete must be number[]");
-    await deleteSystem(id);
   }
 
-  // ── UPDATES ──
   // Build a validated allowlist for each entity's field set rather than
   // blind-casting the raw payload. Stops a malformed/malicious client from
   // sending unexpected shapes (e.g. `{ x: { weird: 1 } }`) into a column
-  // UPDATE — the lib/db helpers' tagged-template binding would reject most
-  // such cases at the wire, but a structured 400 here is friendlier.
+  // UPDATE.
   const str  = (v: unknown) => (typeof v === "string" ? v : undefined);
   const num  = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
   const bool = (v: unknown) => (typeof v === "boolean" ? v : undefined);
@@ -137,49 +136,16 @@ export async function PUT(
     if (typeof u.id !== "number") return bad("system update missing id");
     if (u.centerKind !== undefined && !isCenterKind(u.centerKind))
       return bad(`Invalid center_kind: ${u.centerKind}`);
-    await updateSystem(u.id, {
-      slug: str(u.slug),
-      name: str(u.name),
-      x: num(u.x),
-      y: num(u.y),
-      allegianceSlug: nullable(u.allegianceSlug, str),
-      territoryRadius: nullable(u.territoryRadius, num),
-      centerKind: u.centerKind as CenterKind | undefined,
-      binaryAngle: nullable(u.binaryAngle, num),
-      externalUrl: nullable(u.externalUrl, str),
-      published: bool(u.published),
-    });
   }
   for (const u of payload.vortexes?.update ?? []) {
     if (typeof u.id !== "number") return bad("vortex update missing id");
     if (u.layer !== undefined && u.layer !== null && !isLayer(u.layer))
       return bad(`Invalid vortex layer: ${u.layer}`);
-    await updateVortex(u.id, {
-      slug: str(u.slug),
-      name: str(u.name),
-      x: num(u.x),
-      y: num(u.y),
-      color: nullable(u.color, str),
-      radius: nullable(u.radius, num),
-      ratioW: nullable(u.ratioW, num),
-      ratioH: nullable(u.ratioH, num),
-      layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
-    });
   }
   for (const u of payload.connections?.update ?? []) {
     if (typeof u.id !== "number") return bad("connection update missing id");
     if (u.layer !== undefined && u.layer !== null && !isLayer(u.layer))
       return bad(`Invalid connection layer: ${u.layer}`);
-    await updateConnection(u.id, {
-      fromSlug: str(u.fromSlug),
-      toSlug: str(u.toSlug),
-      curvature: nullable(u.curvature, num),
-      label: nullable(u.label, str),
-      color: nullable(u.color, str),
-      dashes: nullable(u.dashes, str),
-      opacity: nullable(u.opacity, num),
-      layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
-    });
   }
   for (const u of payload.markers?.update ?? []) {
     if (typeof u.id !== "number") return bad("marker update missing id");
@@ -187,27 +153,7 @@ export async function PUT(
       return bad(`Invalid marker type: ${u.type}`);
     if (u.layer !== undefined && u.layer !== null && !isLayer(u.layer))
       return bad(`Invalid marker layer: ${u.layer}`);
-    await updateMarker(u.id, {
-      slug: str(u.slug),
-      name: str(u.name),
-      type: u.type as MarkerType | undefined,
-      allegianceSlug: nullable(u.allegianceSlug, str),
-      externalUrl: nullable(u.externalUrl, str),
-      territoryRadius: nullable(u.territoryRadius, num),
-      layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
-      connectionId: nullable(u.connectionId, num),
-      position: nullable(u.position, num),
-      x: nullable(u.x, num),
-      y: nullable(u.y, num),
-      angle: nullable(u.angle, num),
-    });
   }
-
-  // ── CREATES ──
-  // Order: systems → vortexes → connections (with embedded markers) → free markers.
-  // Why: connection-attached markers need the parent connection's id, so
-  // connections come first within their own group.
-
   for (const c of payload.systems?.create ?? []) {
     if (typeof c.slug !== "string" || typeof c.name !== "string")
       return bad("system create requires slug and name");
@@ -215,21 +161,7 @@ export async function PUT(
       return bad("system create requires x and y");
     if (c.centerKind !== undefined && !isCenterKind(c.centerKind))
       return bad(`Invalid center_kind: ${c.centerKind}`);
-    await insertSystem({
-      sectorId: sector.id,
-      slug: c.slug,
-      name: c.name,
-      x: c.x,
-      y: c.y,
-      allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
-      territoryRadius: (c.territoryRadius as number | null | undefined) ?? null,
-      centerKind: (c.centerKind as CenterKind | undefined) ?? "single",
-      binaryAngle: (c.binaryAngle as number | null | undefined) ?? null,
-      externalUrl: (c.externalUrl as string | null | undefined) ?? null,
-      published: (c.published as boolean | undefined) ?? true,
-    });
   }
-
   for (const c of payload.vortexes?.create ?? []) {
     if (typeof c.slug !== "string" || typeof c.name !== "string")
       return bad("vortex create requires slug and name");
@@ -237,94 +169,205 @@ export async function PUT(
       return bad("vortex create requires x and y");
     if (c.layer !== undefined && c.layer !== null && !isLayer(c.layer))
       return bad(`Invalid vortex layer: ${c.layer}`);
-    await insertVortex({
-      sectorId: sector.id,
-      slug: c.slug,
-      name: c.name,
-      x: c.x,
-      y: c.y,
-      color: (c.color as string | null | undefined) ?? null,
-      radius: (c.radius as number | null | undefined) ?? null,
-      ratioW: (c.ratioW as number | null | undefined) ?? null,
-      ratioH: (c.ratioH as number | null | undefined) ?? null,
-      layer: (c.layer as Layer | null | undefined) ?? null,
-    });
   }
-
   for (const c of payload.connections?.create ?? []) {
     if (typeof c.fromSlug !== "string" || typeof c.toSlug !== "string")
       return bad("connection create requires fromSlug and toSlug");
     if (c.layer !== undefined && c.layer !== null && !isLayer(c.layer))
       return bad(`Invalid connection layer: ${c.layer}`);
-    const inserted = await insertConnection({
-      sectorId: sector.id,
-      fromSlug: c.fromSlug,
-      toSlug: c.toSlug,
-      curvature: (c.curvature as number | null | undefined) ?? null,
-      label: (c.label as string | null | undefined) ?? null,
-      color: (c.color as string | null | undefined) ?? null,
-      dashes: (c.dashes as string | null | undefined) ?? null,
-      opacity: (c.opacity as number | null | undefined) ?? null,
-      layer: (c.layer as Layer | null | undefined) ?? null,
-    });
     const m = c.marker as AnyRec | undefined;
     if (m) {
       if (typeof m.slug !== "string" || typeof m.name !== "string" || !isMarkerType(m.type))
         return bad("connection.create.marker requires slug, name, and a valid type");
-      await insertMarker({
-        sectorId: sector.id,
-        slug: m.slug,
-        name: m.name,
-        type: m.type,
-        allegianceSlug: (m.allegianceSlug as string | null | undefined) ?? null,
-        externalUrl: (m.externalUrl as string | null | undefined) ?? null,
-        territoryRadius: (m.territoryRadius as number | null | undefined) ?? null,
-        layer: ((m.layer as Layer | null | undefined) ?? (c.layer as Layer | null | undefined)) ?? null,
-        connectionId: inserted.id,
-        position: (m.position as number | null | undefined) ?? 0.5,
-      });
     }
   }
-
   for (const c of payload.markers?.create ?? []) {
     if (typeof c.slug !== "string" || typeof c.name !== "string" || !isMarkerType(c.type))
       return bad("marker create requires slug, name, and a valid type");
     if (c.layer !== undefined && c.layer !== null && !isLayer(c.layer))
       return bad(`Invalid marker layer: ${c.layer}`);
-
-    const isAttached = c.connectionId != null;
-    if (isAttached) {
+    if (c.connectionId != null) {
       if (typeof c.position !== "number")
         return bad("attached marker create requires connectionId and position");
-      await insertMarker({
-        sectorId: sector.id,
-        slug: c.slug,
-        name: c.name,
-        type: c.type,
-        allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
-        externalUrl: (c.externalUrl as string | null | undefined) ?? null,
-        territoryRadius: (c.territoryRadius as number | null | undefined) ?? null,
-        layer: (c.layer as Layer | null | undefined) ?? null,
-        connectionId: c.connectionId as number,
-        position: c.position,
-      });
     } else {
       if (typeof c.x !== "number" || typeof c.y !== "number")
         return bad("free marker create requires x and y");
-      await insertMarker({
-        sectorId: sector.id,
-        slug: c.slug,
-        name: c.name,
-        type: c.type,
-        allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
-        externalUrl: (c.externalUrl as string | null | undefined) ?? null,
-        territoryRadius: (c.territoryRadius as number | null | undefined) ?? null,
-        layer: (c.layer as Layer | null | undefined) ?? null,
-        x: c.x,
-        y: c.y,
-        angle: (c.angle as number | null | undefined) ?? null,
-      });
     }
+  }
+
+  // ── Apply: deletes → updates → creates, all inside one transaction ──
+  try {
+    await withTransaction(async (tx) => {
+      // DELETES (CASCADE handles dependent rows)
+      for (const id of payload.connections?.delete ?? []) {
+        await deleteConnection(id as number, tx);
+      }
+      for (const id of payload.markers?.delete ?? []) {
+        await deleteMarker(id as number, tx);
+      }
+      for (const id of payload.vortexes?.delete ?? []) {
+        await deleteVortex(id as number, tx);
+      }
+      for (const id of payload.systems?.delete ?? []) {
+        await deleteSystem(id as number, tx);
+      }
+
+      // UPDATES
+      for (const u of payload.systems?.update ?? []) {
+        await updateSystem(u.id, {
+          slug: str(u.slug),
+          name: str(u.name),
+          x: num(u.x),
+          y: num(u.y),
+          allegianceSlug: nullable(u.allegianceSlug, str),
+          territoryRadius: nullable(u.territoryRadius, num),
+          centerKind: u.centerKind as CenterKind | undefined,
+          binaryAngle: nullable(u.binaryAngle, num),
+          externalUrl: nullable(u.externalUrl, str),
+          published: bool(u.published),
+        }, tx);
+      }
+      for (const u of payload.vortexes?.update ?? []) {
+        await updateVortex(u.id, {
+          slug: str(u.slug),
+          name: str(u.name),
+          x: num(u.x),
+          y: num(u.y),
+          color: nullable(u.color, str),
+          radius: nullable(u.radius, num),
+          ratioW: nullable(u.ratioW, num),
+          ratioH: nullable(u.ratioH, num),
+          layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
+        }, tx);
+      }
+      for (const u of payload.connections?.update ?? []) {
+        await updateConnection(u.id, {
+          fromSlug: str(u.fromSlug),
+          toSlug: str(u.toSlug),
+          curvature: nullable(u.curvature, num),
+          label: nullable(u.label, str),
+          color: nullable(u.color, str),
+          dashes: nullable(u.dashes, str),
+          opacity: nullable(u.opacity, num),
+          layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
+        }, tx);
+      }
+      for (const u of payload.markers?.update ?? []) {
+        await updateMarker(u.id, {
+          slug: str(u.slug),
+          name: str(u.name),
+          type: u.type as MarkerType | undefined,
+          allegianceSlug: nullable(u.allegianceSlug, str),
+          externalUrl: nullable(u.externalUrl, str),
+          territoryRadius: nullable(u.territoryRadius, num),
+          layer: nullable(u.layer, (v) => (isLayer(v) ? v : undefined)),
+          connectionId: nullable(u.connectionId, num),
+          position: nullable(u.position, num),
+          x: nullable(u.x, num),
+          y: nullable(u.y, num),
+          angle: nullable(u.angle, num),
+        }, tx);
+      }
+
+      // CREATES
+      // Order: systems → vortexes → connections (with embedded markers) → free markers.
+      // Connection-attached markers need the parent connection's id, so
+      // connections come first within their own group.
+      for (const c of payload.systems?.create ?? []) {
+        await insertSystem({
+          sectorId: sector.id,
+          slug: c.slug as string,
+          name: c.name as string,
+          x: c.x as number,
+          y: c.y as number,
+          allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
+          territoryRadius: (c.territoryRadius as number | null | undefined) ?? null,
+          centerKind: (c.centerKind as CenterKind | undefined) ?? "single",
+          binaryAngle: (c.binaryAngle as number | null | undefined) ?? null,
+          externalUrl: (c.externalUrl as string | null | undefined) ?? null,
+          published: (c.published as boolean | undefined) ?? true,
+        }, tx);
+      }
+
+      for (const c of payload.vortexes?.create ?? []) {
+        await insertVortex({
+          sectorId: sector.id,
+          slug: c.slug as string,
+          name: c.name as string,
+          x: c.x as number,
+          y: c.y as number,
+          color: (c.color as string | null | undefined) ?? null,
+          radius: (c.radius as number | null | undefined) ?? null,
+          ratioW: (c.ratioW as number | null | undefined) ?? null,
+          ratioH: (c.ratioH as number | null | undefined) ?? null,
+          layer: (c.layer as Layer | null | undefined) ?? null,
+        }, tx);
+      }
+
+      for (const c of payload.connections?.create ?? []) {
+        const inserted = await insertConnection({
+          sectorId: sector.id,
+          fromSlug: c.fromSlug as string,
+          toSlug: c.toSlug as string,
+          curvature: (c.curvature as number | null | undefined) ?? null,
+          label: (c.label as string | null | undefined) ?? null,
+          color: (c.color as string | null | undefined) ?? null,
+          dashes: (c.dashes as string | null | undefined) ?? null,
+          opacity: (c.opacity as number | null | undefined) ?? null,
+          layer: (c.layer as Layer | null | undefined) ?? null,
+        }, tx);
+        const m = c.marker as AnyRec | undefined;
+        if (m) {
+          await insertMarker({
+            sectorId: sector.id,
+            slug: m.slug as string,
+            name: m.name as string,
+            type: m.type as MarkerType,
+            allegianceSlug: (m.allegianceSlug as string | null | undefined) ?? null,
+            externalUrl: (m.externalUrl as string | null | undefined) ?? null,
+            territoryRadius: (m.territoryRadius as number | null | undefined) ?? null,
+            layer: ((m.layer as Layer | null | undefined) ?? (c.layer as Layer | null | undefined)) ?? null,
+            connectionId: inserted.id,
+            position: (m.position as number | null | undefined) ?? 0.5,
+          }, tx);
+        }
+      }
+
+      for (const c of payload.markers?.create ?? []) {
+        const isAttached = c.connectionId != null;
+        if (isAttached) {
+          await insertMarker({
+            sectorId: sector.id,
+            slug: c.slug as string,
+            name: c.name as string,
+            type: c.type as MarkerType,
+            allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
+            externalUrl: (c.externalUrl as string | null | undefined) ?? null,
+            territoryRadius: (c.territoryRadius as number | null | undefined) ?? null,
+            layer: (c.layer as Layer | null | undefined) ?? null,
+            connectionId: c.connectionId as number,
+            position: c.position as number,
+          }, tx);
+        } else {
+          await insertMarker({
+            sectorId: sector.id,
+            slug: c.slug as string,
+            name: c.name as string,
+            type: c.type as MarkerType,
+            allegianceSlug: (c.allegianceSlug as string | null | undefined) ?? null,
+            externalUrl: (c.externalUrl as string | null | undefined) ?? null,
+            territoryRadius: (c.territoryRadius as number | null | undefined) ?? null,
+            layer: (c.layer as Layer | null | undefined) ?? null,
+            x: c.x as number,
+            y: c.y as number,
+            angle: (c.angle as number | null | undefined) ?? null,
+          }, tx);
+        }
+      }
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: `Save failed: ${msg}` }, { status: 500 });
   }
 
   revalidatePath("/sectors");

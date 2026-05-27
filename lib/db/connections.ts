@@ -1,7 +1,5 @@
-import { neon } from "@neondatabase/serverless";
 import type { Layer } from "@/lib/mapEnums";
-
-const sql = neon(process.env.DATABASE_URL!);
+import { execQuery, type Tx } from "@/lib/db/tx";
 
 export interface ConnectionRow {
   id: number;
@@ -31,11 +29,12 @@ function rowToConnection(row: Record<string, unknown>): ConnectionRow {
   };
 }
 
-export async function getConnectionsBySector(sectorId: number): Promise<ConnectionRow[]> {
-  const rows = await sql`
-    SELECT id, sector_id, from_slug, to_slug, curvature, label, color, dashes, opacity, layer
-    FROM connections WHERE sector_id = ${sectorId} ORDER BY id
-  `;
+export async function getConnectionsBySector(sectorId: number, tx?: Tx): Promise<ConnectionRow[]> {
+  const rows = await execQuery(tx,
+    `SELECT id, sector_id, from_slug, to_slug, curvature, label, color, dashes, opacity, layer
+     FROM connections WHERE sector_id = $1 ORDER BY id`,
+    [sectorId]
+  );
   return rows.map(rowToConnection);
 }
 
@@ -49,17 +48,18 @@ export async function insertConnection(c: {
   dashes?: string | null;
   opacity?: number | null;
   layer?: Layer | null;
-}): Promise<ConnectionRow> {
-  const rows = await sql`
-    INSERT INTO connections (
-      sector_id, from_slug, to_slug, curvature, label, color, dashes, opacity, layer
-    ) VALUES (
-      ${c.sectorId}, ${c.fromSlug}, ${c.toSlug},
-      ${c.curvature ?? null}, ${c.label ?? null}, ${c.color ?? null},
-      ${c.dashes ?? null}, ${c.opacity ?? null}, ${c.layer ?? null}
-    )
-    RETURNING id, sector_id, from_slug, to_slug, curvature, label, color, dashes, opacity, layer
-  `;
+}, tx?: Tx): Promise<ConnectionRow> {
+  const rows = await execQuery(tx,
+    `INSERT INTO connections (
+       sector_id, from_slug, to_slug, curvature, label, color, dashes, opacity, layer
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id, sector_id, from_slug, to_slug, curvature, label, color, dashes, opacity, layer`,
+    [
+      c.sectorId, c.fromSlug, c.toSlug,
+      c.curvature ?? null, c.label ?? null, c.color ?? null,
+      c.dashes ?? null, c.opacity ?? null, c.layer ?? null,
+    ]
+  );
   return rowToConnection(rows[0]);
 }
 
@@ -74,20 +74,21 @@ export async function updateConnection(
     dashes: string | null;
     opacity: number | null;
     layer: Layer | null;
-  }>
+  }>,
+  tx?: Tx
 ): Promise<void> {
-  if (fields.fromSlug !== undefined) await sql`UPDATE connections SET from_slug = ${fields.fromSlug} WHERE id = ${id}`;
-  if (fields.toSlug !== undefined) await sql`UPDATE connections SET to_slug = ${fields.toSlug} WHERE id = ${id}`;
-  if (fields.curvature !== undefined) await sql`UPDATE connections SET curvature = ${fields.curvature} WHERE id = ${id}`;
-  if (fields.label !== undefined) await sql`UPDATE connections SET label = ${fields.label} WHERE id = ${id}`;
-  if (fields.color !== undefined) await sql`UPDATE connections SET color = ${fields.color} WHERE id = ${id}`;
-  if (fields.dashes !== undefined) await sql`UPDATE connections SET dashes = ${fields.dashes} WHERE id = ${id}`;
-  if (fields.opacity !== undefined) await sql`UPDATE connections SET opacity = ${fields.opacity} WHERE id = ${id}`;
-  if (fields.layer !== undefined) await sql`UPDATE connections SET layer = ${fields.layer} WHERE id = ${id}`;
+  if (fields.fromSlug !== undefined) await execQuery(tx, `UPDATE connections SET from_slug = $1 WHERE id = $2`, [fields.fromSlug, id]);
+  if (fields.toSlug !== undefined) await execQuery(tx, `UPDATE connections SET to_slug = $1 WHERE id = $2`, [fields.toSlug, id]);
+  if (fields.curvature !== undefined) await execQuery(tx, `UPDATE connections SET curvature = $1 WHERE id = $2`, [fields.curvature, id]);
+  if (fields.label !== undefined) await execQuery(tx, `UPDATE connections SET label = $1 WHERE id = $2`, [fields.label, id]);
+  if (fields.color !== undefined) await execQuery(tx, `UPDATE connections SET color = $1 WHERE id = $2`, [fields.color, id]);
+  if (fields.dashes !== undefined) await execQuery(tx, `UPDATE connections SET dashes = $1 WHERE id = $2`, [fields.dashes, id]);
+  if (fields.opacity !== undefined) await execQuery(tx, `UPDATE connections SET opacity = $1 WHERE id = $2`, [fields.opacity, id]);
+  if (fields.layer !== undefined) await execQuery(tx, `UPDATE connections SET layer = $1 WHERE id = $2`, [fields.layer, id]);
 }
 
-export async function deleteConnection(id: number): Promise<void> {
-  await sql`DELETE FROM connections WHERE id = ${id}`;
+export async function deleteConnection(id: number, tx?: Tx): Promise<void> {
+  await execQuery(tx, `DELETE FROM connections WHERE id = $1`, [id]);
 }
 
 /**
@@ -96,22 +97,23 @@ export async function deleteConnection(id: number): Promise<void> {
  * collision in another sector can't cause unrelated rewrites.
  *
  * Called by updateSystem / updateVortex / updateMarker when their slug
- * changes. No-op if old and new are equal.
+ * changes. No-op if old and new are equal. The `tx` parameter MUST be
+ * threaded through from the parent caller — otherwise the cascade runs on
+ * a separate connection, outside the transaction.
  */
 export async function cascadeSlugRename(
   sectorId: number,
   oldSlug: string,
-  newSlug: string
+  newSlug: string,
+  tx?: Tx
 ): Promise<void> {
   if (oldSlug === newSlug) return;
-  await sql`
-    UPDATE connections
-    SET from_slug = ${newSlug}
-    WHERE sector_id = ${sectorId} AND from_slug = ${oldSlug}
-  `;
-  await sql`
-    UPDATE connections
-    SET to_slug = ${newSlug}
-    WHERE sector_id = ${sectorId} AND to_slug = ${oldSlug}
-  `;
+  await execQuery(tx,
+    `UPDATE connections SET from_slug = $1 WHERE sector_id = $2 AND from_slug = $3`,
+    [newSlug, sectorId, oldSlug]
+  );
+  await execQuery(tx,
+    `UPDATE connections SET to_slug = $1 WHERE sector_id = $2 AND to_slug = $3`,
+    [newSlug, sectorId, oldSlug]
+  );
 }

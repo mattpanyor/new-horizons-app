@@ -1,7 +1,5 @@
-import { neon } from "@neondatabase/serverless";
 import type { StarRole } from "@/lib/mapEnums";
-
-const sql = neon(process.env.DATABASE_URL!);
+import { execQuery, type Tx } from "@/lib/db/tx";
 
 export interface StarRow {
   id: number;
@@ -27,11 +25,12 @@ function rowToStar(row: Record<string, unknown>): StarRow {
   };
 }
 
-export async function getStarsBySystem(systemId: number): Promise<StarRow[]> {
-  const rows = await sql`
-    SELECT id, system_id, role, name, fantasy_label, color, secondary_color, external_url
-    FROM stars WHERE system_id = ${systemId} ORDER BY role
-  `;
+export async function getStarsBySystem(systemId: number, tx?: Tx): Promise<StarRow[]> {
+  const rows = await execQuery(tx,
+    `SELECT id, system_id, role, name, fantasy_label, color, secondary_color, external_url
+     FROM stars WHERE system_id = $1 ORDER BY role`,
+    [systemId]
+  );
   return rows.map(rowToStar);
 }
 
@@ -43,13 +42,13 @@ export async function insertStar(s: {
   color: string;
   secondaryColor?: string | null;
   externalUrl?: string | null;
-}): Promise<StarRow> {
-  const rows = await sql`
-    INSERT INTO stars (system_id, role, name, fantasy_label, color, secondary_color, external_url)
-    VALUES (${s.systemId}, ${s.role}, ${s.name}, ${s.fantasyLabel ?? null},
-            ${s.color}, ${s.secondaryColor ?? null}, ${s.externalUrl ?? null})
-    RETURNING id, system_id, role, name, fantasy_label, color, secondary_color, external_url
-  `;
+}, tx?: Tx): Promise<StarRow> {
+  const rows = await execQuery(tx,
+    `INSERT INTO stars (system_id, role, name, fantasy_label, color, secondary_color, external_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, system_id, role, name, fantasy_label, color, secondary_color, external_url`,
+    [s.systemId, s.role, s.name, s.fantasyLabel ?? null, s.color, s.secondaryColor ?? null, s.externalUrl ?? null]
+  );
   return rowToStar(rows[0]);
 }
 
@@ -63,20 +62,20 @@ export async function upsertStar(s: {
   color: string;
   secondaryColor?: string | null;
   externalUrl?: string | null;
-}): Promise<void> {
-  await sql`
-    INSERT INTO stars (system_id, role, name, fantasy_label, color, secondary_color, external_url)
-    VALUES (${s.systemId}, ${s.role}, ${s.name}, ${s.fantasyLabel ?? null},
-            ${s.color}, ${s.secondaryColor ?? null}, ${s.externalUrl ?? null})
-    ON CONFLICT (system_id, role) DO UPDATE SET
-      name = EXCLUDED.name,
-      fantasy_label = EXCLUDED.fantasy_label,
-      color = EXCLUDED.color,
-      secondary_color = EXCLUDED.secondary_color,
-      external_url = EXCLUDED.external_url
-  `;
+}, tx?: Tx): Promise<void> {
+  await execQuery(tx,
+    `INSERT INTO stars (system_id, role, name, fantasy_label, color, secondary_color, external_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (system_id, role) DO UPDATE SET
+       name = EXCLUDED.name,
+       fantasy_label = EXCLUDED.fantasy_label,
+       color = EXCLUDED.color,
+       secondary_color = EXCLUDED.secondary_color,
+       external_url = EXCLUDED.external_url`,
+    [s.systemId, s.role, s.name, s.fantasyLabel ?? null, s.color, s.secondaryColor ?? null, s.externalUrl ?? null]
+  );
 }
 
-export async function deleteStarByRole(systemId: number, role: StarRole): Promise<void> {
-  await sql`DELETE FROM stars WHERE system_id = ${systemId} AND role = ${role}`;
+export async function deleteStarByRole(systemId: number, role: StarRole, tx?: Tx): Promise<void> {
+  await execQuery(tx, `DELETE FROM stars WHERE system_id = $1 AND role = $2`, [systemId, role]);
 }
