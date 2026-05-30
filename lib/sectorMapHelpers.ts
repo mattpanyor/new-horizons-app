@@ -6,6 +6,7 @@ export const FULL_W = 1200;
 export const FULL_H = 800;
 
 export const SECTOR_TERRITORY: Record<string, { cx: number; cy: number; arcStart: number; arcEnd: number }> = {
+  "atlas-sector":   { cx: 80,   cy: 720, arcStart: 270, arcEnd: 360 },
   "denerum-sector": { cx: 80,   cy: 80,  arcStart: 0,   arcEnd: 90  },
   "castell-sector": { cx: 1120, cy: 80,  arcStart: 90,  arcEnd: 180 },
   "vintar-sector":  { cx: 1120, cy: 720, arcStart: 180, arcEnd: 270 },
