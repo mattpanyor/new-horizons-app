@@ -122,6 +122,16 @@ export async function PUT(
           );
           const target = targetRes.rows[0];
           if (!target) throw new MoveError("Target connection not in this sector", 404);
+          // A connection holds at most one marker (UNIQUE partial index +
+          // singular render model). Reject up front with a clean 409 rather
+          // than letting the INSERT hit the constraint as a raw 500.
+          const occupiedRes = await tx.query(
+            `SELECT 1 FROM markers WHERE connection_id = $1 LIMIT 1`,
+            [dstConn]
+          );
+          if (occupiedRes.rows.length > 0) {
+            throw new MoveError("Target connection already has a ship/fleet on it", 409);
+          }
           // Prefer the source body_id as the marker slug — avoids the
           // accumulating -<date-suffix>-<date-suffix> growth on round-trip
           // moves. Only append a disambiguation suffix if the slug is
@@ -215,6 +225,16 @@ export async function PUT(
           const target = targetRes.rows[0];
           if (!target) throw new MoveError("Target connection not in this sector", 404);
           if (target.id === marker.connection_id) throw new MoveError("Marker is already on this connection", 400);
+          // One marker per connection (UNIQUE partial index). The source is on
+          // a different connection (checked above), so any hit here is another
+          // marker already occupying the target — reject with a clean 409.
+          const occupiedRes = await tx.query(
+            `SELECT 1 FROM markers WHERE connection_id = $1 LIMIT 1`,
+            [dstConn]
+          );
+          if (occupiedRes.rows.length > 0) {
+            throw new MoveError("Target connection already has a ship/fleet on it", 409);
+          }
           await tx.query(
             `UPDATE markers
              SET connection_id = $1, position = 0.5,

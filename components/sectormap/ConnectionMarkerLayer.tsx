@@ -136,8 +136,12 @@ export function ConnectionMarkerLayer({
 
       {/* ── Connection marker info card — top layer ── */}
       {activeMarkerId !== null && !activeMarkerId.startsWith("free-") && (() => {
-        const connIdx = parseInt(activeMarkerId);
-        const conn = connections[connIdx];
+        // tooltipKey is `m<markerId>` for DB-backed markers or `c<connIdx>`
+        // for pending-create markers (see the producer above). parseInt on
+        // those prefixed keys yields NaN, so resolve the connection per scheme.
+        const conn = activeMarkerId.startsWith("m")
+          ? connections.find((c) => c.marker?.id === Number(activeMarkerId.slice(1)))
+          : connections[parseInt(activeMarkerId.slice(1))];
         const marker = conn?.marker;
         if (!conn || !marker) return null;
 

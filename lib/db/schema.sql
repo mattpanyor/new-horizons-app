@@ -197,4 +197,12 @@ CREATE TABLE IF NOT EXISTS markers (
   )
 );
 CREATE INDEX IF NOT EXISTS markers_sector_idx ON markers (sector_id);
-CREATE INDEX IF NOT EXISTS markers_connection_idx ON markers (connection_id);
+-- At most one marker per connection: the render model (ConnectionLine.marker)
+-- and the loader (markersByConnection) are singular, so a second marker on the
+-- same connection would be silently dropped on read. Enforce it at the DB so
+-- writes fail loudly instead. Partial index since free markers have NULL
+-- connection_id. Migration for an existing DB (dedupe first if needed):
+--   CREATE UNIQUE INDEX markers_connection_uniq ON markers (connection_id)
+--     WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
+  ON markers (connection_id) WHERE connection_id IS NOT NULL;

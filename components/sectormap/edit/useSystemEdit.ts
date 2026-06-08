@@ -227,7 +227,12 @@ export function useSystemEdit(): SystemEditApi {
         ...p.bodyCreates,
         {
           tempId,
-          id: "new-body",
+          // Unique default id per created body. A constant ("new-body") made
+          // every new body serialize to the same body_id slug on save —
+          // colliding on UNIQUE(system_id, body_id) and rolling back the whole
+          // transaction — and produced duplicate SVG gradient ids in preview.
+          // The user can still rename it via the Body ID field.
+          id: `new-body-${tempId.slice(-4)}`,
           name: "New Body",
           type: "planet",
           orbitPosition: 0,
