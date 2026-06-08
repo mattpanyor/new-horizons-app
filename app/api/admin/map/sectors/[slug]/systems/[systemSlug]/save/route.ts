@@ -17,7 +17,7 @@ import { getUserByUsername } from "@/lib/db/users";
 import { getSectorRowBySlug } from "@/lib/db/sectors";
 import { getSystemBySlug, updateSystem } from "@/lib/db/systems";
 import { upsertStar, deleteStarByRole } from "@/lib/db/stars";
-import { insertBody, updateBody, deleteBody } from "@/lib/db/bodies";
+import { getBodiesBySystem, insertBody, updateBody, deleteBody } from "@/lib/db/bodies";
 import { withTransaction } from "@/lib/db/tx";
 import {
   BODY_TYPES,
@@ -47,6 +47,16 @@ const isLabelPosition = (v: unknown): v is LabelPosition =>
   typeof v === "string" && (LABEL_POSITIONS as readonly string[]).includes(v);
 const isSpecialAttribute = (v: unknown): v is SpecialAttribute =>
   typeof v === "string" && (SPECIAL_ATTRIBUTE_KEYS as readonly string[]).includes(v);
+
+// Typed field pickers — mirror the sector-save route so a malformed client
+// can't push unexpected shapes (e.g. `{ x: { weird: 1 } }`) into a column.
+const str  = (v: unknown) => (typeof v === "string" ? v : undefined);
+const num  = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+const bool = (v: unknown) => (typeof v === "boolean" ? v : undefined);
+const nullable = <T>(v: unknown, pick: (x: unknown) => T | undefined): T | null | undefined => {
+  if (v === null) return null;
+  return pick(v);
+};
 
 const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 });
 
@@ -157,11 +167,38 @@ export async function PUT(
     }
   }
 
+  // ── Scope enforcement: every body update/delete id must belong to THIS
+  // system. deleteBody/updateBody key on a bare id (WHERE id = $1), so without
+  // this a superadmin saving system A could pass body ids from another system
+  // (incl. other sectors / imperial-core) and mutate them. ──
+  const ownBodies = await getBodiesBySystem(system.id);
+  const bodyIds = new Set(ownBodies.map((b) => b.id));
+  for (const id of payload.bodies?.delete ?? []) {
+    if (!bodyIds.has(id)) return bad(`body ${id} is not in system '${systemSlug}'`);
+  }
+  for (const u of payload.bodies?.update ?? []) {
+    if (!bodyIds.has(u.id)) return bad(`body ${u.id} is not in system '${systemSlug}'`);
+  }
+
   // ── Apply: system metadata, then stars, then bodies (deletes → updates → creates) ──
   try {
     await withTransaction(async (tx) => {
       if (payload.system) {
-        await updateSystem(system.id, payload.system as Parameters<typeof updateSystem>[1], tx);
+        // Build a validated field set rather than blind-casting the raw
+        // payload (centerKind already enum-checked above).
+        const s = payload.system;
+        await updateSystem(system.id, {
+          slug: str(s.slug),
+          name: str(s.name),
+          x: num(s.x),
+          y: num(s.y),
+          allegianceSlug: nullable(s.allegianceSlug, str),
+          territoryRadius: nullable(s.territoryRadius, num),
+          centerKind: s.centerKind as CenterKind | undefined,
+          binaryAngle: nullable(s.binaryAngle, num),
+          externalUrl: nullable(s.externalUrl, str),
+          published: bool(s.published),
+        }, tx);
       }
 
       if (payload.stars?.primary) {
@@ -199,7 +236,22 @@ export async function PUT(
       }
 
       for (const u of payload.bodies?.update ?? []) {
-        await updateBody(u.id, u as Parameters<typeof updateBody>[1], tx);
+        // Validated field set (type/labelPosition/specialAttribute enum-checked
+        // above) rather than a raw cast of the client object.
+        await updateBody(u.id, {
+          bodyId: str(u.bodyId),
+          name: str(u.name),
+          type: u.type as BodyType | undefined,
+          biomeSlug: nullable(u.biomeSlug, str),
+          lore: nullable(u.lore, str),
+          orbitPosition: num(u.orbitPosition),
+          orbitDistance: num(u.orbitDistance),
+          labelPosition: nullable(u.labelPosition, (v) => (isLabelPosition(v) ? v : undefined)),
+          specialAttribute: nullable(u.specialAttribute, (v) => (isSpecialAttribute(v) ? v : undefined)),
+          allegianceSlug: nullable(u.allegianceSlug, str),
+          externalUrl: nullable(u.externalUrl, str),
+          published: bool(u.published),
+        }, tx);
       }
 
       for (const c of payload.bodies?.create ?? []) {

@@ -15,21 +15,25 @@ import { revalidatePath } from "next/cache";
 import { getUserByUsername } from "@/lib/db/users";
 import { getSectorRowBySlug } from "@/lib/db/sectors";
 import {
+  getSystemsBySector,
   insertSystem,
   updateSystem,
   deleteSystem,
 } from "@/lib/db/systems";
 import {
+  getVortexesBySector,
   insertVortex,
   updateVortex,
   deleteVortex,
 } from "@/lib/db/vortexes";
 import {
+  getConnectionsBySector,
   insertConnection,
   updateConnection,
   deleteConnection,
 } from "@/lib/db/connections";
 import {
+  getMarkersBySector,
   insertMarker,
   updateMarker,
   deleteMarker,
@@ -193,6 +197,57 @@ export async function PUT(
       if (typeof c.x !== "number" || typeof c.y !== "number")
         return bad("free marker create requires x and y");
     }
+  }
+
+  // ── Scope enforcement: every update/delete id (and attached-marker
+  // connection reference) must belong to THIS sector. The DB update/delete
+  // helpers key on a bare id (WHERE id = $1) with no sector filter, so without
+  // this a superadmin editing sector A could pass ids from sector B — incl.
+  // read-only imperial-core — and mutate them. Pre-fetch the sector's own id
+  // sets and reject anything out of scope before opening the transaction.
+  const [ownSystems, ownVortexes, ownMarkers, ownConnections] = await Promise.all([
+    getSystemsBySector(sector.id),
+    getVortexesBySector(sector.id),
+    getMarkersBySector(sector.id),
+    getConnectionsBySector(sector.id),
+  ]);
+  const systemIds = new Set(ownSystems.map((r) => r.id));
+  const vortexIds = new Set(ownVortexes.map((r) => r.id));
+  const markerIds = new Set(ownMarkers.map((r) => r.id));
+  const connectionIds = new Set(ownConnections.map((r) => r.id));
+
+  const checkScope = (label: string, ids: number[], allowed: Set<number>): string | null => {
+    for (const id of ids) if (!allowed.has(id)) return `${label} ${id} is not in sector '${slug}'`;
+    return null;
+  };
+  const scopeError =
+    checkScope("system", [
+      ...(payload.systems?.delete ?? []),
+      ...(payload.systems?.update ?? []).map((u) => u.id),
+    ], systemIds) ??
+    checkScope("vortex", [
+      ...(payload.vortexes?.delete ?? []),
+      ...(payload.vortexes?.update ?? []).map((u) => u.id),
+    ], vortexIds) ??
+    checkScope("marker", [
+      ...(payload.markers?.delete ?? []),
+      ...(payload.markers?.update ?? []).map((u) => u.id),
+    ], markerIds) ??
+    checkScope("connection", [
+      ...(payload.connections?.delete ?? []),
+      ...(payload.connections?.update ?? []).map((u) => u.id),
+    ], connectionIds);
+  if (scopeError) return bad(scopeError);
+
+  // Attached markers (create + update) must reference a connection in THIS
+  // sector. null connectionId is a valid detach; undefined means no change.
+  for (const c of payload.markers?.create ?? []) {
+    if (typeof c.connectionId === "number" && !connectionIds.has(c.connectionId))
+      return bad(`marker create references connection ${c.connectionId} not in sector '${slug}'`);
+  }
+  for (const u of payload.markers?.update ?? []) {
+    if (typeof u.connectionId === "number" && !connectionIds.has(u.connectionId))
+      return bad(`marker update references connection ${u.connectionId} not in sector '${slug}'`);
   }
 
   // ── Apply: deletes → updates → creates, all inside one transaction ──

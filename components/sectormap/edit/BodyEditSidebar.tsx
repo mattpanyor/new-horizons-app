@@ -40,13 +40,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function BodyEditSidebar({ api, biomes }: Props) {
-  if (!api.active || !api.baseSystem) return null;
   const base = api.baseSystem;
   const p = api.pending;
 
+  // Hooks must run unconditionally — the early return lives below all of them
+  // (mirrors SystemEditSidebar). Putting the guard above useMemo changed the
+  // hook count between renders and crashed when baseSystem briefly went null.
   // Composite body list (base + creates − deletes), patched with pending changes.
   const bodies = useMemo(() => {
     const out: Array<CelestialBody & { _tempId?: string }> = [];
+    if (!base) return out;
     for (const b of base.bodies) {
       if (b.dbId !== undefined && p.bodyDeletes.has(b.dbId)) continue;
       const patch = b.dbId !== undefined ? p.bodyUpdates.get(b.dbId) ?? {} : {};
@@ -70,7 +73,9 @@ export function BodyEditSidebar({ api, biomes }: Props) {
       });
     }
     return out;
-  }, [base.bodies, p.bodyCreates, p.bodyUpdates, p.bodyDeletes]);
+  }, [base, p.bodyCreates, p.bodyUpdates, p.bodyDeletes]);
+
+  if (!api.active || !base) return null;
 
   const selectedBody = (() => {
     if (api.selection?.kind !== "body") return null;
