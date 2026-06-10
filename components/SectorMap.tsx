@@ -1,10 +1,23 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import type { SectorMetadata, SystemPin } from "@/types/sector";
+import type { SectorMetadata, SystemPin, MapMarker } from "@/types/sector";
 import type { StarSystemMetadata } from "@/types/starsystem";
 import { useSvgTooltipTimer } from "@/hooks/useSvgTooltipTimer";
 import { useSvgPanZoom } from "@/hooks/useSvgPanZoom";
+import { EditModeProvider, useEditMode } from "@/components/sectormap/edit/EditModeProvider";
+import { EditToggle } from "@/components/sectormap/edit/EditToggle";
+import { EditToolbar } from "@/components/sectormap/edit/EditToolbar";
+import { SidePanel } from "@/components/sectormap/edit/SidePanel";
+import { CreateEntityModal } from "@/components/sectormap/edit/CreateEntityModal";
+import { SystemEditSidebar } from "@/components/sectormap/edit/SystemEditSidebar";
+import { BodyEditSidebar } from "@/components/sectormap/edit/BodyEditSidebar";
+import { useSystemEdit } from "@/components/sectormap/edit/useSystemEdit";
+import { useDragPin } from "@/components/sectormap/edit/useDragPin";
+import { useDragBody } from "@/components/sectormap/edit/useDragBody";
+import type { EntityKind } from "@/components/sectormap/edit/types";
+import type { Biome } from "@/lib/db/biomes";
+import type { CelestialBody } from "@/types/starsystem";
 import {
   FULL_W, FULL_H,
   SECTOR_TERRITORY, TERRITORY_INNER_R, TERRITORY_OUTER_R,
@@ -37,6 +50,8 @@ interface SectorMapProps {
   systemsData?: Record<string, StarSystemMetadata>;
   children?: React.ReactNode;
   staticSvgLayers: React.ReactNode;
+  userAccessLevel?: number;
+  biomes?: Biome[];
 }
 
 function computeContentViewBox(sector: SectorMetadata): { x: number; y: number; w: number; h: number } {
@@ -95,8 +110,138 @@ function computeContentViewBox(sector: SectorMetadata): { x: number; y: number; 
   return { x: cxContent - finalW / 2, y: cyContent - finalH / 2, w: finalW, h: finalH };
 }
 
-export default function SectorMap({ sector, systemsData = {}, children, staticSvgLayers }: SectorMapProps) {
-  const initialViewBox = useMemo(() => computeContentViewBox(sector), [sector]);
+// Outer wrapper: mounts the EditModeProvider with the BASE sector + user access
+// level. SectorMapInner reads the projected (effective) sector from the
+// provider when in edit mode.
+export default function SectorMap(props: SectorMapProps) {
+  return (
+    <EditModeProvider sector={props.sector} userAccessLevel={props.userAccessLevel ?? 0}>
+      <SectorMapInner {...props} />
+    </EditModeProvider>
+  );
+}
+
+function SectorMapInner({ sector: propsSector, systemsData = {}, children, staticSvgLayers, biomes = [] }: SectorMapProps) {
+  const edit = useEditMode();
+  // While the GM has edit mode on, the canvas renders the locally-projected
+  // sector (base + pending changes). View mode passes through the base prop.
+  const sector = edit.mode === "sector-edit" ? edit.effectiveSector : propsSector;
+
+  // Context menu state for right-click → create entity flow
+  const [contextMenu, setContextMenu] = useState<{ screenX: number; screenY: number; svgX: number; svgY: number } | null>(null);
+  const [createModal, setCreateModal] = useState<{ kind: "system" | "vortex" | "marker"; x: number; y: number } | null>(null);
+
+  // System-edit session — opened by the "Edit System" button when zoomed in.
+  // The hook owns the pending state, save flow, and selection.
+  const systemEdit = useSystemEdit();
+  const dragBody = useDragBody();
+
+  // Keep useSystemEdit's captured baseSystem in sync with the freshest
+  // systemsData prop. Critical after a save: router.refresh() pulls new DB
+  // values, but the hook's local snapshot was frozen at enter() time, so
+  // forms would otherwise revert to pre-save values when `pending` clears.
+  //
+  // Destructure stable primitives instead of depending on the whole
+  // `systemEdit` object (which is recreated every render and would fire
+  // this effect on every render).
+  const { active: systemEditActive, systemSlug: systemEditSlug, baseSystem: systemEditBase, syncBase } = systemEdit;
+  useEffect(() => {
+    if (!systemEditActive || !systemEditSlug) return;
+    const fresh = systemsData[systemEditSlug];
+    if (fresh && fresh !== systemEditBase) {
+      syncBase(fresh);
+    }
+  }, [systemsData, systemEditActive, systemEditSlug, systemEditBase, syncBase]);
+
+  // When system-edit is active for the focused system, project pending changes
+  // (system metadata, star fields, body updates/creates/deletes, plus live
+  // orbit-drag preview) onto the rendered StarSystemMetadata.
+  const composeEditedSystem = useCallback(
+    (base: StarSystemMetadata): StarSystemMetadata => {
+      if (!systemEdit.active || systemEdit.systemSlug !== base.slug) return base;
+      const p = systemEdit.pending;
+      const star = { ...base.star, ...p.primary, type: p.primary.fantasyLabel ?? base.star.type };
+      let secondaryStar = base.secondaryStar;
+      if (p.secondary === null) secondaryStar = undefined;
+      else if (p.secondary !== undefined) secondaryStar = { ...(base.secondaryStar ?? { name: "", type: "", color: "" }), ...p.secondary, type: p.secondary.fantasyLabel ?? (base.secondaryStar?.type ?? "") };
+      // Compose body list
+      const bodies: CelestialBody[] = [];
+      for (const b of base.bodies) {
+        if (b.dbId !== undefined && p.bodyDeletes.has(b.dbId)) continue;
+        const patch = b.dbId !== undefined ? p.bodyUpdates.get(b.dbId) ?? {} : {};
+        const merged = { ...b, ...patch };
+        // Apply live drag preview
+        if (dragBody.drag && dragBody.drag.bodyDbId !== undefined && dragBody.drag.bodyDbId === b.dbId) {
+          merged.orbitPosition = Math.round(dragBody.drag.orbitPosition);
+        }
+        bodies.push(merged);
+      }
+      for (const c of p.bodyCreates) {
+        const live = (dragBody.drag && dragBody.drag.bodyTempId === c.tempId)
+          ? { orbitPosition: Math.round(dragBody.drag.orbitPosition) } : {};
+        bodies.push({
+          id: c.id ?? "new-body",
+          name: c.name ?? "New Body",
+          type: c.type ?? "planet",
+          orbitPosition: c.orbitPosition ?? 0,
+          orbitDistance: c.orbitDistance ?? 0.5,
+          biome: c.biome,
+          lore: c.lore,
+          labelPosition: c.labelPosition,
+          special_attribute: c.special_attribute,
+          allegiance: c.allegiance,
+          externalUrl: c.externalUrl,
+          published: c.published,
+          ...live,
+          // Stash tempId on the body for downstream identification (cast — not in type)
+          ...({ _tempId: c.tempId } as Record<string, string>),
+        });
+      }
+      return {
+        ...base,
+        name: p.system.name ?? base.name,
+        externalUrl: p.system.externalUrl ?? base.externalUrl,
+        published: p.system.published ?? base.published,
+        centerKind: p.system.centerKind ?? base.centerKind,
+        binaryAngle: p.system.binaryAngle !== undefined ? (p.system.binaryAngle ?? undefined) : base.binaryAngle,
+        star,
+        secondaryStar,
+        bodies,
+      };
+    },
+    [systemEdit.active, systemEdit.systemSlug, systemEdit.pending, dragBody.drag]
+  );
+
+  // Body drag commit: fires on mouseup. Updates pending state on the dragged body.
+  const onBodyDragCommit = useCallback(
+    (ref: { dbId?: number; tempId?: string }, orbitPosition: number) => {
+      systemEdit.patchBody(ref, { orbitPosition });
+    },
+    [systemEdit]
+  );
+
+  // Drag state for sector-edit reposition flow. The dragged entity's
+  // rendered position is overridden from `dragPin.drag` until mouseup commits.
+  const dragPin = useDragPin();
+  const onDragCommit = useCallback(
+    (kind: EntityKind, ref: { id?: number; tempId?: string }, x: number, y: number) => {
+      edit.updateField(kind, ref, { x: Math.round(x), y: Math.round(y) });
+    },
+    [edit]
+  );
+  const overridePosition = (kind: EntityKind, id: number | undefined) => {
+    const d = dragPin.drag;
+    if (!d) return null;
+    if (d.kind !== kind) return null;
+    if (id !== undefined && d.id !== id) return null;
+    return { x: d.x, y: d.y };
+  };
+
+  // The viewport bounds are a function of the sector's territory geometry,
+  // not the live editor positions. Memoize on the base prop so the camera
+  // doesn't snap back to bounds every time `pending` updates the projected
+  // sector.
+  const initialViewBox = useMemo(() => computeContentViewBox(propsSector), [propsSector]);
 
   const {
     containerRef, svgRef, vb, zoom, cursorGrab, didDragRef,
@@ -120,15 +265,15 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
   const isDev = process.env.NODE_ENV === "development";
   const [activeLayer, setActiveLayer] = useState("None");
 
-  // Auto-detect which layers exist in this sector's content
+  // Auto-detect which layers exist in this sector's content. Compare by
+  // slug value (what's stored on data) — MAP_LAYERS keys now match those
+  // values 1:1, so this is straightforward.
   const sectorLayers = useMemo(() => {
-    const usedSlugs = new Set<LayerSlug>();
+    const usedSlugs = new Set<string>();
     for (const c of sector.connections ?? []) if (c.layer) usedSlugs.add(c.layer);
     for (const m of sector.markers ?? []) if (m.layer) usedSlugs.add(m.layer);
     for (const v of sector.vortexes ?? []) if (v.layer) usedSlugs.add(v.layer);
-    return (Object.keys(MAP_LAYERS) as LayerSlug[])
-      .filter(slug => usedSlugs.has(slug))
-      .map(slug => MAP_LAYERS[slug]);
+    return Object.values(MAP_LAYERS).filter((layer) => usedSlugs.has(layer.slug));
   }, [sector.connections, sector.markers, sector.vortexes]);
 
   // Filter layered elements — items without a layer always show, items with a layer only show when selected
@@ -251,11 +396,64 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
   }, [hideBody, animateToVb]);
 
   const exitSystem = useCallback(() => {
+    // If the GM has an unsaved system-edit session for this system, prompt
+    // before navigating away (systemEdit.exit returns false on cancel).
+    if (systemEdit.active && !systemEdit.exit()) return;
     setActiveSystemSlug(null);
     setHoveredSlug(systemUnderCursor());
     hideBody();
     animateToVb(initialViewBox, 500);
-  }, [hideBody, animateToVb, initialViewBox, systemUnderCursor]);
+  }, [hideBody, animateToVb, initialViewBox, systemUnderCursor, systemEdit]);
+
+  // In edit mode, clicking a system selects it for editing rather than zooming.
+  // For vortex / marker selection, click handlers live in their layer components
+  // (or — fallback — the GM uses the Connections panel to navigate refs).
+  const onSystemPick = useCallback(
+    (pin: SystemPin) => {
+      if (edit.mode === "sector-edit") {
+        const tempId = (pin as SystemPin & { tempId?: string }).tempId;
+        edit.select("system", pin.id ?? null, tempId ?? null);
+      } else {
+        focusSystem(pin);
+      }
+    },
+    [edit, focusSystem]
+  );
+
+  // Right-click on the SVG opens a "Create here" context menu (edit mode only).
+  const onSvgContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (edit.mode !== "sector-edit") return;
+      e.preventDefault();
+      const svg = svgRef.current;
+      if (!svg) return;
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return;
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgPt = pt.matrixTransform(ctm.inverse());
+      setContextMenu({ screenX: e.clientX, screenY: e.clientY, svgX: svgPt.x, svgY: svgPt.y });
+    },
+    [edit.mode, svgRef]
+  );
+
+  // Click-to-select for vortexes / free markers in edit mode. Bound onto each
+  // entity's <g> through inline onClick handlers in the JSX below.
+  const onVortexPick = useCallback(
+    (v: VortexPin) => {
+      if (edit.mode !== "sector-edit" || v.id === undefined) return;
+      edit.select("vortex", v.id);
+    },
+    [edit]
+  );
+  const onMarkerPick = useCallback(
+    (m: MapMarker) => {
+      if (edit.mode !== "sector-edit" || m.id === undefined) return;
+      edit.select("marker", m.id);
+    },
+    [edit]
+  );
 
   const focusBodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -396,6 +594,7 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
           style={{ userSelect: "none" }}
           onClick={handleSvgClick}
           onMouseMove={handleSvgMouseMove}
+          onContextMenu={onSvgContextMenu}
         >
           {/* ── Static SVG layers (server-rendered: gradients, territories) ── */}
           {staticSvgLayers}
@@ -408,6 +607,14 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
             markers={filteredMarkers}
             sectorColor={sector.color}
             orbitDataMap={orbitDataMap}
+            isEditing={edit.mode === "sector-edit"}
+            onPick={(c) => {
+              const tempId = (c as { tempId?: string }).tempId;
+              if (c.id !== undefined) edit.select("connection", c.id);
+              else if (tempId !== undefined) edit.select("connection", null, tempId);
+            }}
+            selectedConnectionId={edit.selection?.kind === "connection" ? edit.selection.id : null}
+            selectedConnectionTempId={edit.selection?.kind === "connection" ? edit.selection.tempId : null}
           />
 
           {/* ── Vortex shapes ── */}
@@ -416,12 +623,24 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
             const r = v.radius ?? 80;
             const [rw, rh] = v.ratio ?? [1, 1];
             const ry = r * (rh / Math.max(rw, rh));
+            const editable = edit.mode === "sector-edit";
+            const isSelected = editable && edit.selection?.kind === "vortex" && edit.selection.id === v.id;
+            const override = overridePosition("vortex", v.id);
+            const vx = override?.x ?? v.x;
+            const vy = override?.y ?? v.y;
             return (
-              <g key={v.slug} style={{ pointerEvents: "none" }}>
-                <path d={wavyCloudPath(v.x, v.y, r, { ratio: v.ratio })}
-                  fill={color} fillOpacity={0.12}
-                  stroke={color} strokeOpacity={0.35} strokeWidth={1.5} />
-                <text x={v.x} y={v.y + ry + 18} textAnchor="middle"
+              <g
+                key={v.slug}
+                style={{ pointerEvents: editable ? "auto" : "none", cursor: editable ? "move" : "default" }}
+                onClick={editable ? () => onVortexPick(v) : undefined}
+                onMouseDown={editable && v.id !== undefined
+                  ? (e) => dragPin.startDrag({ event: e, svg: svgRef.current, kind: "vortex", id: v.id, currentX: v.x, currentY: v.y, onCommit: onDragCommit })
+                  : undefined}
+              >
+                <path d={wavyCloudPath(vx, vy, r, { ratio: v.ratio })}
+                  fill={color} fillOpacity={isSelected ? 0.25 : 0.12}
+                  stroke={color} strokeOpacity={isSelected ? 0.8 : 0.35} strokeWidth={isSelected ? 2.5 : 1.5} />
+                <text x={vx} y={vy + ry + 18} textAnchor="middle"
                   fill={color} fillOpacity={0.75} fontSize="11"
                   fontFamily="var(--font-cinzel), serif">
                   {v.name}
@@ -432,26 +651,66 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
 
           {/* ── Star systems ── */}
           {sector.systems.map((pin) => {
-            const sys = systemsData[pin.slug];
+            const baseSys = systemsData[pin.slug];
             const isActive = activeSystemSlug === pin.slug;
+            const editable = edit.mode === "sector-edit";
+            const override = overridePosition("system", pin.id);
+            const effectivePin = override
+              ? ({ ...pin, x: override.x, y: override.y } as SystemPin)
+              : pin;
+            // Apply system-edit pending changes to the rendered system
+            const isThisEditing = systemEdit.active && systemEdit.systemSlug === pin.slug;
+            const sys = baseSys && isThisEditing ? composeEditedSystem(baseSys) : baseSys;
             return (
-              <StarSystemView
+              <g
                 key={pin.slug}
-                pin={pin}
-                sys={sys}
-                sectorSlug={sector.slug}
-                sectorColor={sector.color}
-                isActive={isActive}
-                isDimmed={activeSystemSlug !== null && !isActive}
-                noActiveSystem={activeSystemSlug === null}
-                isHovered={!planning.active && hoveredSlug === pin.slug}
-                orbitData={orbitDataMap.get(pin.slug) ?? { orbitDistances: [], maxOrbit: 40 }}
-                vb={isActive ? vb : undefined}
-                activeBodyId={!planning.active && activeBodySystemSlug === pin.slug ? activeBodyId : null}
-                tooltipActions={bodyTooltipActions}
-                onFocusSystem={planning.active ? noop : focusSystem}
-                onHoverSystem={planning.active ? noopStr : setHoveredSlug}
-              />
+                style={editable ? { cursor: "move" } : undefined}
+                onMouseDown={editable && pin.id !== undefined
+                  ? (e) => dragPin.startDrag({ event: e, svg: svgRef.current, kind: "system", id: pin.id, currentX: pin.x, currentY: pin.y, onCommit: onDragCommit })
+                  : undefined}
+              >
+                <StarSystemView
+                  pin={effectivePin}
+                  sys={sys}
+                  sectorSlug={sector.slug}
+                  sectorColor={sector.color}
+                  isActive={isActive}
+                  isDimmed={activeSystemSlug !== null && !isActive}
+                  noActiveSystem={activeSystemSlug === null}
+                  isHovered={!planning.active && hoveredSlug === pin.slug}
+                  orbitData={orbitDataMap.get(pin.slug) ?? { orbitDistances: [], maxOrbit: 40 }}
+                  vb={isActive ? vb : undefined}
+                  activeBodyId={!planning.active && activeBodySystemSlug === pin.slug ? activeBodyId : null}
+                  tooltipActions={bodyTooltipActions}
+                  onFocusSystem={planning.active ? noop : onSystemPick}
+                  onHoverSystem={planning.active ? noopStr : setHoveredSlug}
+                  isSystemEditing={isThisEditing}
+                  onBodyPick={(ref) =>
+                    systemEdit.select({ kind: "body", bodyDbId: ref.dbId, bodyTempId: ref.tempId })
+                  }
+                  onBodyDragStart={(e, ref) =>
+                    dragBody.start({
+                      event: e,
+                      svg: svgRef.current,
+                      bodyDbId: ref.dbId,
+                      bodyTempId: ref.tempId,
+                      systemCenterX: pin.x,
+                      systemCenterY: pin.y,
+                      onCommit: onBodyDragCommit,
+                    })
+                  }
+                  selectedBodyDbId={
+                    isThisEditing && systemEdit.selection?.kind === "body"
+                      ? systemEdit.selection.bodyDbId ?? null
+                      : null
+                  }
+                  selectedBodyTempId={
+                    isThisEditing && systemEdit.selection?.kind === "body"
+                      ? systemEdit.selection.bodyTempId ?? null
+                      : null
+                  }
+                />
+              </g>
             );
           })}
 
@@ -469,21 +728,44 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
             markerCardEnter={markerCardEnter}
             markerCardLeave={markerCardLeave}
             vb={vb}
+            isEditing={edit.mode === "sector-edit"}
+            editPick={edit.mode === "sector-edit" ? onMarkerPick : undefined}
+            selectedMarkerId={edit.selection?.kind === "marker" ? edit.selection.id : null}
           />
 
           {/* ── Free-floating markers ── */}
-          {filteredMarkers.length > 0 && (
-            <FreeMarkerLayer
-              markers={filteredMarkers}
-              sectorSlug={sector.slug}
-              activeMarkerId={activeMarkerId}
-              showMarker={showMarker}
-              scheduleHideMarker={scheduleHideMarker}
-              markerCardEnter={markerCardEnter}
-              markerCardLeave={markerCardLeave}
-              vb={vb}
-            />
-          )}
+          {filteredMarkers.length > 0 && (() => {
+            // Override the dragged marker's position so the live drag shows
+            // it under the cursor without committing yet.
+            const editing = edit.mode === "sector-edit";
+            const renderedMarkers = (editing && dragPin.drag?.kind === "marker")
+              ? filteredMarkers.map((m) =>
+                  m.id === dragPin.drag!.id ? { ...m, x: dragPin.drag!.x, y: dragPin.drag!.y } : m
+                )
+              : filteredMarkers;
+            return (
+              <FreeMarkerLayer
+                markers={renderedMarkers}
+                sectorSlug={sector.slug}
+                activeMarkerId={activeMarkerId}
+                showMarker={showMarker}
+                scheduleHideMarker={scheduleHideMarker}
+                markerCardEnter={markerCardEnter}
+                markerCardLeave={markerCardLeave}
+                vb={vb}
+                isEditing={editing}
+                editPick={editing ? onMarkerPick : undefined}
+                editDragStart={editing ? (e, m) => {
+                  if (m.id === undefined) return;
+                  dragPin.startDrag({
+                    event: e, svg: svgRef.current, kind: "marker", id: m.id,
+                    currentX: m.x ?? 0, currentY: m.y ?? 0, onCommit: onDragCommit,
+                  });
+                } : undefined}
+                selectedMarkerId={edit.selection?.kind === "marker" ? edit.selection.id : null}
+              />
+            );
+          })()}
 
           {/* ── Planning mode overlay ── */}
           {planning.active && (
@@ -545,23 +827,38 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
         {oobTooltipPos ? "Outside sector bounds" : ""}
       </div>
 
-      {/* ── Layer selector ── */}
+      {/* ── Layer selector ── (shifted down in edit mode so it doesn't overlap EditToolbar) */}
       {sectorLayers.length > 0 && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+        <div className={`absolute left-1/2 -translate-x-1/2 z-10 ${edit.mode === "sector-edit" ? "top-16" : "top-3"}`}>
           <LayerSelector layers={sectorLayers} selected={activeLayer} onChange={setActiveLayer} />
         </div>
       )}
 
       {/* ── Controls ── */}
       {activeSystemSlug && (
-        <button
-          onClick={exitSystem}
-          className="absolute top-3 left-3 z-10 flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-1.5 md:py-2.5 rounded scifi-card text-xs md:text-xl text-slate-300 hover:text-white transition-colors"
-          style={{ fontFamily: "var(--font-cinzel), serif" }}
-        >
-          <span>&#x2190;</span>
-          <span>Sector</span>
-        </button>
+        <>
+          <button
+            onClick={exitSystem}
+            className="absolute top-3 left-3 z-10 flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-1.5 md:py-2.5 rounded scifi-card text-xs md:text-xl text-slate-300 hover:text-white transition-colors"
+            style={{ fontFamily: "var(--font-cinzel), serif" }}
+          >
+            <span>&#x2190;</span>
+            <span>Sector</span>
+          </button>
+          {/* Edit System button — only for superadmins in view mode, and only
+              when the focused system is editable (Imperial Core is bespoke). */}
+          {edit.canEdit && edit.mode === "view"
+            && propsSector.slug !== "imperial-core"
+            && systemsData[activeSystemSlug] && !systemEdit.active && (
+            <button
+              onClick={() => systemEdit.enter(propsSector.slug, systemsData[activeSystemSlug])}
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded scifi-card text-xs text-amber-200 border border-amber-500/40 hover:bg-amber-500/15 transition-colors"
+              style={{ fontFamily: "var(--font-cinzel), serif" }}
+            >
+              Edit System
+            </button>
+          )}
+        </>
       )}
 
       <div className="absolute top-3 right-3 z-20">
@@ -593,6 +890,69 @@ export default function SectorMap({ sector, systemsData = {}, children, staticSv
         {zoom.toFixed(1)}x
         {isDev && <span ref={devCoordsRef} className="ml-2 text-amber-400/70" />}
       </div>
+
+      {/* ── Edit-mode toggle (top-left, superadmin only) ── */}
+      {!activeSystemSlug && (
+        <div className="absolute top-3 left-3 z-20">
+          <EditToggle />
+        </div>
+      )}
+
+      {/* ── Edit-mode top-center toolbar ── */}
+      {edit.mode === "sector-edit" && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
+          <EditToolbar />
+        </div>
+      )}
+
+      {/* ── Right-rail side panel (edit mode only) ── */}
+      <SidePanel />
+
+      {/* ── Right-click context menu ── */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div
+            className="fixed z-40 scifi-card rounded text-xs overflow-hidden"
+            style={{
+              left: contextMenu.screenX,
+              top: contextMenu.screenY,
+              fontFamily: "var(--font-cinzel), serif",
+            }}
+          >
+            {(["system", "vortex", "marker"] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => {
+                  setCreateModal({ kind: k, x: contextMenu.svgX, y: contextMenu.svgY });
+                  setContextMenu(null);
+                }}
+                className="block w-full text-left px-3 py-2 text-slate-200 hover:bg-amber-500/20 hover:text-amber-100 capitalize"
+              >
+                Create {k}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Create-entity modal ── */}
+      {createModal && (
+        <CreateEntityModal
+          kind={createModal.kind}
+          x={createModal.x}
+          y={createModal.y}
+          onClose={() => setCreateModal(null)}
+        />
+      )}
+
+      {/* ── System-edit sidebars — right rail for system/center/stars, left rail for bodies ── */}
+      {systemEdit.active && (
+        <>
+          <SystemEditSidebar api={systemEdit} />
+          <BodyEditSidebar api={systemEdit} biomes={biomes} />
+        </>
+      )}
     </div>
   );
 }

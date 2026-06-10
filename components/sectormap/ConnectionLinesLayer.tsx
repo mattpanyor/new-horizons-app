@@ -1,5 +1,7 @@
-// Server Component — static connection line paths + labels between systems/vortexes.
-// No "use client" directive. Interactive markers stay in ConnectionMarkerLayer (client).
+"use client";
+
+// Client component since edit mode needs click handlers on each connection
+// path. Interactive markers stay in ConnectionMarkerLayer.
 
 import type { ConnectionLine, SystemPin, VortexPin, MapMarker } from "@/types/sector";
 import {
@@ -19,10 +21,17 @@ interface ConnectionLinesLayerProps {
   markers: MapMarker[];
   sectorColor: string;
   orbitDataMap: Map<string, { maxOrbit: number }>;
+  // Edit-mode passthroughs: when isEditing, each path gets a fat invisible
+  // hit-target overlay; selectedConnectionId draws the line accentuated.
+  isEditing?: boolean;
+  onPick?: (c: ConnectionLine) => void;
+  selectedConnectionId?: number | null;
+  selectedConnectionTempId?: string | null;
 }
 
 export function ConnectionLinesLayer({
   connections, systems, vortexes, markers, sectorColor, orbitDataMap,
+  isEditing, onPick, selectedConnectionId, selectedConnectionTempId,
 }: ConnectionLinesLayerProps) {
   return (
     <>
@@ -57,23 +66,40 @@ export function ConnectionLinesLayer({
           : `M ${op2.x.toFixed(1)} ${op2.y.toFixed(1)} Q ${op1.x.toFixed(1)} ${op1.y.toFixed(1)} ${op0.x.toFixed(1)} ${op0.y.toFixed(1)}`;
         const labelPathId = `conn-label-${connIdx}`;
 
+        const tempId = (conn as ConnectionLine & { tempId?: string }).tempId;
+        const isSelected = isEditing && (
+          (conn.id !== undefined && selectedConnectionId === conn.id) ||
+          (tempId !== undefined && selectedConnectionTempId === tempId)
+        );
         return (
-          <g key={`conn-${connIdx}`} style={{ pointerEvents: "none" }}>
+          <g key={`conn-${connIdx}`} style={{ pointerEvents: isEditing ? "auto" : "none" }}>
             {conn.label && (
               <defs>
                 <path id={labelPathId} d={labelPathD} />
               </defs>
             )}
+            {/* Visible line */}
             <path
               d={pathD} fill="none"
-              stroke={color} strokeOpacity={opacity}
-              strokeWidth={0.8} strokeDasharray={dashes} strokeLinecap="round"
+              stroke={color} strokeOpacity={isSelected ? 1 : opacity}
+              strokeWidth={isSelected ? 2 : 0.8} strokeDasharray={dashes} strokeLinecap="round"
+              style={isSelected ? { filter: `drop-shadow(0 0 4px ${color})` } : undefined}
             />
+            {/* Fat invisible hit target — only in edit mode, so view-mode panning isn't disrupted */}
+            {isEditing && onPick && (
+              <path
+                d={pathD} fill="none"
+                stroke="transparent" strokeWidth={14}
+                style={{ cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); onPick(conn); }}
+              />
+            )}
             {conn.label && (
               <text
                 fill={color} fillOpacity={Math.min(opacity + 0.25, 1)}
                 fontSize="11" fontFamily="var(--font-cinzel), serif"
-                textAnchor="middle">
+                textAnchor="middle"
+                style={{ pointerEvents: "none" }}>
                 <textPath href={`#${labelPathId}`} startOffset="50%">
                   {conn.label}
                 </textPath>

@@ -12,27 +12,44 @@ interface BodyShapeProps {
   pinSlug: string;
   sectorSlug: string;
   bodyColor: string;
+  /** Inner-to-outer falloff color for the gradient. If omitted, falls back to bodyColor. */
+  bodySecondaryColor?: string;
   isBodyActive: boolean;
   isActive: boolean;
 }
 
 export function BodyShape({
   bodyId, bodyType, posX, posY, pinSlug, sectorSlug,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  bodyColor, isBodyActive, isActive,
+  bodyColor, bodySecondaryColor, isBodyActive, isActive,
 }: BodyShapeProps) {
-  const fillId = `url(#body-${pinSlug}-${bodyId})`;
+  // The body's radial-fill gradient is emitted here (client-side) so it
+  // reflects the live body data — system-edit type/biome changes flow
+  // through immediately. Previously the gradient was server-rendered in
+  // SectorMapSvgLayer using initial colors; client edits couldn't override
+  // the stale defs.
+  const gradId = `body-${pinSlug}-${bodyId}`;
+  const fillId = `url(#${gradId})`;
+  const innerColor = bodyColor;
+  const outerColor = bodySecondaryColor ?? bodyColor;
   const activeStroke = isBodyActive ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.2)";
   const glowStyle = isBodyActive ? { filter: `drop-shadow(0 0 8px ${bodyColor})` } : undefined;
 
-  const labelR =
-    bodyType === "fleet" ? 22 :
-      bodyType === "asteroid-field" ? 32 :
-        bodyType === "station" ? 10 : 12;
+  // Reuses the exported bodyLabelR (defined below) instead of duplicating
+  // the per-type constants. Kept this way historically; consolidating here.
+  const labelR = bodyLabelR(bodyType);
   const highlightR = labelR + 6;
 
   return (
     <>
+      {/* Live body gradient — defined here (not in SectorMapSvgLayer) so it
+          tracks system-edit type/biome changes without a server re-render. */}
+      <defs>
+        <radialGradient id={gradId}>
+          <stop offset="0%" stopColor={innerColor} stopOpacity="1" />
+          <stop offset="70%" stopColor={outerColor} stopOpacity="0.9" />
+          <stop offset="100%" stopColor={outerColor} stopOpacity="0.7" />
+        </radialGradient>
+      </defs>
       {/* Pulsing highlight ring for active body */}
       {isBodyActive && (
         <circle cx={posX} cy={posY} r={highlightR}
