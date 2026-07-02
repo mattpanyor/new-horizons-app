@@ -19,6 +19,7 @@ const adminPages: { label: string; href: string; minLevel?: number }[] = [
   { label: "Messages", href: "/admin/messages" },
   { label: "Games", href: "/admin/games" },
   { label: "Investigation", href: "/admin/investigation", minLevel: 127 },
+  { label: "Storybook", href: "/admin/story", minLevel: 127 },
   { label: "CDN Manager", href: "/admin/cdn" },
   { label: "Kanka Sync", href: "/admin/kanka" },
 ];
