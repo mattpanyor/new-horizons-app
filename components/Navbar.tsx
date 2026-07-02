@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { InboxDropdown } from "@/components/inbox/InboxDropdown";
+import { HexAvatar } from "@/components/HexAvatar";
+import { DossierModal } from "@/components/profile/DossierModal";
 
 interface Props {
   username: string;
@@ -9,6 +11,9 @@ interface Props {
   role?: string;
   group: string;
   accessLevel?: number;
+  imageUrl?: string;
+  color?: string;
+  userId?: number;
 }
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
@@ -23,10 +28,11 @@ const adminPages: { label: string; href: string; minLevel?: number }[] = [
   { label: "Kanka Sync", href: "/admin/kanka" },
 ];
 
-export default function Navbar({ username, character, role, group, accessLevel = 0 }: Props) {
+export default function Navbar({ username, character, role, group, accessLevel = 0, imageUrl, color, userId }: Props) {
   const displayName = character ?? username;
   const showAdmin = accessLevel >= 66;
   const [adminOpen, setAdminOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -132,7 +138,30 @@ export default function Navbar({ username, character, role, group, accessLevel =
             )}
           </div>
         )}
+
+        {/* Profile / dossier avatar */}
+        <button
+          onClick={() => setProfileOpen(true)}
+          aria-label="Open dossier"
+          aria-haspopup="dialog"
+          className="group shrink-0 w-9 h-9 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60 rounded"
+        >
+          <HexAvatar
+            imageUrl={imageUrl ?? null}
+            letter={displayName[0] ?? "?"}
+            interactive
+            maxWidth={36}
+            letterClassName="text-xs"
+          />
+        </button>
       </div>
+
+      {profileOpen && userId != null && (
+        <DossierModal
+          user={{ id: userId, username, character, role, group, accessLevel, imageUrl, color }}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
 
     </header>
   );
