@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { StoryPage } from "@/types/story";
 import { toRoman } from "@/lib/story";
+import { parseClueText } from "@/lib/investigation/clueText";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 const serif = { fontFamily: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif" };
@@ -91,31 +92,53 @@ const paraStyle = {
   marginBottom: "0.7em",
 } as const;
 
+const dropCapStyle = {
+  ...cinzel,
+  color: "#7a5c26",
+  fontSize: "3.4em",
+  lineHeight: 0.72,
+  paddingRight: "0.08em",
+  marginTop: "0.04em",
+  textShadow: "0 1px 1px rgba(0,0,0,0.25)",
+} as const;
+
+// A Kanka @mention rendered as a link to the campaign, styled for parchment.
+function MentionLink({ name, url }: { name: string; url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="text-amber-800 hover:text-amber-900 underline decoration-dotted underline-offset-2 decoration-amber-700/50"
+    >
+      {name}
+    </a>
+  );
+}
+
 const Paragraph = forwardRef<HTMLParagraphElement, { text: string; dropCap: boolean }>(
   function Paragraph({ text, dropCap }, ref) {
+    const tokens = parseClueText(text);
     return (
       <p ref={ref} className="text-justify" style={paraStyle}>
-        {dropCap && text.length > 0 ? (
-          <>
-            <span
-              className="float-left"
-              style={{
-                ...cinzel,
-                color: "#7a5c26",
-                fontSize: "3.4em",
-                lineHeight: 0.72,
-                paddingRight: "0.08em",
-                marginTop: "0.04em",
-                textShadow: "0 1px 1px rgba(0,0,0,0.25)",
-              }}
-            >
-              {text.charAt(0)}
-            </span>
-            {text.slice(1)}
-          </>
-        ) : (
-          text
-        )}
+        {tokens.map((tok, i) => {
+          if (tok.kind === "mention") {
+            return <MentionLink key={i} name={tok.name} url={tok.url} />;
+          }
+          // Drop cap on the first character of a section's opening paragraph.
+          if (dropCap && i === 0 && tok.value.length > 0) {
+            return (
+              <span key={i}>
+                <span className="float-left" style={dropCapStyle}>
+                  {tok.value.charAt(0)}
+                </span>
+                {tok.value.slice(1)}
+              </span>
+            );
+          }
+          return <span key={i}>{tok.value}</span>;
+        })}
       </p>
     );
   }

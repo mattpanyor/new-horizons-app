@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Chapter } from "@/types/investigation";
 import type { StoryEntry } from "@/types/story";
 import ChapterDropdown, { toRoman } from "@/components/investigation/ChapterDropdown";
 import { PAGE_BREAK, imageToken } from "@/lib/story";
 import StoryImagePicker from "@/components/admin/StoryImagePicker";
+import MentionPicker, { type MentionEntity } from "@/components/investigation/MentionPicker";
+import {
+  detectMention,
+  buildMentionMarkup,
+  type MentionState,
+} from "@/lib/investigation/clueText";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -51,7 +57,48 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [mention, setMention] = useState<MentionState | null>(null);
+  const [entities, setEntities] = useState<MentionEntity[]>([]);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // Kanka entities for @mentions (same source as the investigation board).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/investigation/mentions")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((data) => {
+        if (!cancelled) setEntities(data.entities ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function refreshMention() {
+    const ta = bodyRef.current;
+    if (!ta) {
+      setMention(null);
+      return;
+    }
+    setMention(detectMention(ta.value, ta.selectionStart ?? 0));
+  }
+
+  function handleMentionPick(entity: MentionEntity) {
+    if (!mention || !editor) return;
+    const markup = buildMentionMarkup(entity.name, entity.entityId);
+    const body = editor.form.body;
+    const next = body.slice(0, mention.atIndex) + markup + body.slice(mention.endIndex);
+    patchForm({ body: next });
+    setMention(null);
+    const pos = mention.atIndex + markup.length;
+    queueMicrotask(() => {
+      const ta = bodyRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    });
+  }
 
   function startAdd() {
     setError(null);
@@ -381,15 +428,31 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                     </button>
                   </div>
                 </div>
-                <textarea
-                  ref={bodyRef}
-                  value={editor.form.body}
-                  onChange={(e) => patchForm({ body: e.target.value })}
-                  rows={12}
-                  maxLength={40000}
-                  placeholder={`Write the story…\n\nSeparate paragraphs with a blank line.\nStart a page with "# Heading" for a centred title.\nInsert ${PAGE_BREAK} on its own line to force a new page.`}
-                  className="w-full bg-white/[0.04] border border-white/15 rounded p-3 text-white/85 text-sm leading-relaxed focus:outline-none focus:border-amber-400/40 font-mono"
-                />
+                <div className="relative">
+                  <textarea
+                    ref={bodyRef}
+                    value={editor.form.body}
+                    onChange={(e) => {
+                      patchForm({ body: e.target.value });
+                      queueMicrotask(refreshMention);
+                    }}
+                    onSelect={refreshMention}
+                    onKeyUp={refreshMention}
+                    onClick={refreshMention}
+                    rows={12}
+                    maxLength={40000}
+                    placeholder={`Write the story…\n\nSeparate paragraphs with a blank line.\nStart a page with "# Heading" for a centred title.\nType @ to mention a Kanka entity.\nInsert ${PAGE_BREAK} on its own line to force a new page.`}
+                    className="w-full bg-white/[0.04] border border-white/15 rounded p-3 text-white/85 text-sm leading-relaxed focus:outline-none focus:border-amber-400/40 font-mono"
+                  />
+                  {mention && (
+                    <MentionPicker
+                      entities={entities}
+                      query={mention.query}
+                      onPick={handleMentionPick}
+                      onClose={() => setMention(null)}
+                    />
+                  )}
+                </div>
                 <p className="text-[9px] text-white/30" style={cinzel}>
                   Content flows to the reader&apos;s screen; page breaks force a new leaf of the book.
                 </p>
