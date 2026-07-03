@@ -26,36 +26,37 @@ function flushText(buffer: string[]): StoryBlock | null {
 }
 
 function chunkToPage(lines: string[]): StoryPage {
-  let heading: string | null = null;
-  let rest = lines;
-
-  const firstIdx = lines.findIndex((l) => l.trim() !== "");
-  if (firstIdx >= 0 && /^#\s+/.test(lines[firstIdx].trim())) {
-    heading = lines[firstIdx].trim().replace(/^#\s+/, "").trim();
-    rest = lines.slice(firstIdx + 1);
-  }
-
   const blocks: StoryBlock[] = [];
   let buffer: string[] = [];
-  for (const line of rest) {
+  const flush = () => {
+    const text = flushText(buffer);
+    if (text) blocks.push(text);
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // A `# Heading` line becomes a heading block wherever it appears.
+    if (/^#\s+/.test(trimmed)) {
+      flush();
+      blocks.push({ type: "heading", text: trimmed.replace(/^#\s+/, "").trim() });
+      continue;
+    }
     const m = line.match(IMAGE_RE);
     if (m) {
-      const text = flushText(buffer);
-      if (text) blocks.push(text);
-      buffer = [];
+      flush();
       blocks.push({ type: "image", url: m[2], alt: m[1] ?? "" });
-    } else {
-      buffer.push(line);
+      continue;
     }
+    buffer.push(line);
   }
-  const trailing = flushText(buffer);
-  if (trailing) blocks.push(trailing);
+  flush();
 
-  return { heading, blocks };
+  return { blocks };
 }
 
-// Split a story body into rendered pages. Empty pages (e.g. a stray double
-// break) are dropped so navigation never lands on a blank leaf.
+// Split a story body into sections. Empty sections (e.g. a stray double break)
+// are dropped so navigation never lands on a blank leaf.
 export function parseStoryBody(body: string): StoryPage[] {
   const lines = body.replace(/\r\n/g, "\n").split("\n");
   const chunks: string[][] = [[]];
@@ -63,8 +64,8 @@ export function parseStoryBody(body: string): StoryPage[] {
     if (PAGE_BREAK_RE.test(line)) chunks.push([]);
     else chunks[chunks.length - 1].push(line);
   }
-  const pages = chunks.map(chunkToPage).filter((p) => p.heading || p.blocks.length > 0);
-  return pages.length > 0 ? pages : [{ heading: null, blocks: [] }];
+  const pages = chunks.map(chunkToPage).filter((p) => p.blocks.length > 0);
+  return pages.length > 0 ? pages : [{ blocks: [] }];
 }
 
 const ROMAN: [number, string][] = [
