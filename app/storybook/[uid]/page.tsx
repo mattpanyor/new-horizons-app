@@ -12,10 +12,16 @@ const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
 export default async function StorybookPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ uid: string }>;
+  searchParams: Promise<{ p?: string | string[] }>;
 }) {
   const { uid } = await params;
+  const sp = await searchParams;
+  const rawP = Array.isArray(sp.p) ? sp.p[0] : sp.p;
+  const parsedP = rawP ? parseInt(rawP, 10) : 1;
+  const initialSpread = Number.isFinite(parsedP) && parsedP > 0 ? parsedP - 1 : 0;
 
   const cookieStore = await cookies();
   const username = cookieStore.get("nh_user")?.value;
@@ -65,6 +71,7 @@ export default async function StorybookPage({
         chapterTitle={entry.chapterTitle}
         sessionNumber={entry.sessionNumber}
         pages={pages}
+        initialSpread={initialSpread}
       />
     </div>
   );

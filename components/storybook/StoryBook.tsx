@@ -8,6 +8,7 @@ import {
   useRef,
   useMemo,
   forwardRef,
+  type ReactNode,
 } from "react";
 import type { StoryPage } from "@/types/story";
 import { toRoman } from "@/lib/story";
@@ -49,19 +50,21 @@ interface ImageItem {
   url: string;
   alt: string;
 }
-type Item = TextItem | ImageItem;
+interface HeadingItem {
+  type: "heading";
+  text: string;
+}
+type Item = TextItem | ImageItem | HeadingItem;
 
 interface Section {
-  heading: string | null;
   items: Item[];
 }
 interface PhysPage {
-  heading: string | null;
   items: Item[];
 }
 
-// Flatten a parsed section into atoms: heading (own field) + paragraph/image
-// items. The first paragraph of a section carries the drop cap.
+// Flatten a parsed section into ordered atoms (headings/paragraphs/images).
+// The first paragraph of a section carries the drop cap.
 function toSections(pages: StoryPage[]): Section[] {
   return pages.map((p) => {
     const items: Item[] = [];
@@ -69,6 +72,8 @@ function toSections(pages: StoryPage[]): Section[] {
     for (const block of p.blocks) {
       if (block.type === "image") {
         items.push({ type: "image", url: block.url, alt: block.alt });
+      } else if (block.type === "heading") {
+        items.push({ type: "heading", text: block.text });
       } else {
         for (const para of block.paragraphs) {
           items.push({ type: "text", text: para, dropCap: firstPara });
@@ -76,7 +81,7 @@ function toSections(pages: StoryPage[]): Section[] {
         }
       }
     }
-    return { heading: p.heading, items };
+    return { items };
   });
 }
 
@@ -117,28 +122,71 @@ function MentionLink({ name, url }: { name: string; url: string }) {
   );
 }
 
+// Spoken lines sit between double quotes; set them in italic (full ink
+// contrast) so conversation reads distinctly without shouting.
+const dialogueStyle = { fontStyle: "italic" } as const;
+
+// Render a paragraph into nodes, handling (in one pass): Kanka @mentions,
+// dialogue between "quotes", and the section's opening drop cap. Quote state
+// carries across mention tokens so "…@Name…" stays styled as one line.
+function buildParagraphNodes(text: string, dropCap: boolean): ReactNode[] {
+  const tokens = parseClueText(text);
+  const nodes: ReactNode[] = [];
+  let key = 0;
+  let inQuote = false;
+  let dropDone = !dropCap;
+
+  const emit = (str: string, quoted: boolean) => {
+    if (!str) return;
+    const style = quoted ? dialogueStyle : undefined;
+    if (!dropDone) {
+      const letter = /[A-Za-z0-9]/.exec(str);
+      if (letter) {
+        const idx = letter.index;
+        const prefix = str.slice(0, idx);
+        const rest = str.slice(idx + 1);
+        if (prefix) nodes.push(<span key={key++} style={style}>{prefix}</span>);
+        nodes.push(<span key={key++} className="float-left" style={dropCapStyle}>{str[idx]}</span>);
+        dropDone = true;
+        if (rest) nodes.push(<span key={key++} style={style}>{rest}</span>);
+        return;
+      }
+    }
+    nodes.push(<span key={key++} style={style}>{str}</span>);
+  };
+
+  for (const tok of tokens) {
+    if (tok.kind === "mention") {
+      nodes.push(<MentionLink key={key++} name={tok.name} url={tok.url} />);
+      continue;
+    }
+    let buf = "";
+    for (const ch of tok.value) {
+      if (ch === '"') {
+        if (inQuote) {
+          buf += ch;
+          emit(buf, true);
+          buf = "";
+          inQuote = false;
+        } else {
+          emit(buf, false);
+          buf = ch;
+          inQuote = true;
+        }
+      } else {
+        buf += ch;
+      }
+    }
+    emit(buf, inQuote);
+  }
+  return nodes;
+}
+
 const Paragraph = forwardRef<HTMLParagraphElement, { text: string; dropCap: boolean }>(
   function Paragraph({ text, dropCap }, ref) {
-    const tokens = parseClueText(text);
     return (
       <p ref={ref} className="text-justify" style={paraStyle}>
-        {tokens.map((tok, i) => {
-          if (tok.kind === "mention") {
-            return <MentionLink key={i} name={tok.name} url={tok.url} />;
-          }
-          // Drop cap on the first character of a section's opening paragraph.
-          if (dropCap && i === 0 && tok.value.length > 0) {
-            return (
-              <span key={i}>
-                <span className="float-left" style={dropCapStyle}>
-                  {tok.value.charAt(0)}
-                </span>
-                {tok.value.slice(1)}
-              </span>
-            );
-          }
-          return <span key={i}>{tok.value}</span>;
-        })}
+        {buildParagraphNodes(text, dropCap)}
       </p>
     );
   }
@@ -244,9 +292,10 @@ function Leaf({
         style={{ opacity: visible ? 1 : 0 }}
       >
         <div className="absolute overflow-hidden" style={{ left, right, top: BODY_TOP, bottom: BODY_BOTTOM }}>
-          {page?.heading && <HeadingBlock text={page.heading} />}
           {page?.items.map((it, i) =>
-            it.type === "text" ? (
+            it.type === "heading" ? (
+              <HeadingBlock key={i} text={it.text} />
+            ) : it.type === "text" ? (
               <Paragraph key={i} text={it.text} dropCap={it.dropCap} />
             ) : (
               <RealImage key={i} item={it} onImageClick={onImageClick} />
@@ -268,9 +317,17 @@ interface Props {
   chapterTitle: string | null;
   sessionNumber: number | null;
   pages: StoryPage[];
+  initialSpread?: number;
 }
 
-export default function StoryBook({ title, chapter, chapterTitle, sessionNumber, pages }: Props) {
+export default function StoryBook({
+  title,
+  chapter,
+  chapterTitle,
+  sessionNumber,
+  pages,
+  initialSpread = 0,
+}: Props) {
   const sections = useMemo(() => toSections(pages), [pages]);
   const imageUrls = useMemo(
     () => sections.flatMap((s) => s.items.filter((i): i is ImageItem => i.type === "image").map((i) => i.url)),
@@ -281,11 +338,11 @@ export default function StoryBook({ title, chapter, chapterTitle, sessionNumber,
   const [bookW, setBookW] = useState(0);
   const [natSizes, setNatSizes] = useState<Map<string, { w: number; h: number }>>(new Map());
   const [physPages, setPhysPages] = useState<PhysPage[]>(() =>
-    sections.map((s) => ({ heading: s.heading, items: s.items }))
+    sections.map((s) => ({ items: s.items }))
   );
 
-  const [spread, setSpread] = useState(0);
-  const [renderSpread, setRenderSpread] = useState(0);
+  const [spread, setSpread] = useState(initialSpread);
+  const [renderSpread, setRenderSpread] = useState(initialSpread);
   const [contentVisible, setContentVisible] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
@@ -352,7 +409,7 @@ export default function StoryBook({ title, chapter, chapterTitle, sessionNumber,
   useIso(() => {
     if (bookW <= 0 || bodyH <= 0) return;
     if (!imagesReady) {
-      setPhysPages(sections.map((s) => ({ heading: s.heading, items: s.items })));
+      setPhysPages(sections.map((s) => ({ items: s.items })));
       return;
     }
 
@@ -362,46 +419,46 @@ export default function StoryBook({ title, chapter, chapterTitle, sessionNumber,
       if (!flow) return;
       const flowTop = flow.getBoundingClientRect().top;
 
-      type M = { kind: "heading" | "item"; item?: Item; heading?: string; top: number; height: number };
-      const measured: M[] = [];
-      if (sec.heading) {
-        const el = measRefs.current.get(`h-${si}`);
-        if (el) {
-          const r = el.getBoundingClientRect();
-          measured.push({ kind: "heading", heading: sec.heading, top: r.top - flowTop, height: r.height });
-        }
-      }
+      const measured: { item: Item; top: number; height: number }[] = [];
       sec.items.forEach((it, j) => {
         const el = measRefs.current.get(`it-${si}-${j}`);
         if (!el) return;
         const r = el.getBoundingClientRect();
-        measured.push({ kind: "item", item: it, top: r.top - flowTop, height: r.height });
+        measured.push({ item: it, top: r.top - flowTop, height: r.height });
       });
 
       let pageStart = 0;
       let cur: PhysPage | null = null;
       for (const m of measured) {
         if (cur === null) {
-          cur = { heading: null, items: [] };
+          cur = { items: [] };
           result.push(cur);
           pageStart = m.top;
         } else if (m.top + m.height - pageStart > bodyH && cur.items.length > 0) {
-          cur = { heading: null, items: [] };
+          cur = { items: [] };
           result.push(cur);
           pageStart = m.top;
         }
-        if (m.kind === "heading") cur.heading = m.heading ?? null;
-        else if (m.item) cur.items.push(m.item);
+        cur.items.push(m.item);
       }
     });
 
-    setPhysPages(result.length > 0 ? result : [{ heading: null, items: [] }]);
+    setPhysPages(result.length > 0 ? result : [{ items: [] }]);
   }, [sections, bookW, perView, imagesReady, bodyH]);
 
   const totalSpreads = Math.max(1, Math.ceil(physPages.length / perView));
   const maxSpread = totalSpreads - 1;
   const safeSpread = Math.min(spread, maxSpread);
   const safeRender = Math.min(renderSpread, maxSpread);
+
+  // Keep the current spread in the URL (?p=) so a refresh resumes where the
+  // reader left off. replaceState avoids a navigation / server refetch.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (safeSpread > 0) url.searchParams.set("p", String(safeSpread + 1));
+    else url.searchParams.delete("p");
+    window.history.replaceState(null, "", url.toString());
+  }, [safeSpread]);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -531,9 +588,10 @@ export default function StoryBook({ title, chapter, chapterTitle, sessionNumber,
         >
           {sections.map((sec, si) => (
             <div key={si} ref={bind(`flow-${si}`)} style={{ position: "relative", width: bodyW }}>
-              {sec.heading && <HeadingBlock ref={bind(`h-${si}`)} text={sec.heading} />}
               {sec.items.map((it, j) =>
-                it.type === "text" ? (
+                it.type === "heading" ? (
+                  <HeadingBlock key={j} ref={bind(`it-${si}-${j}`)} text={it.text} />
+                ) : it.type === "text" ? (
                   <Paragraph key={j} ref={bind(`it-${si}-${j}`)} text={it.text} dropCap={it.dropCap} />
                 ) : (
                   <ImagePlaceholder key={j} ref={bind(`it-${si}-${j}`)} {...imgDisplaySize(it.url)} />
