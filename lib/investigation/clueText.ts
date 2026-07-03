@@ -47,6 +47,25 @@ export function parseClueText(text: string): ClueToken[] {
   return out;
 }
 
+export interface MentionState {
+  query: string;
+  atIndex: number; // Position of '@' in the text
+  endIndex: number; // Cursor position (end of query)
+}
+
+// Detect an in-progress `@mention` immediately before the cursor. The `@` must
+// start the text or follow whitespace, and the query so far must be
+// whitespace-free. Shared by the clue and storybook editors.
+export function detectMention(text: string, cursor: number): MentionState | null {
+  const pre = text.slice(0, cursor);
+  const match = /(?:^|\s)@([^\s\n]*)$/.exec(pre);
+  if (!match) return null;
+  const matchStart = match.index;
+  const leadingWs = match[0].length - match[1].length - 1; // 0 or 1
+  const atIndex = matchStart + leadingWs;
+  return { query: match[1], atIndex, endIndex: cursor };
+}
+
 export function buildMentionMarkup(name: string, entityId: number): string {
   // Strip characters that would interfere with the markup syntax or render
   // confusingly. `]` would terminate the name capture early; `[` `(` `)` look
