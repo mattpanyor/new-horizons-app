@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   let session: number | null = null;
   if (sessionNumber !== undefined && sessionNumber !== null && sessionNumber !== "") {
-    if (!Number.isInteger(sessionNumber) || sessionNumber < 0) {
+    if (!Number.isInteger(sessionNumber) || sessionNumber < 0 || sessionNumber > 2147483647) {
       return NextResponse.json({ error: "Invalid session number" }, { status: 400 });
     }
     session = sessionNumber;

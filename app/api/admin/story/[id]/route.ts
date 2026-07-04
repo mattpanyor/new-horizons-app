@@ -80,7 +80,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (body.sessionNumber !== undefined) {
     if (body.sessionNumber === null || body.sessionNumber === "") {
       fields.sessionNumber = null;
-    } else if (!Number.isInteger(body.sessionNumber) || body.sessionNumber < 0) {
+    } else if (
+      !Number.isInteger(body.sessionNumber) ||
+      body.sessionNumber < 0 ||
+      body.sessionNumber > 2147483647
+    ) {
       return NextResponse.json({ error: "Invalid session number" }, { status: 400 });
     } else {
       fields.sessionNumber = body.sessionNumber;

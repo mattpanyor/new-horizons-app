@@ -140,7 +140,7 @@ function buildParagraphNodes(text: string, dropCap: boolean): ReactNode[] {
     if (!str) return;
     const style = quoted ? dialogueStyle : undefined;
     if (!dropDone) {
-      const letter = /[A-Za-z0-9]/.exec(str);
+      const letter = /[\p{L}\p{N}]/u.exec(str);
       if (letter) {
         const idx = letter.index;
         const prefix = str.slice(0, idx);
@@ -157,7 +157,16 @@ function buildParagraphNodes(text: string, dropCap: boolean): ReactNode[] {
 
   for (const tok of tokens) {
     if (tok.kind === "mention") {
-      nodes.push(<MentionLink key={key++} name={tok.name} url={tok.url} />);
+      // A paragraph opening with a mention gets no drop cap (rather than
+      // misplacing it onto a later word). A mention inside dialogue is
+      // italicised with the surrounding speech.
+      dropDone = true;
+      const link = <MentionLink name={tok.name} url={tok.url} />;
+      nodes.push(
+        <span key={key++} style={inQuote ? dialogueStyle : undefined}>
+          {link}
+        </span>
+      );
       continue;
     }
     let buf = "";
@@ -199,7 +208,7 @@ const HeadingBlock = forwardRef<HTMLDivElement, { text: string }>(function Headi
         className="uppercase"
         style={{ ...cinzel, color: INK, letterSpacing: "0.1em", lineHeight: 1.1, fontSize: "clamp(14px, 3.2cqw, 26px)" }}
       >
-        {text}
+        {buildParagraphNodes(text, false)}
       </h2>
       <div
         style={{
@@ -375,12 +384,15 @@ export default function StoryBook({
     return () => ro.disconnect();
   }, []);
 
-  // Preload images to learn their natural dimensions.
+  // Preload images to learn their natural dimensions. Each URL is requested at
+  // most once (tracked in a ref) so recording one size doesn't re-run this and
+  // recreate Image objects for the others.
+  const requestedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     let cancelled = false;
-    const missing = imageUrls.filter((u) => !natSizes.has(u));
-    if (missing.length === 0) return;
-    for (const url of missing) {
+    for (const url of imageUrls) {
+      if (requestedRef.current.has(url)) continue;
+      requestedRef.current.add(url);
       const img = new Image();
       const record = (w: number, h: number) => {
         if (cancelled) return;
@@ -398,7 +410,7 @@ export default function StoryBook({
     return () => {
       cancelled = true;
     };
-  }, [imageUrls, natSizes]);
+  }, [imageUrls]);
 
   const leafW = perView === 2 ? (bookW - 1) / 2 : bookW;
   const leafH = leafW * PAGE_ASPECT;
@@ -467,12 +479,14 @@ export default function StoryBook({
     (target: number) => {
       const clamped = Math.max(0, Math.min(target, maxSpread));
       setSpread(clamped);
+      if (timer.current) clearTimeout(timer.current);
       if (clamped === safeRender) {
+        // Already showing this spread (e.g. flip back mid-transition): cancel any
+        // pending swap so it can't fire and desync renderSpread from spread.
         setContentVisible(true);
         return;
       }
       setContentVisible(false);
-      if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         setRenderSpread(clamped);
         setContentVisible(true);

@@ -59,7 +59,33 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
   const [showPicker, setShowPicker] = useState(false);
   const [mention, setMention] = useState<MentionState | null>(null);
   const [entities, setEntities] = useState<MentionEntity[]>([]);
+  const [dirty, setDirty] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // Close the editor, guarding unsaved work.
+  function requestClose() {
+    if (dirty && !confirm("Discard unsaved changes to this entry?")) return;
+    setEditor(null);
+    setMention(null);
+    setDirty(false);
+    setError(null);
+  }
+
+  // Esc closes the editor — but not while the mention dropdown or the image
+  // picker is open (each handles its own Esc), so one Esc can't discard the
+  // whole entry.
+  useEffect(() => {
+    if (!editor) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !mention && !showPicker) {
+        e.preventDefault();
+        requestClose();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, mention, showPicker, dirty]);
 
   // Kanka entities for @mentions (same source as the investigation board).
   useEffect(() => {
@@ -102,6 +128,8 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
 
   function startAdd() {
     setError(null);
+    setDirty(false);
+    setMention(null);
     setEditor({
       mode: "new",
       form: {
@@ -117,6 +145,8 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
 
   function startEdit(entry: StoryEntry) {
     setError(null);
+    setDirty(false);
+    setMention(null);
     setEditor({
       mode: "edit",
       id: entry.id,
@@ -133,6 +163,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
 
   function patchForm(patch: Partial<Form>) {
     setEditor((e) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
+    setDirty(true);
   }
 
   function insertAtCursor(text: string) {
@@ -207,6 +238,8 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
         (a, b) => a.chapter - b.chapter || b.createdAt.localeCompare(a.createdAt)
       );
     });
+    setDirty(false);
+    setMention(null);
     setEditor(null);
   }
 
@@ -340,36 +373,137 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
 
       {editor && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/60 backdrop-blur-sm"
-          onClick={() => setEditor(null)}
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: "linear-gradient(160deg, rgba(12,10,6,0.99), rgba(4,3,2,0.99))" }}
         >
-          <div
-            className="w-full max-w-2xl my-8 p-5 rounded border border-amber-400/30"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "linear-gradient(145deg, rgba(14,11,6,0.98), rgba(6,5,3,0.98))",
-              boxShadow: "0 0 30px rgba(180,150,80,0.18)",
-            }}
-          >
-            <h3 className="text-[10px] tracking-[0.3em] uppercase text-white/65 mb-4" style={cinzel}>
-              {editor.mode === "edit" ? "Edit Entry" : "New Entry"}
-            </h3>
+          {/* Header — title, dirty flag, and actions (no accidental close) */}
+          <header className="shrink-0 flex items-center justify-between gap-3 h-14 px-4 sm:px-6 border-b border-amber-400/15">
+            <div className="flex items-baseline gap-3 min-w-0">
+              <span className="shrink-0 text-[10px] tracking-[0.3em] uppercase text-amber-200/70" style={cinzel}>
+                {editor.mode === "edit" ? "Edit Entry" : "New Entry"}
+              </span>
+              {editor.form.title.trim() && (
+                <span className="truncate text-sm text-white/45" style={cinzel}>
+                  {editor.form.title}
+                </span>
+              )}
+              {dirty && (
+                <span className="shrink-0 text-[8px] tracking-[0.25em] uppercase text-amber-300/60" style={cinzel}>
+                  • unsaved
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={requestClose}
+                className="px-3 py-1.5 text-[10px] tracking-[0.2em] uppercase text-white/45 hover:text-white/85 cursor-pointer"
+                style={cinzel}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                disabled={saving || !editor.form.title.trim() || editor.form.chapter === null}
+                className="px-5 py-1.5 rounded border border-amber-400/40 text-[10px] tracking-[0.2em] uppercase text-amber-200 hover:bg-amber-400/10 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                style={cinzel}
+              >
+                {saving ? "Saving…" : editor.mode === "edit" ? "Save" : "Create"}
+              </button>
+            </div>
+          </header>
 
-            <div className="flex flex-col gap-3">
-              {/* Title */}
+          {error && (
+            <div className="shrink-0 px-4 sm:px-6 py-2 bg-red-500/15 border-b border-red-500/30 text-red-300 text-xs">
+              {error}
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+            {/* Main editing column */}
+            <div className="flex flex-col gap-3 p-4 sm:p-6 min-h-0 lg:flex-1">
               <input
                 value={editor.form.title}
                 onChange={(e) => patchForm({ title: e.target.value })}
                 maxLength={200}
                 placeholder="Entry title…"
-                className="w-full bg-white/[0.04] border border-white/15 rounded p-2 text-white/90 text-sm focus:outline-none focus:border-amber-400/40"
+                className="w-full bg-transparent border-b border-white/10 focus:border-amber-400/40 pb-2 text-white/90 text-xl focus:outline-none"
+                style={cinzel}
                 autoFocus
               />
 
-              {/* Chapter + session */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] tracking-[0.2em] uppercase text-white/45" style={cinzel}>
+              {/* Toolbar */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor(PAGE_BREAK)}
+                  className="text-[9px] tracking-[0.15em] uppercase text-amber-200/70 hover:text-amber-200 border border-amber-400/25 hover:border-amber-400/50 rounded px-2.5 py-1.5 cursor-pointer"
+                  style={cinzel}
+                >
+                  + Page break
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor("# Heading")}
+                  className="text-[9px] tracking-[0.15em] uppercase text-white/50 hover:text-white/85 border border-white/15 hover:border-white/35 rounded px-2.5 py-1.5 cursor-pointer"
+                  style={cinzel}
+                >
+                  + Heading
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPicker(true)}
+                  disabled={editor.form.chapter === null}
+                  title={editor.form.chapter === null ? "Pick a chapter first" : "Insert an image"}
+                  className="text-[9px] tracking-[0.15em] uppercase text-amber-200/70 hover:text-amber-200 border border-amber-400/25 hover:border-amber-400/50 rounded px-2.5 py-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={cinzel}
+                >
+                  + Image
+                </button>
+                <span className="ml-auto text-[9px] tracking-[0.15em] uppercase text-white/25" style={cinzel}>
+                  @ mention · &quot;…&quot; dialogue
+                </span>
+              </div>
+
+              {/* Body — fills the available height */}
+              <div className="relative flex-1 min-h-[45vh] lg:min-h-0">
+                <textarea
+                  ref={bodyRef}
+                  value={editor.form.body}
+                  onChange={(e) => {
+                    patchForm({ body: e.target.value });
+                    queueMicrotask(refreshMention);
+                  }}
+                  onSelect={refreshMention}
+                  onKeyUp={refreshMention}
+                  onClick={refreshMention}
+                  maxLength={40000}
+                  placeholder={`Write the story…\n\nSeparate paragraphs with a blank line.\nType @ to mention a Kanka entity, and wrap speech in "quotes".\nUse the toolbar for headings, page breaks and images.`}
+                  className="absolute inset-0 w-full h-full resize-none bg-white/[0.03] border border-white/12 rounded p-4 text-white/85 text-[13px] leading-[1.7] focus:outline-none focus:border-amber-400/40 font-mono"
+                />
+                {mention && (
+                  <div className="absolute left-3 right-3 top-3 z-40">
+                    <div className="relative">
+                      <MentionPicker
+                        entities={entities}
+                        query={mention.query}
+                        onPick={handleMentionPick}
+                        onClose={() => setMention(null)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Settings sidebar */}
+            <aside className="shrink-0 lg:w-96 lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-white/10 bg-black/25 p-4 sm:p-6 flex flex-col gap-6">
+              {/* Placement */}
+              <div className="flex flex-col gap-3">
+                <span className="text-[9px] tracking-[0.25em] uppercase text-white/40" style={cinzel}>
+                  Placement
+                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] tracking-[0.15em] uppercase text-white/55" style={cinzel}>
                     Chapter
                   </span>
                   <ChapterDropdown
@@ -378,8 +512,8 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                     onSelect={(n) => patchForm({ chapter: n })}
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] tracking-[0.2em] uppercase text-white/45" style={cinzel}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] tracking-[0.15em] uppercase text-white/55" style={cinzel}>
                     Session #
                   </span>
                   <input
@@ -388,78 +522,16 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                     value={editor.form.sessionNumber}
                     onChange={(e) => patchForm({ sessionNumber: e.target.value })}
                     placeholder="optional"
-                    className="w-24 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-amber-400/40"
+                    className="w-28 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-amber-400/40"
                   />
                 </div>
-              </div>
-
-              {/* Body */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] tracking-[0.2em] uppercase text-white/45" style={cinzel}>
-                    Story text
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => insertAtCursor(PAGE_BREAK)}
-                      className="text-[9px] tracking-[0.15em] uppercase text-amber-200/70 hover:text-amber-200 border border-amber-400/25 hover:border-amber-400/50 rounded px-2 py-1 cursor-pointer"
-                      style={cinzel}
-                    >
-                      + Page break
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => insertAtCursor("# Heading")}
-                      className="text-[9px] tracking-[0.15em] uppercase text-white/50 hover:text-white/85 border border-white/15 hover:border-white/35 rounded px-2 py-1 cursor-pointer"
-                      style={cinzel}
-                    >
-                      + Heading
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowPicker(true)}
-                      disabled={editor.form.chapter === null}
-                      title={editor.form.chapter === null ? "Pick a chapter first" : "Insert an image"}
-                      className="text-[9px] tracking-[0.15em] uppercase text-amber-200/70 hover:text-amber-200 border border-amber-400/25 hover:border-amber-400/50 rounded px-2 py-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={cinzel}
-                    >
-                      + Image
-                    </button>
-                  </div>
-                </div>
-                <div className="relative">
-                  <textarea
-                    ref={bodyRef}
-                    value={editor.form.body}
-                    onChange={(e) => {
-                      patchForm({ body: e.target.value });
-                      queueMicrotask(refreshMention);
-                    }}
-                    onSelect={refreshMention}
-                    onKeyUp={refreshMention}
-                    onClick={refreshMention}
-                    rows={12}
-                    maxLength={40000}
-                    placeholder={`Write the story…\n\nSeparate paragraphs with a blank line.\nStart a page with "# Heading" for a centred title.\nType @ to mention a Kanka entity.\nInsert ${PAGE_BREAK} on its own line to force a new page.`}
-                    className="w-full bg-white/[0.04] border border-white/15 rounded p-3 text-white/85 text-sm leading-relaxed focus:outline-none focus:border-amber-400/40 font-mono"
-                  />
-                  {mention && (
-                    <MentionPicker
-                      entities={entities}
-                      query={mention.query}
-                      onPick={handleMentionPick}
-                      onClose={() => setMention(null)}
-                    />
-                  )}
-                </div>
-                <p className="text-[9px] text-white/30" style={cinzel}>
-                  Content flows to the reader&apos;s screen; page breaks force a new leaf of the book.
-                </p>
               </div>
 
               {/* Audience */}
-              <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
+              <div className="flex flex-col gap-2 border-t border-white/10 pt-5">
+                <span className="text-[9px] tracking-[0.25em] uppercase text-white/40" style={cinzel}>
+                  Audience
+                </span>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -473,69 +545,78 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                 </label>
 
                 {!editor.form.isPublic && (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[9px] tracking-[0.2em] uppercase text-white/40" style={cinzel}>
-                      Assigned players
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                      {users.map((u) => {
-                        const on = editor.form.assignedUsernames.includes(u.username);
-                        return (
-                          <button
-                            key={u.username}
-                            type="button"
-                            onClick={() => toggleUser(u.username)}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[11px] transition-colors cursor-pointer ${
-                              on
-                                ? "border-amber-400/50 bg-amber-400/15 text-amber-100"
-                                : "border-white/12 bg-white/[0.03] text-white/55 hover:text-white/85 hover:border-white/25"
-                            }`}
-                          >
-                            {u.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={u.imageUrl}
-                                alt=""
-                                className="w-4 h-4 rounded-full object-cover border border-white/15"
-                              />
-                            ) : (
-                              <span className="w-4 h-4 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-[7px] uppercase">
-                                {u.username.charAt(0)}
-                              </span>
-                            )}
-                            <span>{u.character ?? u.username}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {users.map((u) => {
+                      const on = editor.form.assignedUsernames.includes(u.username);
+                      return (
+                        <button
+                          key={u.username}
+                          type="button"
+                          onClick={() => toggleUser(u.username)}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[11px] transition-colors cursor-pointer ${
+                            on
+                              ? "border-amber-400/50 bg-amber-400/15 text-amber-100"
+                              : "border-white/12 bg-white/[0.03] text-white/55 hover:text-white/85 hover:border-white/25"
+                          }`}
+                        >
+                          {u.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={u.imageUrl}
+                              alt=""
+                              className="w-4 h-4 rounded-full object-cover border border-white/15"
+                            />
+                          ) : (
+                            <span className="w-4 h-4 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-[7px] uppercase">
+                              {u.username.charAt(0)}
+                            </span>
+                          )}
+                          <span>{u.character ?? u.username}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              {error && (
-                <div className="px-3 py-2 bg-red-500/15 border border-red-500/30 rounded text-red-300 text-xs">
-                  {error}
-                </div>
-              )}
-            </div>
+              {/* Formatting legend */}
+              <div className="flex flex-col gap-2 border-t border-white/10 pt-5">
+                <span className="text-[9px] tracking-[0.25em] uppercase text-white/40" style={cinzel}>
+                  Formatting
+                </span>
+                <ul className="flex flex-col gap-1.5 text-[11px] text-white/45 leading-relaxed">
+                  <li><span className="text-white/60">blank line</span> — new paragraph</li>
+                  <li><code className="text-amber-200/70 font-mono"># Heading</code> — centred title (anywhere)</li>
+                  <li><code className="text-amber-200/70 font-mono">---PAGE---</code> — start a new section</li>
+                  <li><code className="text-amber-200/70 font-mono">@</code> — mention a Kanka entity</li>
+                  <li><span className="italic text-white/60">&quot;spoken&quot;</span> — dialogue is italicised</li>
+                  <li>Pages flow automatically to fit the book.</li>
+                </ul>
+              </div>
 
-            <div className="flex justify-end gap-2 mt-5">
-              <button
-                onClick={() => setEditor(null)}
-                className="px-3 py-1.5 text-[10px] tracking-[0.2em] uppercase text-white/45 hover:text-white/85 cursor-pointer"
-                style={cinzel}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={save}
-                disabled={saving || !editor.form.title.trim() || editor.form.chapter === null}
-                className="px-4 py-1.5 rounded border border-amber-400/40 text-[10px] tracking-[0.2em] uppercase text-amber-200 hover:bg-amber-400/10 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                style={cinzel}
-              >
-                {saving ? "Saving…" : editor.mode === "edit" ? "Save" : "Create"}
-              </button>
-            </div>
+              {/* Share link (edit mode) */}
+              {editor.mode === "edit" && (() => {
+                const ent = entries.find((e) => e.id === editor.id);
+                if (!ent) return null;
+                return (
+                  <div className="flex flex-col gap-2 border-t border-white/10 pt-5">
+                    <span className="text-[9px] tracking-[0.25em] uppercase text-white/40" style={cinzel}>
+                      Share link
+                    </span>
+                    <button
+                      onClick={() => copyLink(ent)}
+                      className="self-start flex items-center gap-1.5 text-[11px] text-white/40 hover:text-amber-200/80 transition-colors cursor-pointer font-mono"
+                      title="Copy shareable link"
+                    >
+                      <span className="truncate max-w-[240px]">/storybook/{ent.uid}</span>
+                      <span className="shrink-0 text-[9px] tracking-[0.15em] uppercase" style={cinzel}>
+                        {copied === ent.id ? "✓ Copied" : "Copy"}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })()}
+            </aside>
           </div>
         </div>
       )}
