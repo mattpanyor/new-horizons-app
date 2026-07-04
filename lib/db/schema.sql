@@ -39,6 +39,24 @@ CREATE TABLE IF NOT EXISTS clues (
 );
 CREATE INDEX IF NOT EXISTS clues_chapter_created_at_idx ON clues (chapter, created_at DESC);
 
+-- Story entries: admin-authored narrative pages, categorised by chapter,
+-- optionally tagged with a session number, targeted at specific players
+-- (or made public), and read via /storybook/[uid].
+CREATE TABLE IF NOT EXISTS story_entries (
+  id                 SERIAL PRIMARY KEY,
+  uid                TEXT NOT NULL UNIQUE,
+  chapter            INTEGER NOT NULL REFERENCES chapters(number) ON DELETE CASCADE,
+  session_number     INTEGER,
+  title              TEXT NOT NULL,
+  body               TEXT NOT NULL DEFAULT '',
+  is_public          BOOLEAN NOT NULL DEFAULT FALSE,
+  assigned_usernames TEXT[] NOT NULL DEFAULT '{}',
+  created_by         TEXT NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS story_entries_chapter_idx ON story_entries (chapter, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS game_sessions (
   id                SERIAL PRIMARY KEY,
   game_type         VARCHAR(50) NOT NULL DEFAULT 'storm-queens-folly',
