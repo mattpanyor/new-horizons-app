@@ -71,11 +71,13 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
     setError(null);
   }
 
-  // Esc closes the editor (unless the mention dropdown is open — it handles Esc).
+  // Esc closes the editor — but not while the mention dropdown or the image
+  // picker is open (each handles its own Esc), so one Esc can't discard the
+  // whole entry.
   useEffect(() => {
     if (!editor) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !mention) {
+      if (e.key === "Escape" && !mention && !showPicker) {
         e.preventDefault();
         requestClose();
       }
@@ -83,7 +85,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, mention, dirty]);
+  }, [editor, mention, showPicker, dirty]);
 
   // Kanka entities for @mentions (same source as the investigation board).
   useEffect(() => {

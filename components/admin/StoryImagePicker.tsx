@@ -78,6 +78,19 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
     };
   }, [chapter, prefix, loadImages]);
 
+  // Esc closes the picker (capture phase, so it wins over the editor's Esc).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -85,6 +98,13 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
     if (!isImage(file.name)) {
       setError("Only image files are allowed");
       return;
+    }
+    // Uploads use the raw filename with no random suffix, so a same-named file
+    // silently overwrites the existing one (and hijacks any embedded token).
+    if (images.some((b) => fileName(b.pathname) === file.name)) {
+      if (!confirm(`An image named "${file.name}" already exists in this chapter. Replace it?`)) {
+        return;
+      }
     }
     setUploading(true);
     setError(null);

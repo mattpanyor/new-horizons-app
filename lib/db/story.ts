@@ -55,11 +55,22 @@ export async function createStoryEntry(fields: {
   createdBy: string;
 }): Promise<StoryEntry> {
   const uid = randomUUID();
+  // Single round-trip (INSERT + SELECT-with-join in one CTE) so the created row
+  // is always returned — a separate follow-up SELECT could miss it under lag.
   const rows = await sql.query(
-    `INSERT INTO story_entries
-       (uid, chapter, session_number, title, body, is_public, assigned_usernames, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id`,
+    `WITH inserted AS (
+       INSERT INTO story_entries
+         (uid, chapter, session_number, title, body, is_public, assigned_usernames, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, uid, chapter, session_number, title, body,
+                 is_public, assigned_usernames, created_by, created_at, updated_at
+     )
+     SELECT
+       s.id, s.uid, s.chapter, s.session_number, s.title, s.body,
+       s.is_public, s.assigned_usernames, s.created_by, s.created_at, s.updated_at,
+       c.title AS chapter_title
+     FROM inserted s
+     LEFT JOIN chapters c ON c.number = s.chapter`,
     [
       uid,
       fields.chapter,
@@ -71,8 +82,7 @@ export async function createStoryEntry(fields: {
       fields.createdBy,
     ]
   );
-  const created = await getStoryEntryById(rows[0].id as number);
-  return created!;
+  return rowToEntry(rows[0]);
 }
 
 export async function updateStoryEntry(
