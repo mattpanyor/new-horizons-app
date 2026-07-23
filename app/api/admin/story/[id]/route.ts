@@ -7,9 +7,16 @@ import {
   updateStoryEntry,
   deleteStoryEntry,
 } from "@/lib/db/story";
+import { STORY_VISIBILITIES, type StoryVisibility } from "@/types/story";
 
 const MAX_TITLE = 200;
 const MAX_BODY = 40000;
+
+function parseVisibility(input: unknown): StoryVisibility | null {
+  return (STORY_VISIBILITIES as readonly string[]).includes(input as string)
+    ? (input as StoryVisibility)
+    : null;
+}
 
 async function requireSuperAdmin() {
   const cookieStore = await cookies();
@@ -91,8 +98,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   }
 
-  if (body.isPublic !== undefined) {
-    fields.isPublic = Boolean(body.isPublic);
+  let nextVisibility: StoryVisibility | undefined;
+  if (body.visibility !== undefined) {
+    const vis = parseVisibility(body.visibility);
+    if (vis === null) {
+      return NextResponse.json({ error: "Invalid visibility" }, { status: 400 });
+    }
+    nextVisibility = vis;
+    fields.visibility = vis;
   }
 
   if (body.assignedUsernames !== undefined) {
@@ -101,6 +114,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Invalid assigned players" }, { status: 400 });
     }
     fields.assignedUsernames = assigned;
+  }
+
+  // Wider visibility levels never carry an assignment list, so clear it when
+  // switching away from 'assigned' regardless of what the client sent.
+  if (nextVisibility !== undefined && nextVisibility !== "assigned") {
+    fields.assignedUsernames = [];
   }
 
   const entry = await updateStoryEntry(id, fields);

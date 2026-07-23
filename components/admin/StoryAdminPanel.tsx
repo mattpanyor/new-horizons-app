@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { Chapter } from "@/types/investigation";
-import type { StoryEntry } from "@/types/story";
+import type { StoryEntry, StoryVisibility } from "@/types/story";
 import ChapterDropdown, { toRoman } from "@/components/investigation/ChapterDropdown";
 import { PAGE_BREAK, imageToken } from "@/lib/story";
 import StoryImagePicker from "@/components/admin/StoryImagePicker";
@@ -32,9 +32,15 @@ interface Form {
   sessionNumber: string;
   title: string;
   body: string;
-  isPublic: boolean;
+  visibility: StoryVisibility;
   assignedUsernames: string[];
 }
+
+const VISIBILITY_OPTIONS: { value: StoryVisibility; label: string; hint: string }[] = [
+  { value: "assigned", label: "Assigned", hint: "Only the players you pick" },
+  { value: "players", label: "All players", hint: "Any logged-in player" },
+  { value: "world", label: "Public link", hint: "Anyone with the link — no login" },
+];
 
 type EditorState =
   | { mode: "new"; form: Form }
@@ -42,7 +48,8 @@ type EditorState =
   | null;
 
 function audienceLabel(entry: StoryEntry): string {
-  if (entry.isPublic) return "All players";
+  if (entry.visibility === "world") return "Public link";
+  if (entry.visibility === "players") return "All players";
   const n = entry.assignedUsernames.length;
   if (n === 0) return "No one assigned";
   return `${n} player${n === 1 ? "" : "s"}`;
@@ -137,7 +144,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
         sessionNumber: "",
         title: "",
         body: "",
-        isPublic: false,
+        visibility: "assigned",
         assignedUsernames: [],
       },
     });
@@ -155,7 +162,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
         sessionNumber: entry.sessionNumber !== null ? String(entry.sessionNumber) : "",
         title: entry.title,
         body: entry.body,
-        isPublic: entry.isPublic,
+        visibility: entry.visibility,
         assignedUsernames: entry.assignedUsernames,
       },
     });
@@ -214,8 +221,8 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
       title: form.title.trim(),
       body: form.body,
       sessionNumber: form.sessionNumber.trim() === "" ? null : Number(form.sessionNumber),
-      isPublic: form.isPublic,
-      assignedUsernames: form.isPublic ? [] : form.assignedUsernames,
+      visibility: form.visibility,
+      assignedUsernames: form.visibility === "assigned" ? form.assignedUsernames : [],
     };
 
     const url = editor.mode === "edit" ? `/api/admin/story/${editor.id}` : "/api/admin/story";
@@ -532,19 +539,45 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                 <span className="text-[9px] tracking-[0.25em] uppercase text-white/40" style={cinzel}>
                   Audience
                 </span>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={editor.form.isPublic}
-                    onChange={(e) => patchForm({ isPublic: e.target.checked })}
-                    className="accent-amber-400"
-                  />
-                  <span className="text-[10px] tracking-[0.2em] uppercase text-white/70" style={cinzel}>
-                    Visible to all players
-                  </span>
-                </label>
+                <div className="flex flex-col gap-1.5">
+                  {VISIBILITY_OPTIONS.map((opt) => {
+                    const on = editor.form.visibility === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => patchForm({ visibility: opt.value })}
+                        aria-pressed={on}
+                        className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded border text-left transition-colors cursor-pointer ${
+                          on
+                            ? "border-amber-400/50 bg-amber-400/10"
+                            : "border-white/12 bg-white/[0.03] hover:border-white/25"
+                        }`}
+                      >
+                        <span
+                          className={`text-[10px] tracking-[0.2em] uppercase ${
+                            on ? "text-amber-100" : "text-white/70"
+                          }`}
+                          style={cinzel}
+                        >
+                          {opt.label}
+                        </span>
+                        <span className="text-[10px] text-white/40 normal-case tracking-normal">
+                          {opt.hint}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                {!editor.form.isPublic && (
+                {editor.form.visibility === "world" && (
+                  <p className="text-[10px] text-amber-200/60 leading-relaxed mt-0.5">
+                    Anyone with the link can read this entry without logging in. The
+                    rest of the site stays private.
+                  </p>
+                )}
+
+                {editor.form.visibility === "assigned" && (
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {users.map((u) => {
                       const on = editor.form.assignedUsernames.includes(u.username);

@@ -3,9 +3,16 @@ import { cookies } from "next/headers";
 import { getUserByUsername, getAllUsers } from "@/lib/db/users";
 import { getChapter } from "@/lib/db/chapters";
 import { getAllStoryEntries, createStoryEntry } from "@/lib/db/story";
+import { STORY_VISIBILITIES, type StoryVisibility } from "@/types/story";
 
 const MAX_TITLE = 200;
 const MAX_BODY = 40000;
+
+function parseVisibility(input: unknown): StoryVisibility | null {
+  return (STORY_VISIBILITIES as readonly string[]).includes(input as string)
+    ? (input as StoryVisibility)
+    : null;
+}
 
 async function requireSuperAdmin() {
   const cookieStore = await cookies();
@@ -43,7 +50,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
-  const { chapter, title, body: text, sessionNumber, isPublic, assignedUsernames } = body;
+  const { chapter, title, body: text, sessionNumber, visibility, assignedUsernames } = body;
 
   if (!Number.isInteger(chapter) || chapter < 1) {
     return NextResponse.json({ error: "Invalid chapter" }, { status: 400 });
@@ -74,6 +81,11 @@ export async function POST(req: NextRequest) {
     session = sessionNumber;
   }
 
+  const vis = visibility === undefined ? "assigned" : parseVisibility(visibility);
+  if (vis === null) {
+    return NextResponse.json({ error: "Invalid visibility" }, { status: 400 });
+  }
+
   const assigned = await sanitizeAssigned(assignedUsernames);
   if (assigned === null) {
     return NextResponse.json({ error: "Invalid assigned players" }, { status: 400 });
@@ -84,8 +96,10 @@ export async function POST(req: NextRequest) {
     title: title.trim(),
     body: typeof text === "string" ? text : "",
     sessionNumber: session,
-    isPublic: Boolean(isPublic),
-    assignedUsernames: assigned,
+    visibility: vis,
+    // Assignments only matter for 'assigned'; wider levels clear the list so a
+    // later switch back to 'assigned' can't silently resurrect stale players.
+    assignedUsernames: vis === "assigned" ? assigned : [],
     createdBy: admin.username,
   });
   return NextResponse.json({ entry }, { status: 201 });

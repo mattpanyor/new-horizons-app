@@ -1,3 +1,15 @@
+// Who can read a story entry:
+// - "assigned" — only the players listed in assignedUsernames (plus superadmins)
+// - "players"  — any logged-in player
+// - "world"    — anyone with the link, no login required
+export type StoryVisibility = "assigned" | "players" | "world";
+
+export const STORY_VISIBILITIES: readonly StoryVisibility[] = [
+  "assigned",
+  "players",
+  "world",
+];
+
 export interface StoryEntry {
   id: number;
   uid: string;
@@ -6,7 +18,7 @@ export interface StoryEntry {
   sessionNumber: number | null;
   title: string;
   body: string;
-  isPublic: boolean;
+  visibility: StoryVisibility;
   assignedUsernames: string[];
   createdBy: string;
   createdAt: string;
