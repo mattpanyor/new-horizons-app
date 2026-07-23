@@ -40,8 +40,11 @@ CREATE TABLE IF NOT EXISTS clues (
 CREATE INDEX IF NOT EXISTS clues_chapter_created_at_idx ON clues (chapter, created_at DESC);
 
 -- Story entries: admin-authored narrative pages, categorised by chapter,
--- optionally tagged with a session number, targeted at specific players
--- (or made public), and read via /storybook/[uid].
+-- optionally tagged with a session number, and read via /storybook/[uid].
+-- visibility controls the audience:
+--   'assigned' — only players listed in assigned_usernames (plus superadmins)
+--   'players'  — any logged-in player
+--   'world'    — anyone with the link, no login required
 CREATE TABLE IF NOT EXISTS story_entries (
   id                 SERIAL PRIMARY KEY,
   uid                TEXT NOT NULL UNIQUE,
@@ -49,7 +52,8 @@ CREATE TABLE IF NOT EXISTS story_entries (
   session_number     INTEGER,
   title              TEXT NOT NULL,
   body               TEXT NOT NULL DEFAULT '',
-  is_public          BOOLEAN NOT NULL DEFAULT FALSE,
+  visibility         TEXT NOT NULL DEFAULT 'assigned'
+                       CHECK (visibility IN ('assigned', 'players', 'world')),
   assigned_usernames TEXT[] NOT NULL DEFAULT '{}',
   created_by         TEXT NOT NULL,
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -23,21 +23,28 @@ export default async function StorybookPage({
   const parsedP = rawP ? parseInt(rawP, 10) : 1;
   const initialSpread = Number.isFinite(parsedP) && parsedP > 0 ? parsedP - 1 : 0;
 
-  const cookieStore = await cookies();
-  const username = cookieStore.get("nh_user")?.value;
-  if (!username) redirect("/login");
-
-  const user = await getUserByUsername(username);
-  if (!user) redirect("/login");
-
+  // Load the entry first: a 'world' entry is readable without any login, so we
+  // must not redirect to /login before we know the entry's visibility.
   const entry = await getStoryEntryByUid(uid);
   if (!entry) notFound();
 
-  // Superadmins (127+) may open any entry without being assigned.
-  const canView =
-    user.accessLevel >= 127 ||
-    entry.isPublic ||
-    entry.assignedUsernames.includes(user.username);
+  let canView = entry.visibility === "world";
+
+  if (!canView) {
+    // Every non-'world' entry requires a valid session.
+    const cookieStore = await cookies();
+    const username = cookieStore.get("nh_user")?.value;
+    if (!username) redirect("/login");
+
+    const user = await getUserByUsername(username);
+    if (!user) redirect("/login");
+
+    // Superadmins (127+) may open any entry without being assigned.
+    canView =
+      user.accessLevel >= 127 ||
+      entry.visibility === "players" ||
+      entry.assignedUsernames.includes(user.username);
+  }
 
   if (!canView) {
     return (
