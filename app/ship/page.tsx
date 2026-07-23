@@ -27,6 +27,9 @@ export default async function ShipPage() {
         role={user.role ?? undefined}
         group={user.group}
         accessLevel={user.accessLevel}
+        imageUrl={user.imageUrl ?? undefined}
+        color={user.color ?? undefined}
+        userId={user.id}
       />
       <StarSystemBackground />
       <HexShieldAnimation />
