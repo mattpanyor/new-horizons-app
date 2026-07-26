@@ -67,7 +67,7 @@ export default function LoginPage() {
       <StarSystemBackground />
       <DotGridAnimation exclusionZones={[{ x: 30, y: 25, width: 40, height: 50 }]} />
       <div className="min-h-screen flex items-center justify-center px-4">
-        <div className={`w-full ${showAvatarGrid ? "max-w-2xl" : "max-w-sm"}`}>
+        <div className={showAvatarGrid ? "w-auto max-w-full" : "w-full max-w-sm"}>
           {/* Title */}
           <div className="text-center mb-8">
             <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-2" style={cinzel}>
@@ -79,18 +79,18 @@ export default function LoginPage() {
           </div>
 
           {showAvatarGrid ? (
-            <div className="scifi-card p-6">
+            <div className="scifi-card p-0 overflow-hidden">
               {users === null ? (
-                <p className="text-xs text-slate-400 text-center" style={cinzel}>
+                <p className="text-xs text-slate-400 text-center p-6" style={cinzel}>
                   Loading…
                 </p>
               ) : users.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center" style={cinzel}>
+                <p className="text-xs text-slate-400 text-center p-6" style={cinzel}>
                   No crew on record.
                 </p>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                  {users.map((u) => (
+                <div className="flex flex-row items-stretch overflow-x-auto">
+                  {users.map((u, i) => (
                     <button
                       key={u.username}
                       type="button"
@@ -98,9 +98,48 @@ export default function LoginPage() {
                         setUsername(u.username);
                         setError(null);
                       }}
-                      className="group focus:outline-none"
+                      className="login-blade group relative shrink-0 w-24 sm:w-28 h-64 focus:outline-none"
+                      title={u.username}
                     >
-                      <HexAvatar imageUrl={u.imageUrl} letter={u.username[0]} interactive />
+                      {/* Blade frame */}
+                      <div className="absolute inset-0 border border-indigo-500/30 group-hover:border-indigo-400/80 bg-slate-900/60 shadow-[0_0_0_rgba(99,102,241,0)] group-hover:shadow-[0_0_22px_rgba(99,102,241,0.35)] transition-all overflow-hidden">
+                        {/* Portrait, aligned top-center */}
+                        {u.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={u.imageUrl}
+                            alt=""
+                            className="login-blade__portrait w-full h-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="login-blade__portrait w-full h-full flex items-start justify-center pt-6">
+                            <span className="text-4xl text-slate-500 uppercase" style={cinzel}>
+                              {u.username[0]}
+                            </span>
+                          </div>
+                        )}
+                        {/* Idle scan line (staggered per blade) + hover sheen sweep */}
+                        <div
+                          className="login-blade__scan"
+                          style={{ animationDelay: `${(i % 5) * -1.4}s` }}
+                        />
+                        <div className="login-blade__sheen" />
+                        {/* Bottom scrim + name */}
+                        <div className="absolute inset-x-0 bottom-0 z-[4] bg-gradient-to-t from-slate-950/90 to-transparent pt-8 pb-2 px-1">
+                          <p
+                            className="text-[10px] tracking-[0.2em] uppercase text-white/70 group-hover:text-white text-center truncate transition-colors"
+                            style={cinzel}
+                          >
+                            {u.username}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Corner brackets */}
+                      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-indigo-500/40 group-hover:border-indigo-400/90 transition-colors" />
+                      <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-indigo-500/40 group-hover:border-indigo-400/90 transition-colors" />
+                      <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-indigo-500/40 group-hover:border-indigo-400/90 transition-colors" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-indigo-500/40 group-hover:border-indigo-400/90 transition-colors" />
                     </button>
                   ))}
                 </div>
