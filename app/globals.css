@@ -141,7 +141,7 @@ body {
     filter 0.4s ease;
 }
 .login-blade:hover .login-blade__portrait,
-.login-blade:focus-visible .login-blade__portrait {
+.login-blade:focus-within .login-blade__portrait {
   filter: grayscale(0) brightness(1) contrast(1);
   transform: scale(1.08);
 }
@@ -163,7 +163,7 @@ body {
   animation: blade-scan 7s linear infinite;
 }
 .login-blade:hover .login-blade__scan,
-.login-blade:focus-visible .login-blade__scan {
+.login-blade:focus-within .login-blade__scan {
   animation-duration: 2.2s;
   background: linear-gradient(
     to bottom,
@@ -190,7 +190,7 @@ body {
   );
 }
 .login-blade:hover .login-blade__sheen,
-.login-blade:focus-visible .login-blade__sheen {
+.login-blade:focus-within .login-blade__sheen {
   animation: blade-sheen 0.9s ease-out;
 }
 
@@ -250,12 +250,13 @@ body {
   .login-blade__sheen {
     display: none;
   }
-  .login-blade__portrait {
+  .login-blade__portrait,
+  .login-blade--active .login-blade__portrait {
     transition: filter 0.3s ease;
     transform: none;
   }
   .login-blade:hover .login-blade__portrait,
-  .login-blade:focus-visible .login-blade__portrait {
+  .login-blade:focus-within .login-blade__portrait {
     transform: none;
   }
 }

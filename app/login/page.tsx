@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import DotGridAnimation from "@/components/DotGridAnimation";
@@ -24,6 +24,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<AvatarUser[] | null>(null);
+  // Hit-target buttons keyed by username, so focus can return to the blade a
+  // user backed out of.
+  const bladeButtons = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     if (!AVATAR_LOGIN) return;
@@ -59,9 +62,12 @@ export default function LoginPage() {
   const selecting = AVATAR_LOGIN && !!username;
 
   function reset() {
+    const prev = username;
     setUsername("");
     setPassword("");
     setError(null);
+    // Return focus to the blade the user backed out of, once it re-renders.
+    requestAnimationFrame(() => bladeButtons.current[prev]?.focus());
   }
 
   return (
@@ -104,6 +110,8 @@ export default function LoginPage() {
                   return (
                     <div
                       key={u.username}
+                      aria-hidden={isHidden || undefined}
+                      inert={isHidden || undefined}
                       className={[
                         "login-blade group relative shrink-0 overflow-hidden",
                         "transition-all ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
@@ -115,13 +123,15 @@ export default function LoginPage() {
                       ].join(" ")}
                     >
                       {/* Blade frame */}
-                      <div className="absolute inset-0 border border-indigo-500/30 group-hover:border-indigo-400/80 bg-slate-900/60 shadow-[0_0_0_rgba(99,102,241,0)] group-hover:shadow-[0_0_22px_rgba(99,102,241,0.35)] transition-all overflow-hidden">
+                      <div className="absolute inset-0 border border-indigo-500/30 group-hover:border-indigo-400/80 bg-slate-900/60 shadow-[inset_0_0_0_rgba(99,102,241,0)] group-hover:shadow-[inset_0_0_26px_rgba(99,102,241,0.4)] transition-all overflow-hidden">
                         {/* Portrait, aligned top-center — becomes the faded box backdrop when active */}
                         {u.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={u.imageUrl}
                             alt=""
+                            width={112}
+                            height={256}
                             className="login-blade__portrait w-full h-full object-cover object-top"
                           />
                         ) : (
@@ -141,7 +151,7 @@ export default function LoginPage() {
 
                         {/* Backdrop scrim — fades the portrait into the box when active */}
                         <div
-                          className={`absolute inset-0 z-[3] bg-gradient-to-b from-slate-950/40 via-slate-950/65 to-slate-950/95 transition-opacity duration-500 ${
+                          className={`absolute inset-0 z-[3] bg-gradient-to-b from-slate-950/40 via-slate-950/65 to-slate-950/95 transition-opacity duration-500 motion-reduce:transition-none ${
                             isSelected ? "opacity-100" : "opacity-0"
                           }`}
                         />
@@ -193,7 +203,12 @@ export default function LoginPage() {
                             </div>
 
                             {error && (
-                              <p className="text-xs text-red-400/90 text-center" style={cinzel}>
+                              <p
+                                role="alert"
+                                aria-live="polite"
+                                className="text-xs text-red-400/90 text-center"
+                                style={cinzel}
+                              >
                                 {error}
                               </p>
                             )}
@@ -228,11 +243,14 @@ export default function LoginPage() {
                       {!selecting && (
                         <button
                           type="button"
+                          ref={(el) => {
+                            bladeButtons.current[u.username] = el;
+                          }}
                           onClick={() => {
                             setError(null);
                             setUsername(u.username);
                           }}
-                          className="absolute inset-0 z-[7] focus:outline-none"
+                          className="absolute inset-0 z-[7] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80 focus-visible:ring-inset"
                           title={u.username}
                           aria-label={`Select ${u.username}`}
                         />
