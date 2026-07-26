@@ -127,3 +127,136 @@ body {
 .combat-status-pulse {
   animation: combat-status-pulse 2s ease-in-out infinite;
 }
+
+/* ── Login portrait blades ─────────────────────────────────────────────
+   Resting: portrait sits desaturated/dim with a slow holographic scan line
+   drifting down it (staggered per blade via an inline animation-delay).
+   Hover/focus: full color + slight zoom, the scan line speeds up and
+   brightens, and a diagonal sheen sweeps across once. */
+.login-blade__portrait {
+  filter: grayscale(0.5) brightness(0.62) contrast(1.05);
+  transform: scale(1.02);
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.4s ease;
+}
+.login-blade:hover .login-blade__portrait,
+.login-blade:focus-within .login-blade__portrait {
+  filter: grayscale(0) brightness(1) contrast(1);
+  transform: scale(1.08);
+}
+
+.login-blade__scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 45%;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(129, 140, 248, 0.12),
+    transparent
+  );
+  animation: blade-scan 7s linear infinite;
+}
+.login-blade:hover .login-blade__scan,
+.login-blade:focus-within .login-blade__scan {
+  animation-duration: 2.2s;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(129, 140, 248, 0.4),
+    transparent
+  );
+}
+
+.login-blade__sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(165, 180, 252, 0.15) 48%,
+    rgba(224, 231, 255, 0.3) 50%,
+    rgba(165, 180, 252, 0.15) 52%,
+    transparent 70%
+  );
+}
+.login-blade:hover .login-blade__sheen,
+.login-blade:focus-within .login-blade__sheen {
+  animation: blade-sheen 0.9s ease-out;
+}
+
+@keyframes blade-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(260%);
+  }
+}
+@keyframes blade-sheen {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+/* Active blade → the clicked blade expands into the login box: its portrait
+   dims into a backdrop, the scan line stops, and the form reveals over it. */
+.login-blade--active .login-blade__portrait {
+  filter: grayscale(0.25) brightness(0.5);
+  transform: scale(1.05);
+}
+.login-blade--active .login-blade__scan {
+  animation: none;
+  opacity: 0;
+}
+.login-form-reveal {
+  animation: login-form-reveal 0.4s ease-out 0.28s both;
+}
+@keyframes login-form-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-form-reveal {
+    animation: none;
+  }
+  .login-blade__scan {
+    animation: none;
+  }
+  .login-blade__sheen {
+    display: none;
+  }
+  .login-blade__portrait,
+  .login-blade--active .login-blade__portrait {
+    transition: filter 0.3s ease;
+    transform: none;
+  }
+  .login-blade:hover .login-blade__portrait,
+  .login-blade:focus-within .login-blade__portrait {
+    transform: none;
+  }
+}
