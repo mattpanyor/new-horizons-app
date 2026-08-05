@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "crypto";
 import type { User } from "@/lib/db/users";
+import { decryptToken, encryptToken } from "@/lib/mcp/crypto";
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -11,9 +12,16 @@ export interface McpToken {
   username: string;
   label: string;
   scopes: string[];
+  issuedBy: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+}
+
+/** A token with its plaintext recovered, for the admin panel only. */
+export interface McpTokenRevealed extends McpToken {
+  /** null when MCP_TOKEN_SECRET is unset or has been rotated since issuance. */
+  plaintext: string | null;
 }
 
 function rowToToken(row: Record<string, unknown>): McpToken {
@@ -22,6 +30,7 @@ function rowToToken(row: Record<string, unknown>): McpToken {
     username: row.username as string,
     label: row.label as string,
     scopes: (row.scopes as string[]) ?? [],
+    issuedBy: (row.issued_by as string) ?? null,
     createdAt: row.created_at as string,
     lastUsedAt: (row.last_used_at as string) ?? null,
     revokedAt: (row.revoked_at as string) ?? null,
@@ -36,43 +45,62 @@ export function hashToken(plaintext: string): string {
   return createHash("sha256").update(plaintext).digest("hex");
 }
 
-/** A new token. The plaintext is returned once here and never stored. */
-export function generateToken(): { plaintext: string; hash: string } {
-  const plaintext = TOKEN_PREFIX + randomBytes(32).toString("base64url");
-  return { plaintext, hash: hashToken(plaintext) };
+export function generateToken(): string {
+  return TOKEN_PREFIX + randomBytes(32).toString("base64url");
 }
 
+/**
+ * Issue a token for `username`, recorded as issued by `issuedBy`.
+ *
+ * Callers are responsible for the authorisation check — see the privilege rule
+ * in app/api/admin/mcp/tokens/route.ts. Throws TokenSecretMissingError if
+ * MCP_TOKEN_SECRET is unset, since a token that cannot be encrypted could never
+ * be shown to the admin again.
+ */
 export async function createMcpToken(fields: {
   username: string;
   label: string;
   scopes: string[];
+  issuedBy: string;
 }): Promise<{ token: McpToken; plaintext: string }> {
-  const { plaintext, hash } = generateToken();
+  const plaintext = generateToken();
   const rows = await sql`
-    INSERT INTO mcp_tokens (username, token_hash, label, scopes)
-    VALUES (${fields.username}, ${hash}, ${fields.label}, ${fields.scopes})
-    RETURNING id, username, label, scopes, created_at, last_used_at, revoked_at
+    INSERT INTO mcp_tokens (username, token_hash, token_encrypted, label, scopes, issued_by)
+    VALUES (
+      ${fields.username},
+      ${hashToken(plaintext)},
+      ${encryptToken(plaintext)},
+      ${fields.label},
+      ${fields.scopes},
+      ${fields.issuedBy}
+    )
+    RETURNING id, username, label, scopes, issued_by, created_at, last_used_at, revoked_at
   `;
   return { token: rowToToken(rows[0]), plaintext };
 }
 
-export async function listTokensForUser(username: string): Promise<McpToken[]> {
+/** Every token, with plaintext recovered. Admin panel only — never expose to players. */
+export async function listAllTokensRevealed(): Promise<McpTokenRevealed[]> {
   const rows = await sql`
-    SELECT id, username, label, scopes, created_at, last_used_at, revoked_at
+    SELECT id, username, label, scopes, issued_by, created_at, last_used_at, revoked_at,
+           token_encrypted
     FROM mcp_tokens
-    WHERE username = ${username}
-    ORDER BY created_at DESC
+    ORDER BY revoked_at NULLS FIRST, created_at DESC
   `;
-  return rows.map(rowToToken);
+  return rows.map((row) => {
+    const encrypted = (row.token_encrypted as string) ?? null;
+    return {
+      ...rowToToken(row),
+      plaintext: encrypted ? decryptToken(encrypted) : null,
+    };
+  });
 }
 
-// Scoped to the owner so one user can never revoke another's token, even by
-// guessing an id.
-export async function revokeToken(id: number, username: string): Promise<boolean> {
+export async function revokeToken(id: number): Promise<boolean> {
   const rows = await sql`
     UPDATE mcp_tokens
     SET revoked_at = NOW()
-    WHERE id = ${id} AND username = ${username} AND revoked_at IS NULL
+    WHERE id = ${id} AND revoked_at IS NULL
     RETURNING id
   `;
   return rows.length > 0;
@@ -87,6 +115,9 @@ export interface AuthenticatedToken {
 /**
  * Resolve a plaintext token to its owner. Returns null for unknown or revoked
  * tokens, and for tokens whose user row has since been deleted.
+ *
+ * Deliberately uses the hash, not the encrypted column: this runs on every tool
+ * call and must stay an indexed lookup that never touches the encryption key.
  */
 export async function findUserByToken(plaintext: string): Promise<AuthenticatedToken | null> {
   if (!plaintext.startsWith(TOKEN_PREFIX)) return null;

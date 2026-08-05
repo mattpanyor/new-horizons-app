@@ -25,9 +25,7 @@ const adminPages: { label: string; href: string; minLevel?: number }[] = [
   { label: "Games", href: "/admin/games" },
   { label: "Investigation", href: "/admin/investigation", minLevel: 127 },
   { label: "Storybook", href: "/admin/story", minLevel: 127 },
-  // /mcp is open to every logged-in user, but this dropdown only renders for
-  // accessLevel >= 66 — players reach the page by URL.
-  { label: "MCP Access", href: "/mcp", minLevel: 0 },
+  { label: "MCP Access", href: "/admin/mcp" },
   { label: "CDN Manager", href: "/admin/cdn" },
   { label: "Kanka Sync", href: "/admin/kanka" },
 ];

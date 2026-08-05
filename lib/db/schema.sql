@@ -232,10 +232,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
 -- MCP access tokens: let an external AI client act as a specific user over the
 -- Model Context Protocol endpoint at /api/mcp/server.
 --
--- token_hash is SHA-256, not bcrypt. Bcrypt is deliberately slow, which is
--- right for human-chosen passwords but wrong here — these are 256-bit random
--- strings with no dictionary to attack, and the hash is checked on every tool
--- call. The plaintext is shown once at creation and never stored.
+-- Tokens are issued by an admin in /admin/mcp and handed to the player they
+-- belong to, so they are stored twice, for two different jobs:
+--
+--   token_hash      SHA-256, indexed — authenticates every incoming request.
+--                   Not bcrypt: bcrypt is deliberately slow, right for
+--                   human-chosen passwords but wrong for a 256-bit random
+--                   string checked on every tool call.
+--   token_encrypted AES-256-GCM (see lib/mcp/crypto.ts) — lets the admin panel
+--                   show the token again to re-send it. Keyed by
+--                   MCP_TOKEN_SECRET, which lives in the environment, so a
+--                   leaked database alone does not yield usable tokens.
 --
 -- scopes names which MCP modules the token may use (e.g. '{investigation}').
 -- Effective permission is the user's access_level INTERSECT these scopes: the
@@ -243,15 +250,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
 --
 -- Revocation is a timestamp rather than a DELETE so a revoked token's
 -- last_used_at survives for auditing.
+--
+-- Migration for an existing DB:
+--   ALTER TABLE mcp_tokens ADD COLUMN IF NOT EXISTS token_encrypted TEXT;
 CREATE TABLE IF NOT EXISTS mcp_tokens (
-  id           SERIAL PRIMARY KEY,
-  username     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
-  token_hash   TEXT NOT NULL UNIQUE,
-  label        TEXT NOT NULL,
-  scopes       TEXT[] NOT NULL DEFAULT '{}',
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_used_at TIMESTAMPTZ,
-  revoked_at   TIMESTAMPTZ
+  id              SERIAL PRIMARY KEY,
+  username        VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  token_hash      TEXT NOT NULL UNIQUE,
+  token_encrypted TEXT,
+  label           TEXT NOT NULL,
+  scopes          TEXT[] NOT NULL DEFAULT '{}',
+  issued_by       VARCHAR(50),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at    TIMESTAMPTZ,
+  revoked_at      TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS mcp_tokens_hash_idx ON mcp_tokens (token_hash);
 CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
