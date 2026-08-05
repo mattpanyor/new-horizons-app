@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import type { ShipItem, ShipItemType } from "@/types/ship";
 import { CARGO_TYPES, ISOLATION_TYPES } from "@/types/ship";
 import { ITEM_TYPE_ICONS } from "./itemTypeIcons";
@@ -55,14 +56,7 @@ export default function AddItemModal({ open, category, onClose, onSubmit, editIt
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open, onClose]);
+  const panelRef = useModalA11y(onClose, open);
 
   if (!open || !category) return null;
 
@@ -85,7 +79,12 @@ export default function AddItemModal({ open, category, onClose, onSubmit, editIt
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       <div
-        className="relative w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto scifi-scroll"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-item-title"
+        tabIndex={-1}
+        className="relative w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto scifi-scroll outline-none"
         style={{
           background: "linear-gradient(145deg, rgba(8, 12, 28, 0.98), rgba(4, 6, 18, 0.98))",
           border: "1px solid rgba(99, 102, 241, 0.3)",
@@ -109,6 +108,7 @@ export default function AddItemModal({ open, category, onClose, onSubmit, editIt
           {/* Header */}
           <div className="text-center">
             <p
+              id="add-item-title"
               className="text-[9px] tracking-[0.5em] uppercase text-white/30 mb-1"
               style={cinzel}
             >
@@ -297,6 +297,7 @@ export default function AddItemModal({ open, category, onClose, onSubmit, editIt
         {/* Close button */}
         <button
           onClick={onClose}
+          aria-label="Close"
           className="absolute top-2 right-2 p-1 rounded hover:bg-white/10 text-white/30 hover:text-white/70 transition-colors cursor-pointer"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { useEditMode } from "./EditModeProvider";
 
 export type MoveShipSource = { bodyId: number } | { markerId: number };
@@ -26,6 +27,7 @@ interface Props {
 type Mode = "system" | "connection";
 
 export function MoveShipDialog({ source, onClose }: Props) {
+  const panelRef = useModalA11y(onClose);
   const router = useRouter();
   const { baseSector, effectiveSector } = useEditMode();
   const [mode, setMode] = useState<Mode>("system");
@@ -88,11 +90,17 @@ export function MoveShipDialog({ source, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-slate-950 border border-amber-500/30 rounded-lg p-5 w-[440px] max-w-[90vw] space-y-3"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="move-ship-title"
+        tabIndex={-1}
+        className="bg-slate-950 border border-amber-500/30 rounded-lg p-5 w-[440px] max-w-[90vw] space-y-3 outline-none"
         onClick={(e) => e.stopPropagation()}
         style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
       >
         <h3
+          id="move-ship-title"
           className="text-amber-300 text-sm uppercase tracking-widest"
           style={{ fontFamily: "var(--font-cinzel), serif" }}
         >

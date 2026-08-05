@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import type { ShipItem } from "@/types/ship";
 import { CARGO_TYPES, ISOLATION_TYPES } from "@/types/ship";
 import { ITEM_TYPE_ICONS } from "./itemTypeIcons";
@@ -33,14 +33,7 @@ function PlaceholderImage() {
 }
 
 export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps) {
-  useEffect(() => {
-    if (!item) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [item, onClose]);
+  const panelRef = useModalA11y(onClose, item !== null);
 
   if (!item) return null;
 
@@ -54,7 +47,12 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       <div
-        className="relative w-full max-w-md overflow-hidden"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="item-detail-title"
+        tabIndex={-1}
+        className="relative w-full max-w-md overflow-hidden outline-none"
         style={{
           background: "linear-gradient(145deg, rgba(8, 12, 28, 0.98), rgba(4, 6, 18, 0.98))",
           border: "1px solid rgba(99, 102, 241, 0.3)",
@@ -109,7 +107,7 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
               {Icon && <Icon />}
             </div>
             <div className="flex flex-col">
-              <h2 className="text-base font-semibold text-white/90 tracking-wide" style={cinzel}>
+              <h2 id="item-detail-title" className="text-base font-semibold text-white/90 tracking-wide" style={cinzel}>
                 {item.name}
               </h2>
               <div className="flex items-center gap-3 mt-0.5">
@@ -151,6 +149,7 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
         {/* Close */}
         <button
           onClick={onClose}
+          aria-label="Close item details"
           className="absolute top-3 right-3 z-10 p-1.5 rounded hover:bg-white/10 text-white/30 hover:text-white/70 transition-colors cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
