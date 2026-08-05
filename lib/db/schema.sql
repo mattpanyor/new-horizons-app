@@ -228,3 +228,30 @@ CREATE INDEX IF NOT EXISTS markers_sector_idx ON markers (sector_id);
 --     WHERE connection_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
   ON markers (connection_id) WHERE connection_id IS NOT NULL;
+
+-- MCP access tokens: let an external AI client act as a specific user over the
+-- Model Context Protocol endpoint at /api/mcp/server.
+--
+-- token_hash is SHA-256, not bcrypt. Bcrypt is deliberately slow, which is
+-- right for human-chosen passwords but wrong here — these are 256-bit random
+-- strings with no dictionary to attack, and the hash is checked on every tool
+-- call. The plaintext is shown once at creation and never stored.
+--
+-- scopes names which MCP modules the token may use (e.g. '{investigation}').
+-- Effective permission is the user's access_level INTERSECT these scopes: the
+-- app's own rules set the ceiling, scopes narrow it per token.
+--
+-- Revocation is a timestamp rather than a DELETE so a revoked token's
+-- last_used_at survives for auditing.
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+  id           SERIAL PRIMARY KEY,
+  username     VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  token_hash   TEXT NOT NULL UNIQUE,
+  label        TEXT NOT NULL,
+  scopes       TEXT[] NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  revoked_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS mcp_tokens_hash_idx ON mcp_tokens (token_hash);
+CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
