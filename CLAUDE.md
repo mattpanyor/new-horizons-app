@@ -114,7 +114,7 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 - `/admin/users` - User management (accessLevel >= 66)
 - `/admin/messages` - Message admin panel (accessLevel >= 127)
 - `/admin/kanka` - Kanka campaign sync (dev only)
-- `/mcp` - Self-serve MCP token management (any logged-in user)
+- `/admin/mcp` - Issue and revoke MCP tokens for users (accessLevel >= 66)
 
 ## API Routes
 
@@ -126,7 +126,7 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 - POST `/api/admin/users` - User management
 - POST `/api/admin/kanka/sync`, GET/POST `/api/admin/kanka/entities` - Kanka sync
 - ALL `/api/mcp/server` - MCP endpoint for AI clients (bearer token, not cookie)
-- GET/POST/DELETE `/api/mcp/tokens` - Token management, always scoped to the caller
+- GET/POST/DELETE `/api/admin/mcp/tokens` - Token issuance and revocation (accessLevel >= 66)
 
 ## MCP Server
 
@@ -134,7 +134,11 @@ External AI clients can act as a real app user over the Model Context Protocol.
 
 - **Endpoint**: `/api/mcp/server`, auth via `Authorization: Bearer nhmcp_…`, or
   `/api/mcp/server/t/<token>` for clients that only accept a URL (logs the secret — fallback only)
-- **Tokens**: `mcp_tokens` table, SHA-256 hashed, minted per user at `/mcp`, revocable
+- **Tokens**: `mcp_tokens`, issued by an admin at `/admin/mcp` (accessLevel >= 66) and sent to the
+  user. Stored twice — SHA-256 `token_hash` for the auth hot path, AES-256-GCM `token_encrypted`
+  (key from `MCP_TOKEN_SECRET`) so the panel can show the token again to re-send it
+- An admin may only issue tokens for users **at or below their own access level** — otherwise
+  holding the token would hand them the higher access
 - **Permissions mirror the web app.** A token grants no more than its owner has in the browser.
   Per-token `scopes` narrow further; effective access is `accessLevel ∩ scopes`
 - Tools the caller can't use are **omitted from `tools/list`**, not rejected on call
