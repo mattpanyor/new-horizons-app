@@ -116,17 +116,12 @@ export default function McpTokensPanel({
   };
 
   return (
-    <main className="relative z-10 mx-auto w-full max-w-5xl px-5 py-10 space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-2xl text-white/90" style={cinzel}>
-          MCP Access
-        </h1>
-        <p className="text-sm text-white/50 leading-relaxed">
-          Issue a token so a player can connect an AI assistant to the campaign. The token acts as
-          that player — it can never do more than they could do themselves in the app. Send them the
-          connection URL; they never need to visit this page.
-        </p>
-      </header>
+    <div className="flex flex-col gap-8 max-w-5xl">
+      <p className="text-sm text-white/50 leading-relaxed">
+        Issue a token so a player can connect an AI assistant to the campaign. The token acts as
+        that player — it can never do more than they could do themselves in the app. Send them the
+        connection URL; they never need to visit this page.
+      </p>
 
       {!secretConfigured && (
         <div className="rounded-lg border border-red-400/30 bg-red-500/[0.08] p-4 text-sm text-red-200/80">
@@ -309,6 +304,6 @@ export default function McpTokensPanel({
           </ul>
         )}
       </section>
-    </main>
+    </div>
   );
 }
