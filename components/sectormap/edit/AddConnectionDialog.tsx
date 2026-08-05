@@ -5,6 +5,7 @@
 // On confirm, stages a new connection with default styling.
 
 import { useMemo, useState } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { useEditMode } from "./EditModeProvider";
 
 interface Endpoint {
@@ -14,6 +15,7 @@ interface Endpoint {
 }
 
 export function AddConnectionDialog({ onClose }: { onClose: () => void }) {
+  const panelRef = useModalA11y(onClose);
   const { effectiveSector, createEntity } = useEditMode();
   const [from, setFrom] = useState<Endpoint | null>(null);
   const [to, setTo] = useState<Endpoint | null>(null);
@@ -44,10 +46,16 @@ export function AddConnectionDialog({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="bg-slate-950 border border-amber-500/30 rounded-lg p-5 w-[420px] max-w-[90vw] space-y-3"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-connection-title"
+        tabIndex={-1}
+        className="bg-slate-950 border border-amber-500/30 rounded-lg p-5 w-[420px] max-w-[90vw] space-y-3 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <h3
+          id="add-connection-title"
           className="text-amber-300 text-sm uppercase tracking-widest"
           style={{ fontFamily: "var(--font-cinzel), serif" }}
         >

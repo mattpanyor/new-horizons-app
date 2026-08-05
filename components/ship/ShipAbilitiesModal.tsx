@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import type { ShipAbility } from "@/types/ship";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
@@ -199,18 +200,11 @@ export default function ShipAbilitiesModal({
     setTimeout(() => onClose(), 300);
   }, [onClose]);
 
-  // Escape key
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (selectedAbility) setSelectedAbility(null);
-        else handleClose();
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open, selectedAbility, handleClose]);
+  // Escape dismisses the ability detail first, then the modal itself.
+  const panelRef = useModalA11y(() => {
+    if (selectedAbility) setSelectedAbility(null);
+    else handleClose();
+  }, open);
 
   if (!open) return null;
 
@@ -219,7 +213,14 @@ export default function ShipAbilitiesModal({
   const opacity = Math.min(1, resizeProgress * 8);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ship abilities"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 transition-opacity duration-300"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import type { CombatRangeBand, CombatSizeClass } from "@/types/game";
 import { RANGES } from "@/lib/combat/ranges";
 import { SIZE_CLASSES } from "@/lib/combat/sizeClasses";
@@ -34,6 +35,7 @@ export default function AddShipModal({ open, onClose, onConfirm }: AddShipModalP
     COMBAT_FACTIONS[0]?.id ?? null,
   );
   const [label, setLabel] = useState("");
+  const panelRef = useModalA11y(onClose, open);
 
   if (!open) return null;
 
@@ -43,10 +45,15 @@ export default function AddShipModal({ open, onClose, onConfirm }: AddShipModalP
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md mx-4 rounded-lg border border-white/10 bg-gray-950/95 p-5 flex flex-col gap-4"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-ship-title"
+        tabIndex={-1}
+        className="w-full max-w-md mx-4 rounded-lg border border-white/10 bg-gray-950/95 p-5 flex flex-col gap-4 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-[10px] tracking-[0.3em] uppercase text-white/40" style={cinzel}>
+        <p id="add-ship-title" className="text-[10px] tracking-[0.3em] uppercase text-white/40" style={cinzel}>
           Add Ship
         </p>
 

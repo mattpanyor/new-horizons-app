@@ -4,6 +4,7 @@
 // coords in SVG space and pre-fills them for the new entity.
 
 import { useState } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { useEditMode } from "./EditModeProvider";
 import type { EntityKind } from "./types";
 import { MARKER_TYPES } from "@/lib/mapEnums";
@@ -19,6 +20,7 @@ const inputClass =
   "w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:border-amber-500/50 focus:outline-none";
 
 export function CreateEntityModal({ kind, x, y, onClose }: Props) {
+  const panelRef = useModalA11y(onClose);
   const { createEntity } = useEditMode();
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
@@ -49,10 +51,16 @@ export function CreateEntityModal({ kind, x, y, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-slate-950 border border-amber-500/30 rounded-lg p-5 w-[380px] max-w-[90vw] space-y-3"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-entity-title"
+        tabIndex={-1}
+        className="bg-slate-950 border border-amber-500/30 rounded-lg p-5 w-[380px] max-w-[90vw] space-y-3 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <h3
+          id="create-entity-title"
           className="text-amber-300 text-sm uppercase tracking-widest"
           style={{ fontFamily: "var(--font-cinzel), serif" }}
         >

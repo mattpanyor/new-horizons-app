@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import type { ShipBay } from "@/types/ship";
 
 interface ShipBayModalProps {
@@ -17,15 +18,7 @@ export default function ShipBayModal({
   onClose,
 }: ShipBayModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!bay) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [bay, onClose]);
+  const panelRef = useModalA11y(onClose, bay !== null);
 
   if (!bay) return null;
 
@@ -39,7 +32,12 @@ export default function ShipBayModal({
 
       {/* Modal */}
       <div
-        className="relative max-w-2xl w-full overflow-hidden rounded-lg"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ship-bay-title"
+        tabIndex={-1}
+        className="relative max-w-2xl w-full overflow-hidden rounded-lg outline-none"
         style={{
           background: "rgba(10, 10, 30, 0.95)",
           border: `1px solid ${layerColor}55`,
@@ -75,6 +73,7 @@ export default function ShipBayModal({
 
           {/* Title */}
           <h2
+            id="ship-bay-title"
             className="text-xl text-white font-semibold tracking-wide"
             style={{ fontFamily: "var(--font-cinzel), serif" }}
           >
@@ -103,6 +102,7 @@ export default function ShipBayModal({
         {/* Close button — must be AFTER image so it layers on top */}
         <button
           onClick={onClose}
+          aria-label="Close bay details"
           className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/30 transition-all cursor-pointer"
           style={{ background: "rgba(0,0,0,0.4)" }}
         >

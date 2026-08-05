@@ -1,6 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import type { InboxMessage } from "./InboxDropdown";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
@@ -32,13 +33,20 @@ function renderMessageBody(body: string): React.ReactNode[] {
 }
 
 export function MessageModal({ message, onClose, onAcknowledge }: MessageModalProps) {
+  const panelRef = useModalA11y(onClose);
+
   return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg mx-4 overflow-hidden"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="message-modal-subject"
+        tabIndex={-1}
+        className="relative w-full max-w-lg mx-4 overflow-hidden outline-none"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "rgba(10, 10, 30, 0.92)",
@@ -76,6 +84,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
         {/* Close button */}
         <button
           onClick={onClose}
+          aria-label="Close message"
           className="absolute top-3 right-3 z-10 p-1.5 rounded hover:bg-white/10 text-white/30 hover:text-white/70 transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -134,6 +143,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
         {/* Subject */}
         <div className="px-6 pt-4 pb-2">
           <h2
+            id="message-modal-subject"
             className="text-lg text-white/80 tracking-[0.05em]"
             style={cinzel}
           >
