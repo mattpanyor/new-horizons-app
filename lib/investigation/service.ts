@@ -305,7 +305,17 @@ export async function updateClueAs(
   if (!existing) return fail("Not found", 404);
 
   if (constraints.ownRecordsOnly && existing.createdBy !== actor.username) {
-    return fail(`This clue was written by ${existing.createdBy}; you can only edit your own`, 403);
+    // Names the remedy explicitly. This restriction belongs to the calling
+    // surface, not to the app — editing another player's clue is genuinely
+    // allowed on the board (ClueTile makes the whole tile click-to-edit, with
+    // no ownership gate). An error that only said "you cannot edit this" would
+    // be relayed to the user as a flat refusal, which would be untrue.
+    return fail(
+      `This clue was written by ${existing.createdBy}, and this connection only allows editing ` +
+        `your own clues. The web app does permit it: the user can open the investigation board ` +
+        `and click the clue to edit it there.`,
+      403
+    );
   }
 
   const fields: { text?: string; factionSlugs?: string[]; createdBy?: string } = {};
