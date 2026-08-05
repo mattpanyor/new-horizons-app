@@ -1,48 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { getUserByUsername } from "@/lib/db/users";
-import { createChapter, getAllChapters, getClueCountByChapter } from "@/lib/db/chapters";
-
-async function requireSuperAdmin() {
-  const cookieStore = await cookies();
-  const username = cookieStore.get("nh_user")?.value;
-  if (!username) return null;
-  const user = await getUserByUsername(username);
-  if (!user || user.accessLevel < 127) return null;
-  return user;
-}
+import { requireAccessLevel } from "@/lib/auth";
+import { ACCESS, createChapterAs, listChaptersWithCountsAs } from "@/lib/investigation/service";
 
 export async function GET() {
-  const admin = await requireSuperAdmin();
-  if (!admin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = await requireAccessLevel(ACCESS.SUPERADMIN);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const result = await listChaptersWithCountsAs(admin);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
-  const [chapters, clueCounts] = await Promise.all([
-    getAllChapters(),
-    getClueCountByChapter(),
-  ]);
-  return NextResponse.json({ chapters, clueCounts });
+  return NextResponse.json(result.data);
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await requireSuperAdmin();
-  if (!admin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const admin = await requireAccessLevel(ACCESS.SUPERADMIN);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => null);
-  if (!body) {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
-  const { title } = body;
-  if (typeof title !== "string" || title.trim().length === 0) {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  const result = await createChapterAs(admin, body.title);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
-  if (title.trim().length > 200) {
-    return NextResponse.json({ error: "Title must be 200 characters or fewer" }, { status: 400 });
-  }
-
-  const chapter = await createChapter(title.trim());
-  return NextResponse.json({ chapter }, { status: 201 });
+  return NextResponse.json({ chapter: result.data }, { status: 201 });
 }

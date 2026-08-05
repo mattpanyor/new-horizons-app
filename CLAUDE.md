@@ -114,6 +114,7 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 - `/admin/users` - User management (accessLevel >= 66)
 - `/admin/messages` - Message admin panel (accessLevel >= 127)
 - `/admin/kanka` - Kanka campaign sync (dev only)
+- `/mcp` - Self-serve MCP token management (any logged-in user)
 
 ## API Routes
 
@@ -124,6 +125,42 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 - POST/PUT/DELETE `/api/admin/messages` - Admin message CRUD
 - POST `/api/admin/users` - User management
 - POST `/api/admin/kanka/sync`, GET/POST `/api/admin/kanka/entities` - Kanka sync
+- ALL `/api/mcp/server` - MCP endpoint for AI clients (bearer token, not cookie)
+- GET/POST/DELETE `/api/mcp/tokens` - Token management, always scoped to the caller
+
+## MCP Server
+
+External AI clients can act as a real app user over the Model Context Protocol.
+
+- **Endpoint**: `/api/mcp/server`, auth via `Authorization: Bearer nhmcp_…`, or
+  `/api/mcp/server/t/<token>` for clients that only accept a URL (logs the secret — fallback only)
+- **Tokens**: `mcp_tokens` table, SHA-256 hashed, minted per user at `/mcp`, revocable
+- **Permissions mirror the web app.** A token grants no more than its owner has in the browser.
+  Per-token `scopes` narrow further; effective access is `accessLevel ∩ scopes`
+- Tools the caller can't use are **omitted from `tools/list`**, not rejected on call
+- **Chapter deletion is deliberately not exposed over MCP.** It cascades to every clue in the
+  chapter, and the web UI's type-the-exact-title guard has no AI equivalent — a tool description
+  asking for confirmation is advice a model can reason past. Keep destructive-and-unbounded
+  operations in the admin panel; apply the same test to any future module
+
+**The important rule:** all investigation permission and validation logic lives in
+`lib/investigation/service.ts`. The web routes under `app/api/investigation/**` and
+`app/api/admin/investigation/**` are thin adapters over it, as are the MCP tools. Add a rule there
+and it applies to the browser and every AI client at once — never add one to a route handler alone,
+or the two surfaces silently diverge.
+
+**Adding a domain** (messages, sectors, …):
+
+1. Write `lib/<domain>/service.ts` holding the policy, and make the existing routes call it
+2. Write `lib/mcp/modules/<domain>.ts` exporting a `ToolModule` whose handlers only call that service
+3. Add it to `MODULES` in `lib/mcp/registry.ts`
+
+Endpoint, auth, and the token UI pick it up automatically — the new scope appears as a checkbox.
+Name tools `<domain>_<verb>_<noun>` to avoid collisions and help model selection.
+
+> Before building a sectors module, settle which store is authoritative: `lib/sectors.ts` and
+> `lib/starsystems.ts` read `content/sectors/*.json` from disk, while `lib/db/sectors.ts` has
+> Postgres CRUD. The JSON is intentionally static — confirm the target before writing tools.
 
 ## Review Later
 
@@ -132,7 +169,7 @@ Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image sto
 ## Database
 
 - Neon Postgres via `@neondatabase/serverless`
-- Tables: `users`, `messages`, `message_recipients`, `kanka_entities`, `game_sessions`
+- Tables: `users`, `messages`, `message_recipients`, `kanka_entities`, `game_sessions`, `mcp_tokens`
 - Auth: bcryptjs password hashing
 - No migrations directory — schema changes are manual
 

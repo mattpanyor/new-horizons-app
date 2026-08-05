@@ -16,6 +16,75 @@ function rowToClue(row: Record<string, unknown>): Clue {
   };
 }
 
+// Shared projection for the composed query in searchClues. The tagged-template
+// helpers below inline the same columns; this form exists because sql.query()
+// is the only interface that takes a dynamically built WHERE clause.
+const SELECT = `
+  SELECT
+    c.id, c.chapter, c.text, c.faction_slugs, c.created_by, c.created_at,
+    u.image_url AS creator_image_url,
+    u.color     AS creator_color
+  FROM clues c
+  LEFT JOIN users u ON u.username = c.created_by
+`;
+
+export interface ClueFilters {
+  chapter?: number;
+  faction?: string;
+  author?: string;
+  query?: string;
+  limit?: number;
+}
+
+// `%` and `_` are ILIKE wildcards — a user searching for "50%" means the
+// literal characters, so escape them (Postgres LIKE uses backslash by default).
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+export const CLUE_SEARCH_DEFAULT_LIMIT = 50;
+export const CLUE_SEARCH_MAX_LIMIT = 200;
+
+// Filtered clue search across chapters. Every filter is optional and they
+// combine with AND. Used by the MCP tools, where the caller may want "every
+// clue mentioning the cultists" rather than one chapter's worth.
+export async function searchClues(filters: ClueFilters = {}): Promise<Clue[]> {
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (filters.chapter !== undefined) {
+    params.push(filters.chapter);
+    where.push(`c.chapter = $${params.length}`);
+  }
+  if (filters.author !== undefined) {
+    params.push(filters.author);
+    where.push(`c.created_by = $${params.length}`);
+  }
+  if (filters.faction !== undefined) {
+    params.push(filters.faction);
+    where.push(`$${params.length} = ANY(c.faction_slugs)`);
+  }
+  if (filters.query !== undefined && filters.query.trim() !== "") {
+    params.push(`%${escapeLike(filters.query.trim())}%`);
+    where.push(`c.text ILIKE $${params.length}`);
+  }
+
+  const limit = Math.min(
+    Math.max(filters.limit ?? CLUE_SEARCH_DEFAULT_LIMIT, 1),
+    CLUE_SEARCH_MAX_LIMIT
+  );
+  params.push(limit);
+
+  const rows = await sql.query(
+    `${SELECT}
+     ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
+     ORDER BY c.created_at DESC
+     LIMIT $${params.length}`,
+    params
+  );
+  return rows.map(rowToClue);
+}
+
 export async function getCluesByChapter(chapter: number): Promise<Clue[]> {
   const rows = await sql`
     SELECT
