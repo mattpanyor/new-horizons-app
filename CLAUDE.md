@@ -142,6 +142,10 @@ External AI clients can act as a real app user over the Model Context Protocol.
 - **Permissions mirror the web app.** A token grants no more than its owner has in the browser.
   Per-token `scopes` narrow further; effective access is `accessLevel ∩ scopes`
 - Tools the caller can't use are **omitted from `tools/list`**, not rejected on call
+- **Over MCP a user may only edit clues they authored**, at every access level. The web board still
+  lets any player edit any clue — this is an `ActorConstraints` narrowing applied by the MCP surface,
+  because an AI on a loose instruction could otherwise rewrite many players' clues in one turn.
+  Constraints may only narrow below `can()`, never widen past it
 - **Chapter deletion is deliberately not exposed over MCP.** It cascades to every clue in the
   chapter, and the web UI's type-the-exact-title guard has no AI equivalent — a tool description
   asking for confirmation is advice a model can reason past. Keep destructive-and-unbounded
