@@ -232,7 +232,9 @@ const tools: ToolDef[] = [
   {
     name: "investigation_update_clue",
     description:
-      "Edit an existing clue's text and/or faction tags. Pass only the fields to change. " +
+      "Edit one of YOUR OWN clues — text and/or faction tags. Pass only the fields to change. " +
+      "Clues written by other players cannot be edited through this connection, even by an admin; " +
+      "use the web board for that. " +
       MENTION_SYNTAX,
     inputSchema: {
       type: "object",
@@ -253,12 +255,20 @@ const tools: ToolDef[] = [
       const missing = await findUnknownMentions(args.text);
       if (missing.length > 0) return mentionError(missing);
 
+      // ownRecordsOnly is an MCP-surface restriction, not an app rule: the web
+      // board still lets any player edit any clue. An AI acting on a loose
+      // instruction could otherwise rewrite a dozen players' clues in one turn.
       return fromService(
-        await updateClueAs(ctx.user, num(args.id), {
-          text: args.text,
-          factionSlugs: args.factionSlugs,
-          author: args.author as string | undefined,
-        })
+        await updateClueAs(
+          ctx.user,
+          num(args.id),
+          {
+            text: args.text,
+            factionSlugs: args.factionSlugs,
+            author: args.author as string | undefined,
+          },
+          { ownRecordsOnly: true }
+        )
       );
     },
   },

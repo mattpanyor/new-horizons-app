@@ -46,6 +46,22 @@ export type ServiceResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status: number };
 
+/**
+ * Extra restrictions a *calling surface* may impose on top of the app's rules.
+ *
+ * These only ever narrow, never widen — the access-level rules in `can()`
+ * remain the ceiling. This is the same direction token scopes work: the app
+ * decides the maximum, a surface may ask for less.
+ *
+ * Used by the MCP tools, where an AI acting on a vague instruction could
+ * otherwise rewrite many players' clues in a single turn. The web board keeps
+ * its existing behaviour, where any player may edit any clue.
+ */
+export interface ActorConstraints {
+  /** Refuse writes to records the actor did not author, whatever their level. */
+  ownRecordsOnly?: boolean;
+}
+
 function ok<T>(data: T): ServiceResult<T> {
   return { ok: true, data };
 }
@@ -279,13 +295,18 @@ export async function createClueAs(
 export async function updateClueAs(
   actor: User,
   id: number,
-  input: { text?: unknown; factionSlugs?: unknown; author?: string }
+  input: { text?: unknown; factionSlugs?: unknown; author?: string },
+  constraints: ActorConstraints = {}
 ): Promise<ServiceResult<Clue>> {
   if (!can(actor, "clue:update")) return fail("Forbidden", 403);
   if (!Number.isInteger(id) || id < 1) return fail("Invalid id", 400);
 
   const existing = await getClueById(id);
   if (!existing) return fail("Not found", 404);
+
+  if (constraints.ownRecordsOnly && existing.createdBy !== actor.username) {
+    return fail(`This clue was written by ${existing.createdBy}; you can only edit your own`, 403);
+  }
 
   const fields: { text?: string; factionSlugs?: string[]; createdBy?: string } = {};
 
