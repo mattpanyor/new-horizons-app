@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import DotGridAnimation from "@/components/DotGridAnimation";
+import LoginCardScatter from "@/components/LoginCardScatter";
 
 // Sitewide toggle. When NEXT_PUBLIC_AVATAR_LOGIN=true, the login page shows a
 // grid of user avatars to tap instead of a username field. Inlined at build
@@ -74,7 +75,8 @@ export default function LoginPage() {
     <>
       <StarSystemBackground />
       <DotGridAnimation exclusionZones={[{ x: 30, y: 25, width: 40, height: 50 }]} />
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <LoginCardScatter variant={AVATAR_LOGIN ? "avatar" : "form"} />
+      <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
         <div className={AVATAR_LOGIN ? "w-auto max-w-full" : "w-full max-w-sm"}>
           {/* Title */}
           <div className="text-center mb-8">
