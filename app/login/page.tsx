@@ -76,8 +76,15 @@ export default function LoginPage() {
       <StarSystemBackground />
       <DotGridAnimation exclusionZones={[{ x: 30, y: 25, width: 40, height: 50 }]} />
       <LoginCardScatter variant={AVATAR_LOGIN ? "avatar" : "form"} />
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
-        <div className={AVATAR_LOGIN ? "w-auto max-w-full" : "w-full max-w-sm"}>
+      {/* py-10 rather than pure centring: the stacked phone blade list can run
+          taller than the viewport, and a centred flex child would be clipped
+          at the top instead of scrolling. */}
+      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-10">
+        <div
+          className={
+            AVATAR_LOGIN ? "w-full max-w-sm sm:w-auto sm:max-w-full" : "w-full max-w-sm"
+          }
+        >
           {/* Title */}
           <div className="text-center mb-8">
             <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-2" style={cinzel}>
@@ -102,10 +109,19 @@ export default function LoginPage() {
                 </p>
               </div>
             ) : (
-              // A single row of portrait blades. Clicking one collapses the
-              // others to nothing and expands the chosen blade into the login
-              // box — its portrait dims into the box backdrop.
-              <div className="flex flex-row items-center justify-center overflow-hidden py-6">
+              // A row of portrait blades — stacked into a column of wide, short
+              // ones on a phone, where a row of nine would be a hairline each.
+              // Either way, clicking one collapses the others along the same
+              // axis and expands the chosen blade into the login box, its
+              // portrait dimming into the box backdrop.
+              <div
+                className={[
+                  "flex flex-col sm:flex-row items-center justify-center overflow-hidden py-6",
+                  // The gaps between stacked blades would otherwise survive
+                  // their collapse and push the box off centre.
+                  selecting ? "gap-0" : "gap-1.5 sm:gap-0",
+                ].join(" ")}
+              >
                 {users.map((u, i) => {
                   const isSelected = username === u.username;
                   const isHidden = selecting && !isSelected;
@@ -117,16 +133,23 @@ export default function LoginPage() {
                       className={[
                         "login-blade group relative shrink-0 overflow-hidden",
                         "transition-all ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+                        // Phone blades keep their width and trade height; from
+                        // sm up it's the other way round.
                         isSelected
-                          ? "login-blade--active w-[20rem] max-w-[85vw] h-[26rem] duration-500 delay-100"
+                          ? "login-blade--active w-full h-[21rem] sm:w-[20rem] sm:max-w-[85vw] sm:h-[26rem] duration-500 delay-100"
                           : isHidden
-                            ? "w-0 h-64 opacity-0 duration-300"
-                            : "w-24 sm:w-28 h-64 duration-300",
+                            ? "w-full h-0 opacity-0 sm:w-0 sm:h-64 duration-300"
+                            : "w-full h-16 sm:w-24 md:w-28 sm:h-64 duration-300",
                       ].join(" ")}
                     >
                       {/* Blade frame */}
                       <div className="absolute inset-0 border border-indigo-500/30 group-hover:border-indigo-400/80 bg-slate-900/60 shadow-[inset_0_0_0_rgba(99,102,241,0)] group-hover:shadow-[inset_0_0_26px_rgba(99,102,241,0.4)] transition-all overflow-hidden">
-                        {/* Portrait, aligned top-center — becomes the faded box backdrop when active */}
+                        {/* Portrait, aligned top-center — becomes the faded box
+                            backdrop when active. A resting phone blade is a wide
+                            strip, and stretching a portrait across it crops to a
+                            band of empty sky, so there the portrait keeps its own
+                            column at the leading edge and the strip carries the
+                            name. Expanded, it goes full-bleed again either way. */}
                         {u.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -134,10 +157,16 @@ export default function LoginPage() {
                             alt=""
                             width={112}
                             height={256}
-                            className="login-blade__portrait w-full h-full object-cover object-top"
+                            className={`login-blade__portrait h-full object-cover object-top ${
+                              isSelected ? "w-full" : "w-24 sm:w-full"
+                            }`}
                           />
                         ) : (
-                          <div className="login-blade__portrait w-full h-full flex items-start justify-center pt-6">
+                          <div
+                            className={`login-blade__portrait h-full flex items-center sm:items-start justify-center sm:pt-6 ${
+                              isSelected ? "w-full" : "w-24 sm:w-full"
+                            }`}
+                          >
                             <span className="text-4xl text-slate-500 uppercase" style={cinzel}>
                               {u.username[0]}
                             </span>
@@ -158,11 +187,13 @@ export default function LoginPage() {
                           }`}
                         />
 
-                        {/* Resting name (hidden once this blade becomes the box) */}
+                        {/* Resting name — under the portrait on a tall blade,
+                            beside it on a phone strip. Hidden once this blade
+                            becomes the box. */}
                         {!isSelected && (
-                          <div className="absolute inset-x-0 bottom-0 z-[4] bg-gradient-to-t from-slate-950/90 to-transparent pt-8 pb-2 px-1">
+                          <div className="absolute inset-y-0 left-24 right-0 z-[4] flex items-center px-4 bg-gradient-to-r from-slate-950/70 to-transparent sm:inset-y-auto sm:bottom-0 sm:left-0 sm:block sm:px-1 sm:pt-8 sm:pb-2 sm:bg-gradient-to-t sm:from-slate-950/90">
                             <p
-                              className="text-[10px] tracking-[0.2em] uppercase text-white/70 group-hover:text-white text-center truncate transition-colors"
+                              className="w-full text-[11px] sm:text-[10px] tracking-[0.2em] uppercase text-white/70 group-hover:text-white text-left sm:text-center truncate transition-colors"
                               style={cinzel}
                             >
                               {u.username}

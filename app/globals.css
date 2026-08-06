@@ -261,8 +261,18 @@ body {
   --spread: clamp(9rem, 24vw, 21.5rem);
 }
 
+/* Every card carries two sets of coordinates from the component — desktop
+   (--dx/--dtop/…) and phone (--mx/--mtop/…). Everything below reads only the
+   resolved --x/--top/--rot/--scale, so the phone media query re-points those
+   four at the other set and the layout, the toss animation and the corner
+   shadows all follow without a second copy of any rule. */
 .login-card {
+  --x: var(--dx);
+  --top: var(--dtop);
+  --rot: var(--drot);
+  --scale: var(--dscale);
   position: absolute;
+  top: var(--top);
   width: clamp(8.5rem, 15vw, 15rem);
   aspect-ratio: 1024 / 1536;
   border-radius: 0.6rem;
@@ -310,6 +320,35 @@ body {
   to {
     opacity: 1;
     transform: translate(-50%, -50%) rotate(var(--rot)) scale(var(--scale));
+  }
+}
+
+/* Phones: the login box is as wide as the screen, so the fan swaps to the
+   corner deal (see MOBILE_SLOTS). Cards run larger but sit mostly past the
+   edge, and only the first four are dealt — the rest would land on top of each
+   other. Dimmed harder still, since here they really are behind the box. */
+/* 40rem is Tailwind's `sm` breakpoint — kept in rem so this flips on the same
+   line the blade layout does, whatever the root font size. */
+@media (width < 40rem) {
+  .login-cards,
+  .login-cards--avatar {
+    --spread: 34vw;
+  }
+
+  .login-card {
+    --x: var(--mx);
+    --top: var(--mtop);
+    --rot: var(--mrot);
+    --scale: var(--mscale);
+    width: clamp(9rem, 44vw, 13rem);
+  }
+
+  .login-card:nth-child(n + 5) {
+    display: none;
+  }
+
+  .login-cards .login-card__art {
+    filter: brightness(0.48) saturate(0.75) contrast(1.02);
   }
 }
 

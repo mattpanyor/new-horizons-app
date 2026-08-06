@@ -74,6 +74,20 @@ const SLOTS: Record<"form" | "avatar", Slot[]> = {
   ],
 };
 
+// Phones get their own table. Both login surfaces fill the width of a phone
+// screen, so a fan *around* the box has nowhere to stand — it ends up under the
+// box or off the edge. Instead the deck retreats to the four corners and is
+// dealt mostly off-screen, so what shows is a corner of card in the band above
+// and below the login box, with the middle of the screen left alone. Only the
+// first four cards are dealt on a phone (the CSS hides the rest) — a fan of
+// nine at that size is noise, and four corners is the whole idea.
+const MOBILE_SLOTS: Slot[] = [
+  { x: -1.12, top: "-1%", rot: -15, scale: 1 },
+  { x: 1.16, top: "-4%", rot: 13, scale: 0.94 },
+  { x: 1.1, top: "101%", rot: -12, scale: 0.98 },
+  { x: -1.18, top: "98%", rot: 17, scale: 0.92 },
+];
+
 /** Cards past the end of the table wrap around, shifted out and down a little
  *  so they land beside their ring-mates instead of exactly on top of them. */
 function slotFor(slots: Slot[], i: number): Slot {
@@ -101,6 +115,7 @@ export default function LoginCardScatter({ variant = "form" }: LoginCardScatterP
     <div className={`login-cards login-cards--${variant}`} aria-hidden="true">
       {DECK.map((src, i) => {
         const slot = slotFor(slots, i);
+        const mobile = slotFor(MOBILE_SLOTS, i);
         // The top card keeps its slot but is dealt after everything else.
         const order = src === TOP_CARD ? DECK.length : i;
         return (
@@ -109,11 +124,17 @@ export default function LoginCardScatter({ variant = "form" }: LoginCardScatterP
             className="login-card"
             style={
               {
-                top: slot.top,
                 zIndex: order + 1,
-                "--x": slot.x,
-                "--rot": `${slot.rot}deg`,
-                "--scale": slot.scale,
+                // Two sets of coordinates travel with every card; the
+                // stylesheet decides which set is in play at this width.
+                "--dx": slot.x,
+                "--dtop": slot.top,
+                "--drot": `${slot.rot}deg`,
+                "--dscale": slot.scale,
+                "--mx": mobile.x,
+                "--mtop": mobile.top,
+                "--mrot": `${mobile.rot}deg`,
+                "--mscale": mobile.scale,
                 // Dealt in order, and never a long wait however big the deck gets.
                 "--delay": `${Math.min(order * 90, 900)}ms`,
               } as React.CSSProperties
