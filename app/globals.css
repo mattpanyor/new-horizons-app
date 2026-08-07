@@ -287,6 +287,13 @@ body {
   animation: login-card-toss 780ms cubic-bezier(0.16, 0.9, 0.22, 1) var(--delay) both;
 }
 
+/* The outgoing batch. Cards lift and fade rather than simply disappearing, and
+   the two batches overlap for the length of this transition so one hand is
+   always on the table. */
+.login-card--out {
+  animation: login-card-lift 900ms cubic-bezier(0.4, 0, 0.7, 0.2) both;
+}
+
 .login-card__art {
   width: 100%;
   height: 100%;
@@ -323,6 +330,18 @@ body {
   }
 }
 
+@keyframes login-card-lift {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--rot)) scale(var(--scale));
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 2rem)) rotate(calc(var(--rot) * 1.3))
+      scale(calc(var(--scale) * 0.94));
+  }
+}
+
 /* Phones: the login box is as wide as the screen, so the fan swaps to the
    corner deal (see MOBILE_SLOTS). Cards run larger but sit mostly past the
    edge, and only the first four are dealt — the rest would land on top of each
@@ -343,10 +362,6 @@ body {
     width: clamp(9rem, 44vw, 13rem);
   }
 
-  .login-card:nth-child(n + 5) {
-    display: none;
-  }
-
   .login-cards .login-card__art {
     filter: brightness(0.48) saturate(0.75) contrast(1.02);
   }
@@ -355,6 +370,17 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .login-card {
     animation: none;
+  }
+
+  /* Without this the outgoing hand never leaves. The rule above kills the lift
+     animation at equal specificity to .login-card--out and wins on source
+     order, so the batch that should be fading out stays at full opacity beside
+     the incoming one — a reduced-motion user ends up looking at eight cards
+     permanently, and every deal re-lays out all eight. Removing the motion has
+     to leave the end state, not the start state. */
+  .login-card--out {
+    animation: none;
+    opacity: 0;
   }
 
   .login-form-reveal {

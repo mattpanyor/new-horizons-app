@@ -27,6 +27,7 @@ const adminPages: { label: string; href: string; minLevel?: number }[] = [
   { label: "Storybook", href: "/admin/story", minLevel: 127 },
   { label: "MCP Access", href: "/admin/mcp" },
   { label: "CDN Manager", href: "/admin/cdn" },
+  { label: "Appearance", href: "/admin/settings" },
   { label: "Kanka Sync", href: "/admin/kanka" },
 ];
 

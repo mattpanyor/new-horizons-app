@@ -52,3 +52,7 @@ next-env.d.ts
 .claude/skills/brand/
 .claude/skills/slides/
 .claude/skills/banner-design/
+# Code review reports. Written so a review survives between sessions without
+# the findings ending up in the history — they describe a moment in the branch,
+# not the branch itself.
+code-review-*.md

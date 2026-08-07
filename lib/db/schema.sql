@@ -267,3 +267,22 @@ CREATE TABLE IF NOT EXISTS mcp_tokens (
 );
 CREATE INDEX IF NOT EXISTS mcp_tokens_hash_idx ON mcp_tokens (token_hash);
 CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
+
+-- app_settings — small, admin-controlled values that change how the app looks
+-- or behaves without a deploy.
+--
+-- Deliberately a key/value table rather than a column per setting: these are
+-- single-row, low-traffic, and adding one shouldn't need a migration. Values
+-- are TEXT and each setting's own module is responsible for parsing and
+-- validating them — a bad value in here must never be able to break a page, so
+-- readers fall back to a default rather than trusting the string.
+--
+-- Keys in use:
+--   home_screen_art  which entry of PLANET_PRESETS the login and sectors
+--                    background renders. See lib/settings/service.ts.
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by VARCHAR(50)
+);

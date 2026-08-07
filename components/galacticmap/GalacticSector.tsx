@@ -65,9 +65,16 @@ export const GalacticSector = React.memo(function GalacticSector({
       onMouseLeave={() => onHover(null)}
       onClick={onClick}
     >
+      {/* Smoked backing. The wedge tint is a low-alpha colour wash that only
+          reads as solid over something dark — it used to get that from the map's
+          own background disc, which now would sit on top of the planet. Each
+          wedge carries its own instead, so the glass darkens the planet behind
+          it rather than the map blanking out the whole area. */}
+      <path d={sectorPath} fill="rgba(7,5,18,0.34)" stroke="none" />
+
       <path
         d={sectorPath}
-        fill={isHovered ? `${sector.color}45` : `${sector.color}22`}
+        fill={isHovered ? `${sector.color}4a` : `${sector.color}2a`}
         stroke={isHovered ? sector.color : `${sector.color}55`}
         strokeWidth={isHovered ? 1.5 : 0.5}
         style={isHovered ? { filter: `drop-shadow(0 0 10px ${sector.color}60)` } : undefined}

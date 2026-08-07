@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserByUsername } from "@/lib/db/users";
 import Navbar from "@/components/Navbar";
-import StarSystemBackground from "@/components/StarSystemBackground";
 import HexShieldAnimation from "@/components/HexShieldAnimation";
 import ShipViewer from "@/components/ship/ShipViewer";
 import ShipControls from "@/components/ship/ShipControls";
@@ -31,7 +30,6 @@ export default async function ShipPage() {
         color={user.color ?? undefined}
         userId={user.id}
       />
-      <StarSystemBackground />
       <HexShieldAnimation />
       <NavIcon href="/sectors" label="Galaxy">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">

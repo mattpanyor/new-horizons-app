@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { getAllSectors } from "@/lib/sectors";
 import { getUserByUsername } from "@/lib/db/users";
-import StarSystemBackground from "@/components/StarSystemBackground";
 import GalacticMap from "@/components/GalacticMap";
 import { GalacticMapBackground } from "@/components/galacticmap/GalacticMapBackground";
 import IdentityPanel from "@/components/IdentityPanel";
@@ -18,7 +17,6 @@ export default async function SectorsPage() {
 
   return (
     <>
-      <StarSystemBackground />
       {user && (
         <IdentityPanel
           character={user.character ?? undefined}

@@ -28,9 +28,11 @@ export const GalacticCore = React.memo(function GalacticCore({
       onMouseLeave={() => onHover(null)}
       onClick={onClick}
     >
+      {/* Same smoked backing as the outer wedges. */}
+      <circle cx={cx} cy={cy} r={innerR} fill="rgba(7,5,18,0.34)" />
       <circle
         cx={cx} cy={cy} r={innerR}
-        fill={isHovered ? `${sector.color}50` : `${sector.color}28`}
+        fill={isHovered ? `${sector.color}56` : `${sector.color}30`}
         style={isHovered ? { filter: `drop-shadow(0 0 14px ${sector.color}90)` } : undefined}
       />
       <text
