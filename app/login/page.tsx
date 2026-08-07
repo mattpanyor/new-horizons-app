@@ -114,15 +114,10 @@ export default function LoginPage() {
               // ones on a phone, where a row of nine would be a hairline each.
               // Either way, clicking one collapses the others along the same
               // axis and expands the chosen blade into the login box, its
-              // portrait dimming into the box backdrop.
-              <div
-                className={[
-                  "flex flex-col sm:flex-row items-center justify-center overflow-hidden py-6",
-                  // The gaps between stacked blades would otherwise survive
-                  // their collapse and push the box off centre.
-                  selecting ? "gap-0" : "gap-1.5 sm:gap-0",
-                ].join(" ")}
-              >
+              // portrait dimming into the box backdrop. No gaps in either
+              // direction — the blades butt up against each other and read as
+              // one panel.
+              <div className="flex flex-col sm:flex-row items-center justify-center overflow-hidden py-6">
                 {users.map((u, i) => {
                   const isSelected = username === u.username;
                   const isHidden = selecting && !isSelected;
