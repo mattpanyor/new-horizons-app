@@ -19,24 +19,37 @@ const SETTINGS_TAG = "app_settings";
  *
  * `unstable_cache` holds it across requests so a value that changes maybe
  * monthly is not a database round trip on every page render — this runs in the
- * root layout, so without it every route pays for it, and 82% of them never
- * render the background at all. `revalidateTag` on save keeps the admin's change
- * immediate, so the panel's "next page load" promise still holds.
+ * root layout, so without it every route pays for it, and most of them never
+ * render the background at all.
  *
- * `cache` wraps that again for per-request dedup, which matters on
- * /admin/settings where the layout and the page both want the value.
+ * No time-based revalidation. It would not make an admin's change visible any
+ * sooner — `revalidateTag` on save already does that immediately — so its only
+ * job would be to recover from a failure that got cached. That is fixed at the
+ * source instead: the read throws rather than returning a fallback, and
+ * `unstable_cache` does not cache a rejection, so a database blip degrades that
+ * one request and the next one retries. Nothing to expire.
  *
- * The read's own try/catch stays *inside* the cache deliberately: it degrades a
- * dead database to DEFAULT_PRESET rather than a 500 on every page, and the short
- * revalidate means a transient blip can't pin the wrong theme for long.
+ * The consequence to know about: a change made directly in SQL, bypassing the
+ * admin panel, will not appear until something invalidates the tag or the
+ * deployment is replaced.
  */
-const readSettingRow = cache(
-  unstable_cache(
-    async () => getSettingRow(HOME_SCREEN_ART),
-    ["home-screen-art"],
-    { revalidate: 300, tags: [SETTINGS_TAG] },
-  ),
+const readSettingRowUncaught = unstable_cache(
+  async () => getSettingRow(HOME_SCREEN_ART),
+  ["home-screen-art"],
+  { revalidate: false, tags: [SETTINGS_TAG] },
 );
+
+/** `cache` adds per-request dedup, which matters on /admin/settings where the
+ *  layout and the page both want the value. The catch is out here so that a
+ *  failure falls back for this request only and is never stored. */
+const readSettingRow = cache(async (): Promise<AppSetting | null> => {
+  try {
+    return await readSettingRowUncaught();
+  } catch (err) {
+    console.error("home_screen_art read failed; using the default:", err);
+    return null;
+  }
+});
 
 /**
  * Local override for the home screen art, honoured **in development only**.
