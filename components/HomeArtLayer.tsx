@@ -16,12 +16,18 @@ import type { PlanetPresetName } from "@/lib/planetPresets";
 // This only holds for client-side navigation. A hard refresh or a typed URL
 // starts over, which is what the fade-in is still for.
 
-/** Routes that show the planet. Everything else renders its own background. */
-const SHOWS_ART = ["/login", "/sectors", "/ship"];
+/**
+ * Routes that show the planet. Everything else renders its own background.
+ *
+ * /home-art is the standalone viewer: the same canvas with nothing drawn over
+ * it. It is a route in this list rather than a page that mounts its own
+ * PlanetBackground, so the app keeps exactly one WebGL context — arriving there
+ * from /sectors rebuilds nothing.
+ */
+const SHOWS_ART = ["/login", "/sectors", "/ship", "/home-art"];
 
 function showsArt(pathname: string): boolean {
-  // /sectors/[slug] has its own star field, so match the index exactly rather
-  // than by prefix.
+  // Matched exactly, not by prefix: /sectors/[slug] has its own star field.
   return SHOWS_ART.includes(pathname);
 }
 
