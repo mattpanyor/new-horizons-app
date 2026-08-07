@@ -2,11 +2,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserByUsername } from "@/lib/db/users";
 import Navbar from "@/components/Navbar";
-import StarSystemBackground from "@/components/StarSystemBackground";
+import PlanetBackground from "@/components/PlanetBackground";
 import HexShieldAnimation from "@/components/HexShieldAnimation";
 import ShipViewer from "@/components/ship/ShipViewer";
 import ShipControls from "@/components/ship/ShipControls";
 import NavIcon from "@/components/NavIcon";
+import { getHomeScreenArt } from "@/lib/settings/service";
 import shipData from "@/content/ship/graviton.json";
 import type { ShipData } from "@/types/ship";
 
@@ -18,6 +19,8 @@ export default async function ShipPage() {
 
   const user = await getUserByUsername(username);
   if (!user) redirect("/login");
+
+  const homeArt = await getHomeScreenArt();
 
   return (
     <>
@@ -31,7 +34,7 @@ export default async function ShipPage() {
         color={user.color ?? undefined}
         userId={user.id}
       />
-      <StarSystemBackground />
+      <PlanetBackground preset={homeArt} />
       <HexShieldAnimation />
       <NavIcon href="/sectors" label="Galaxy">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
