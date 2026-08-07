@@ -30,8 +30,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "homeScreenArt is required" }, { status: 400 });
   }
 
+  let saved;
   try {
-    await setHomeScreenArt(homeScreenArt, admin.username);
+    saved = await setHomeScreenArt(homeScreenArt, admin.username);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Could not save setting" },
@@ -39,5 +40,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, homeScreenArt: await getHomeScreenArtStatus() });
+  // The write returns the row it stored, so this does not read it back.
+  return NextResponse.json({ ok: true, homeScreenArt: saved });
 }

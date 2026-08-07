@@ -4,10 +4,39 @@
 // handler, so the admin panel and any future surface (MCP, a script, a seed)
 // all get the same rules. Routes are thin adapters over these functions.
 
-import { getSetting, getSettingRow, setSetting, type AppSetting } from "@/lib/db/settings";
+import { cache } from "react";
+import { unstable_cache, revalidateTag } from "next/cache";
+import { getSettingRow, setSetting, type AppSetting } from "@/lib/db/settings";
 import { DEFAULT_PRESET, PLANET_PRESETS, type PlanetPresetName } from "@/lib/planetPresets";
 
 export const HOME_SCREEN_ART = "home_screen_art";
+
+/** Cache tag for anything derived from app_settings. */
+const SETTINGS_TAG = "app_settings";
+
+/**
+ * The stored row, cached two ways.
+ *
+ * `unstable_cache` holds it across requests so a value that changes maybe
+ * monthly is not a database round trip on every page render — this runs in the
+ * root layout, so without it every route pays for it, and 82% of them never
+ * render the background at all. `revalidateTag` on save keeps the admin's change
+ * immediate, so the panel's "next page load" promise still holds.
+ *
+ * `cache` wraps that again for per-request dedup, which matters on
+ * /admin/settings where the layout and the page both want the value.
+ *
+ * The read's own try/catch stays *inside* the cache deliberately: it degrades a
+ * dead database to DEFAULT_PRESET rather than a 500 on every page, and the short
+ * revalidate means a transient blip can't pin the wrong theme for long.
+ */
+const readSettingRow = cache(
+  unstable_cache(
+    async () => getSettingRow(HOME_SCREEN_ART),
+    ["home-screen-art"],
+    { revalidate: 300, tags: [SETTINGS_TAG] },
+  ),
+);
 
 /**
  * Local override for the home screen art, honoured **in development only**.
@@ -55,7 +84,8 @@ export async function getHomeScreenArt(): Promise<PlanetPresetName> {
   const override = devOverride();
   if (override) return override;
 
-  const stored = await getSetting(HOME_SCREEN_ART);
+  const row = await readSettingRow();
+  const stored = row?.value;
   if (stored && isPlanetPreset(stored)) return stored;
   if (stored) {
     console.warn(`home_screen_art="${stored}" is not a known preset; using ${DEFAULT_PRESET}`);
@@ -69,7 +99,7 @@ export async function getHomeScreenArtStatus(): Promise<{
   row: AppSetting | null;
   overriddenBy: PlanetPresetName | null;
 }> {
-  const row = await getSettingRow(HOME_SCREEN_ART);
+  const row = await readSettingRow();
   const stored = row && isPlanetPreset(row.value) ? row.value : DEFAULT_PRESET;
   return { stored, row, overriddenBy: devOverride() };
 }
@@ -78,5 +108,12 @@ export async function setHomeScreenArt(value: string, updatedBy: string) {
   if (!isPlanetPreset(value)) {
     throw new Error(`Unknown planet preset: ${value}`);
   }
-  await setSetting(HOME_SCREEN_ART, value, updatedBy);
+  const row = await setSetting(HOME_SCREEN_ART, value, updatedBy);
+  // Drops the cross-request cache so the change is live on the next render
+  // rather than up to `revalidate` seconds later. Next 16 requires a lifetime
+  // here; `{ expire: 0 }` is immediate. (`updateTag` would be the read-your-
+  // own-writes version, but it is only callable from a Server Action and this
+  // is a route handler.)
+  revalidateTag(SETTINGS_TAG, { expire: 0 });
+  return { stored: value, row, overriddenBy: devOverride() };
 }
