@@ -11,7 +11,7 @@
 // across batches are fine and expected — within a single batch they are not,
 // since the same face in two places at once reads as a bug.
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 /** One resting place in the fan. */
 interface Slot {
@@ -91,6 +91,11 @@ const MOBILE_SLOTS: Slot[] = [
 
 const CARDS_PER_SIDE = 2;
 const ROUND_MS = 12000;
+/** Must match the .login-card--out animation in globals.css. The outgoing hand
+ *  is dropped once it has finished lifting, rather than being carried until the
+ *  next deal — it spends the rest of the round invisible at opacity 0, holding
+ *  four decoded 768×1152 bitmaps and twelve DOM nodes for nothing. */
+const LIFT_MS = 900;
 
 interface Placed {
   src: string;
@@ -148,7 +153,10 @@ export default function LoginCardScatter({ variant = "form" }: LoginCardScatterP
   const [batches, setBatches] = useState<Batch[]>([]);
 
   useEffect(() => {
-    const next = () =>
+    let interval: number | undefined;
+    let prune: number | undefined;
+
+    const next = () => {
       setBatches((cur) => {
         // The id is derived from what is already on the table, not from a
         // counter the effect owns. A local counter resets every time the effect
@@ -160,19 +168,42 @@ export default function LoginCardScatter({ variant = "form" }: LoginCardScatterP
         // only ever two on the table at once.
         return [...cur.slice(-1), deal(variant, id)];
       });
-    next();
-    const timer = setInterval(next, ROUND_MS);
-    return () => clearInterval(timer);
+      window.clearTimeout(prune);
+      prune = window.setTimeout(() => setBatches((cur) => cur.slice(-1)), LIFT_MS);
+    };
+
+    // Dealing is suspended while the tab is hidden. Each tick builds and
+    // destroys four card trees and dirties layout for the whole document, which
+    // is pure waste with nothing on screen — the browser only throttles the
+    // timer after several minutes, and never stops it.
+    const start = () => {
+      if (interval !== undefined) return;
+      next();
+      interval = window.setInterval(next, ROUND_MS);
+    };
+    const stop = () => {
+      window.clearInterval(interval);
+      interval = undefined;
+    };
+    const onVisibility = () => (document.hidden ? stop() : start());
+
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      window.clearTimeout(prune);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [variant]);
 
-  const newest = useMemo(() => batches[batches.length - 1]?.id, [batches]);
+  const newest = batches[batches.length - 1]?.id;
 
   return (
     <div className={`login-cards login-cards--${variant}`} aria-hidden="true">
       {batches.map((batch) => (
-        // Grouped per batch so the phone rule that culls past the fourth card
-        // counts within a hand rather than across the overlap.
-        <div key={batch.id} className="login-cards__batch">
+        // A fragment, not a wrapper element: the cards are absolutely positioned
+        // against .login-cards and nothing needs to group them in the DOM.
+        <Fragment key={batch.id}>
           {batch.cards.map((card, i) => (
             <div
               key={`${batch.id}-${i}`}
@@ -201,7 +232,7 @@ export default function LoginCardScatter({ variant = "form" }: LoginCardScatterP
               <div className="login-card__scrim" />
             </div>
           ))}
-        </div>
+        </Fragment>
       ))}
     </div>
   );

@@ -266,10 +266,6 @@ body {
    resolved --x/--top/--rot/--scale, so the phone media query re-points those
    four at the other set and the layout, the toss animation and the corner
    shadows all follow without a second copy of any rule. */
-.login-cards__batch {
-  display: contents;
-}
-
 .login-card {
   --x: var(--dx);
   --top: var(--dtop);
@@ -366,14 +362,6 @@ body {
     width: clamp(9rem, 44vw, 13rem);
   }
 
-  /* Was a cull of everything past the fourth card, when the deck was dealt
-     once and in full. A batch is four cards and two batches overlap while one
-     crossfades into the next, so the cull now applies per batch — the group
-     wrapper below keeps each batch's cards as its own children. */
-  .login-card:nth-child(n + 5) {
-    display: none;
-  }
-
   .login-cards .login-card__art {
     filter: brightness(0.48) saturate(0.75) contrast(1.02);
   }
@@ -382,6 +370,17 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .login-card {
     animation: none;
+  }
+
+  /* Without this the outgoing hand never leaves. The rule above kills the lift
+     animation at equal specificity to .login-card--out and wins on source
+     order, so the batch that should be fading out stays at full opacity beside
+     the incoming one — a reduced-motion user ends up looking at eight cards
+     permanently, and every deal re-lays out all eight. Removing the motion has
+     to leave the end state, not the start state. */
+  .login-card--out {
+    animation: none;
+    opacity: 0;
   }
 
   .login-form-reveal {
