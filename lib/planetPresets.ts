@@ -58,11 +58,26 @@ export interface PlanetPreset {
   /** Density threshold: lower = more sky covered. */
   cloudCoverage: number;
   cloudOpacity: number;
+  /** Width of the coverage ramp. Small gives crisp-edged weather, large gives
+   *  banks that dissolve into haze. */
+  cloudSoft?: number;
+  /** How much of the ground's own glow lights the cloud from below. Only
+   *  meaningful on an emissive world. */
+  cloudUnderlit?: number;
 
   // ── Atmosphere ──
   atmo: RGB;
   atmoCool: RGB;
   atmoGain: number;
+
+  // ── Self-luminous surface (optional) ──
+  /** How brightly the emitting parts of the texture glow on their own, ignoring
+   *  the star. 0 for an ordinary world lit from outside. */
+  emissive?: number;
+  /** Where emission starts, against brightness weighted by saturation. Lower
+   *  makes more of the map glow; too low and the whole planet self-illuminates
+   *  and the terminator disappears. */
+  emissiveThreshold?: number;
 
   // ── Surface art ──
   /** Cells of `public/planets/<preset>.jpg` per sphere radius, via triplanar
@@ -135,6 +150,37 @@ export interface PlanetPreset {
   pulseDepth?: number;
   /** Faint nebulosity around the star, lit by it. 0 for clear space. */
   nebula?: number;
+
+  // ── Black hole (optional) ──
+  /** Replace the star with an event horizon and accretion disc. starRadius
+   *  becomes the horizon radius, jetTilt the disc's lean. */
+  blackHole?: number;
+  /** How edge-on the disc is. Small is flatter; 1.0 would be face-on. */
+  discSquash?: number;
+  /** Outer edge of the disc, in horizon radii. The disc reaches far past the
+   *  horizon, so this — not starRadius — decides how much screen the object
+   *  takes. */
+  discOuter?: number;
+  /** How far off the disc plane the camera sits, in radians. Small is nearly
+   *  edge-on; this is what opens the near side into a band. */
+  discIncline?: number;
+  /** Inner edge of the disc, in Schwarzschild radii. 3 is the innermost stable
+   *  circular orbit; below that matter would be falling, not orbiting. */
+  discInner?: number;
+  /** Overall brightness of the disc. */
+  discGain?: number;
+  /** Concentric ribs per unit orbital radius. The disc runs from 1 to discOuter,
+   *  so around 6 gives roughly ten visible striations across it. */
+  ribFreq?: number;
+  /** How deeply the ribs cut, 0–1. Past ~0.6 the disc starts to look machined
+   *  rather than turbulent. */
+  ribDepth?: number;
+  /** Near and far colour of the disc. Not warm/cool: sampled across the
+   *  reference, the disc is one cool blue-grey throughout — rgb(58,78,119) dim
+   *  to rgb(102,119,150) bright — with no warm end anywhere. Brightness and
+   *  beaming do the work a colour split was doing wrong. */
+  discBright?: RGB;
+  discDim?: RGB;
   /** Tint the star's light lays over the planet. */
   lightTint?: RGB;
   /** Colour where the light grazes the surface. Warm for a yellow star, cold
@@ -157,6 +203,8 @@ const PRESETS = {
   // cloud tops over deep blue water.
   amethyst: {
     label: "Amethyst",
+    // Surface art carries the storms and lightning already, so the procedural
+    // weather layers stay off — two systems doing the same job muddy each other.
     oceanDeep: [0.012, 0.030, 0.150],
     oceanShelf: [0.070, 0.190, 0.470],
     landLow: [0.180, 0.080, 0.300],
@@ -166,7 +214,7 @@ const PRESETS = {
     vein: [0.700, 0.330, 0.480],
     veinGain: 0.30,
     seaLevel: 0.52,
-    iceExtent: 0.80,
+    iceExtent: 0.86,
     detailScale: 7.0,
     bandStretch: 2.4,
     flowStrength: 0.45,
@@ -174,15 +222,59 @@ const PRESETS = {
     ridgeMix: 0.55,
     filament: [0.620, 0.300, 0.880],
     filamentGain: 0.70,
-    cloudColor: [0.940, 0.700, 0.990],
-    cloudScale: 3.6,
-    cloudBand: 3.0,
-    cloudCoverage: 0.52,
-    cloudOpacity: 0.88,
+    // Large soft pink banks drifting over the glow, as in the reference: a low
+    // cloudScale for a few big masses rather than scattered weather, a wide
+    // softness so they dissolve at the edges, and underlighting so they take
+    // colour from the channels burning beneath them.
+    cloudColor: [0.980, 0.720, 0.880],
+    cloudScale: 2.0,
+    cloudBand: 1.4,
+    cloudCoverage: 0.50,
+    cloudOpacity: 0.55,
+    cloudSoft: 0.20,
+    cloudUnderlit: 0.55,
+    texScale: 1.9,
+    // A world that makes its own light: the cyan channels and the hottest
+    // magenta glow through the terminator, while the dark veins still shade.
+    emissive: 0.90,
+    emissiveThreshold: 0.34,
+
+    // A black hole instead of a star. Held small: the disc reaches five horizon
+    // radii, so the object's real footprint is much larger than starRadius, and
+    // sizing it like a sun would swallow the corner of the screen.
+    blackHole: 1,
+    starRadius: 0.105,
+    // +9.2 degrees, measured off the reference. Positive rises to the right;
+    // negative — which is what this was — falls to the right, and that inversion
+    // was most of why the angle never looked right.
+    jetTilt: 0.161,
+    // The disc is raymarched now, so these are physical rather than screen
+    // measurements: radii in Schwarzschild units, not ellipse proportions.
+    discSquash: 0.10,
+    discIncline: 0.14,
+    discInner: 3.0,
+    discOuter: 13.0,   // camera sits at 48, comfortably clear of this
+    discGain: 4.20,
+    ribFreq: 6.0,
+    // Shallower than it was: crisp regular ribs read as a ring system.
+    ribDepth: 0.28,
+    // Hues, driven hard — not the tonemapped averages measured off the
+    // reference. Brightness comes from discGain and the beaming.
+    // Leaning violet to sit with the planet, while keeping enough blue that the
+    // hot core still rolls off to white through the exposure curve.
+    discBright: [0.720, 0.700, 1.000],
+    discDim: [0.460, 0.210, 0.880],
+    pulseRate: 0.09,
+    pulseDepth: 0.18,
+    nebula: 0.0,
+    // Lit by the disc, not by a star: violet-white, with a cold terminator.
+    // Lit by the disc: cool blue-white, with a cold terminator to match.
+    lightTint: [0.820, 0.870, 1.000],
+    terminator: [0.520, 0.520, 0.980],
+
     atmo: [0.640, 0.330, 0.950],
     atmoCool: [0.280, 0.520, 0.980],
     atmoGain: 1.0,
-    texScale: 1.6,
     spinPeriod: 300,
     tilt: -0.34,
     cloudSpin: 1.3,

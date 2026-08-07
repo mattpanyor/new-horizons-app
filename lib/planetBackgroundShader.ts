@@ -274,6 +274,8 @@ uniform samplerCube u_map;
 uniform sampler2D u_tex;
 uniform float u_hasTex;
 uniform float u_texScale;
+uniform float u_emissive;
+uniform float u_emissiveThresh;
 
 // Explicit-gradient sampling where the driver offers it. Without the extension
 // the stochastic offsets confuse mip selection and stitch dotted lines along
@@ -307,6 +309,8 @@ uniform float u_filamentGain;
 uniform float u_veinGain;
 uniform float u_cloudCoverage;
 uniform float u_cloudOpacity;
+uniform float u_cloudSoft;
+uniform float u_cloudUnderlit;
 uniform float u_atmoGain;
 uniform float u_spinPeriod;
 uniform float u_tilt;
@@ -331,6 +335,20 @@ uniform float u_pulseDepth;
 uniform float u_nebula;
 uniform vec3  u_lightTint;
 uniform vec3  u_terminator;
+
+// ── Black hole ──
+// When on, the star is replaced by an accretion disc around an event horizon.
+// starRadius becomes the horizon radius and jetTilt the disc's lean.
+uniform float u_blackHole;
+uniform float u_discSquash;
+uniform float u_discOuter;
+uniform float u_discIncline;
+uniform float u_discInner;
+uniform float u_discGain;
+uniform float u_ribFreq;
+uniform float u_ribDepth;
+uniform vec3  u_discBright;
+uniform vec3  u_discDim;
 
 // ── Magnetic sandstorms ──
 uniform vec3  u_stormColor;
@@ -587,75 +605,259 @@ void main() {
     col += u_starGlow * neb * exp(-sd * 0.55) * u_nebula;
   }
 
-  // Body. Treated as a sphere rather than a flat circle: spots are sampled on
-  // the hemisphere standing over the disc, so they crowd toward the edge the
-  // way markings on a real surface do instead of staying evenly sized to the rim.
-  float zz = sqrt(max(0.0, 1.0 - rr * rr));
-  vec3 sn = vec3((uv - sunP) / max(R, 1e-5), zz);
-  float s1 = gnoise(sn * 15.0 + vec3(0.0, 0.0, u_time * 0.04)) * 0.5 + 0.5;
-  float s2 = gnoise(sn * 33.0 + vec3(u_time * 0.09)) * 0.5 + 0.5;
-  // Pushed hard through a contrast curve. Plain noise averages to a smooth grey
-  // and the speckle disappears at any distance; this keeps it reading as
-  // discrete cells.
-  float spots = clamp((s1 * 0.55 + s2 * 0.45 - 0.36) * 3.4, 0.0, 1.0);
-  vec3 bodyCol = mix(u_starSpot, u_starCore, mix(1.0, spots, u_starGrain));
+  if (u_blackHole > 0.5) {
+    // ── Event horizon and accretion disc, by actually bending the light ──
+    //
+    // Six rounds of layering ellipses got the disc, the thickness and the
+    // beaming roughly right and never produced the one feature that identifies
+    // the reference: the thin bright line that traces the top of the horizon
+    // and hooks down and inward at the side. That hook is the disc's second
+    // image, light that has gone most of the way round the photon sphere before
+    // reaching us. No arrangement of stacked ellipses contains it, because it
+    // is not a shape — it is what happens when the path curves.
+    //
+    // So this integrates the trajectory instead. Each ray is marched under the
+    // Schwarzschild deflection term and tested against the disc plane on every
+    // step, accumulating whatever it crosses. Everything that was being drawn by
+    // hand then falls out on its own: the far side lifted over the top, the near
+    // side laid in front, the second image and its hook, the photon ring, the
+    // Einstein-ring pinch at the sides, and correct occlusion by the horizon.
+    //
+    // Units are Schwarzschild radii: the horizon sits at r = 1, and the capture
+    // impact parameter is 3*sqrt(3)/2 = 2.598, which is what the shadow's
+    // apparent radius corresponds to. starRadius sets that apparent radius on
+    // screen, and the scale below is derived from it.
+    float bc = cos(u_jetTilt);
+    float bs = sin(u_jetTilt);
+    vec2 d0 = uv - sunP;
+    vec2 pp = vec2(d0.x * bc + d0.y * bs, -d0.x * bs + d0.y * bc);
 
-  // No hard rim. The body fades out well before its nominal radius and a
-  // white-hot shell takes over across the edge, so the disc dissolves into its
-  // own glow. A crisp circle is the single thing that made it read as a flat
-  // cut-out rather than a star.
-  // The body has to reach almost to the rim. Fading it out early leaves the
-  // white shell covering most of the object, and the speckle — the whole point
-  // of the surface — ends up a small patch in the middle of a glare.
-  float bodyMask = 1.0 - smoothstep(0.80, 1.06, rn);
-  // Narrow, and centred outside the body rather than over it. At sigma 0.34 it
-  // spanned half a radius to one and a third and swallowed the core.
-  float shell = exp(-pow((rn - 1.02) / 0.20, 2.0));
+    // Only pixels near the hole pay for the march.
+    if (length(pp) < R * 8.0) {
+      // Camera distance, in Schwarzschild radii. It must sit well clear of the
+      // disc's outer edge. At 16 against an outer radius of 15 the near rim of
+      // the disc was 2.4 units from the camera and projected across half the
+      // screen as an enormous lens — while also crossing in front of the
+      // horizon and cutting the silhouette into a wedge. Keep this at least
+      // three times discOuter.
+      const float DIST = 48.0;
+      const float B_CRIT = 2.598;   // capture impact parameter
+      float scale = B_CRIT / (DIST * R);
 
-  // The halo terms clamp their exponent at the rim, so both sit at full
-  // strength across the whole disc — flooding the body with flat light and
-  // lifting the speckle's darks until the texture disappears. Fading them in
-  // from inside the body keeps the glow outside where it belongs and lets the
-  // core stay dark enough to read.
-  float haloIn = smoothstep(0.30, 0.95, rn);
-  float corona = exp(-max(sd - R, 0.0) / (0.055 * pulse)) * haloIn;
-  // Tighter than it was: a wide bloom turns the whole quarter of the sky into a
-  // grey wash and takes the blue out of everything.
-  float bloom  = exp(-max(sd - R, 0.0) / (0.26 * pulse)) * haloIn;
+      // Camera basis, inclined a few degrees off the disc plane so we look at it
+      // almost but not quite edge-on — that small angle is what opens the near
+      // side into a visible band instead of a line.
+      float ci = cos(u_discIncline);
+      float si = sin(u_discIncline);
+      vec3 ro = vec3(0.0, DIST * si, -DIST * ci);
+      vec3 fwd = normalize(-ro);
+      vec3 rgt = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
+      vec3 upv = cross(fwd, rgt);
 
-  // Polar jets. Narrow beams on one axis, flaring into a funnel where they
-  // leave the star and reaching most of the way across the frame. The sign of
-  // the tilt decides which way the top of the axis leans — negative leans right.
-  float jets = 0.0;
-  float flare = 0.0;
-  if (u_jetStrength > 0.0) {
-    float jc = cos(u_jetTilt);
-    float js = sin(u_jetTilt);
-    vec2 d = uv - sunP;
-    vec2 j = vec2(d.x * jc + d.y * js, -d.x * js + d.y * jc);
-    float along = abs(j.y);
-    float across = abs(j.x);
-    float w = 0.017 + 0.065 * exp(-along * 8.0) + 0.014 * exp(-along * 1.2);
-    float ragged = 1.0 + 0.30 * gnoise(vec3(j * 22.0, u_time * 0.5));
-    jets = exp(-(across * across) / (w * w * ragged)) * exp(-along * 0.62);
-    jets *= u_jetStrength * pulse;
+      vec3 pos = ro;
+      vec3 vel = normalize(fwd + rgt * (pp.x * scale) + upv * (pp.y * scale));
 
-    // Equatorial plumes: feathery fog combed straight out from the star, at
-    // right angles to the jets. Material thrown off the equator rather than the
-    // poles, and the thing that gives the object a waist.
-    float rad = length(j);
-    float t = max(rad - R * 0.85, 0.0);
-    float band = exp(-pow(along / (0.030 + 0.42 * t), 2.0));
-    float comb = 0.30 + 0.70 * (gnoise(vec3(atan(j.y, j.x) * 8.0, t * 9.0, u_time * 0.05)) * 0.5 + 0.5);
-    flare = band * comb * exp(-t / 0.22) * u_flareStrength * pulse;
+      // Dither the starting point along the ray. Neighbouring pixels otherwise
+      // march in lockstep, so wherever a crossing lands near a step boundary a
+      // whole run of pixels gains or loses it together — which is the dashed
+      // ring around the silhouette. Offsetting each ray by a fixed hashed
+      // fraction decorrelates them and turns that into fine static grain.
+      // Deliberately not animated: a time-varying offset would shimmer.
+      pos += vel * hash12(gl_FragCoord.xy) * 2.5;
+
+      // Angular momentum is conserved along the path, so the deflection term
+      // only needs computing once.
+      vec3 hv = cross(pos, vel);
+      float h2 = dot(hv, hv);
+
+      vec3 acc0 = vec3(0.0);
+
+      // Whether a ray falls in depends only on its impact parameter, and that is
+      // known before marching: b = |r x v| for a unit v, captured below
+      // 3*sqrt(3)/2. Deciding it here rather than by testing r < 1 on every step
+      // gives an exactly round, properly anti-aliased silhouette — a per-step
+      // test quantises the edge to the stride and leaves it visibly stepped.
+      float b = sqrt(h2);
+      float bPix = DIST * scale * px * 1.5;   // ~1.5 pixels of edge softening
+      float shadow = 1.0 - smoothstep(B_CRIT - bPix, B_CRIT + bPix, b);
+
+      for (int i = 0; i < 190; i++) {
+        float r2 = dot(pos, pos);
+        float r = sqrt(r2);
+        if (r < 1.02) break;   // stop marching; the silhouette is analytic
+        if (r > DIST * 2.2) break;
+
+        // Longer strides far away, short ones near the hole where the path
+        // actually curves.
+        // Finer than feels necessary. Coarse strides near the hole both miss
+        // the tight windings that make the photon ring and leave the horizon's
+        // edge visibly stepped, since capture is tested once per step.
+        float dt = clamp(r * 0.085, 0.02, 4.0);
+        vec3 grav = -1.5 * h2 * pos / (r2 * r2 * r);
+        vec3 nvel = vel + grav * dt;
+        vec3 npos = pos + nvel * dt;
+
+        // Disc plane crossing.
+        if (pos.y * npos.y < 0.0) {
+          float t = pos.y / (pos.y - npos.y);
+          vec3 hit = mix(pos, npos, t);
+          float rd = length(hit.xz);
+          // Soft rims. A hard inner/outer radius test leaves both edges
+          // of the disc unaliased, and with one ray per pixel that shows as a
+          // staircase everywhere the disc ends — including where the bright arc
+          // meets the silhouette. The horizon's own edge is analytic and smooth,
+          // which is why the stepping survived being fixed there.
+          float rim = smoothstep(u_discInner, u_discInner * 1.18, rd)
+                    * (1.0 - smoothstep(u_discOuter * 0.72, u_discOuter, rd));
+          if (rim > 0.002) {
+            float rho = rd;
+            float phi = atan(hit.z, hit.x);
+            vec2 dir2 = vec2(cos(phi + u_time * 1.7 / pow(rho, 1.5)),
+                             sin(phi + u_time * 1.7 / pow(rho, 1.5)));
+
+            // Concentric ribs at constant orbital radius, plus turbulence.
+            float ribs = 1.0 - u_ribDepth * (0.5 + 0.5 * sin(rho * u_ribFreq
+                          + gnoise(vec3(dir2 * 1.6, rho * 0.4)) * 1.8));
+            float t1 = gnoise(vec3(dir2 * 2.1, rho * 0.9)) * 0.5 + 0.5;
+            float t2 = gnoise(vec3(dir2 * 5.2, rho * 2.4 + 7.7)) * 0.5 + 0.5;
+            float grain = (0.48 + 0.38 * t1 + 0.24 * t2) * ribs;
+
+            // Emission falls off outward; inner orbits are far brighter.
+            // Shallower than inverse-square so the outer disc still registers;
+            // at 2.1 everything past a few radii fell to nothing.
+            float emis = pow(u_discInner / rho, 1.55);
+
+            // Relativistic beaming, from the orbital velocity at the hit point
+            // against the ray. This is what makes one side blaze and the other
+            // sink, without it being painted in.
+            vec3 tang = normalize(cross(vec3(0.0, 1.0, 0.0), hit));
+            float vmag = sqrt(0.5 / rho);
+            float beta = dot(tang * vmag, normalize(nvel));
+            float boost = pow(clamp(1.0 + beta, 0.05, 2.2), 3.2);
+
+            // Gravitational redshift: light climbing out of the well loses energy.
+            float redshift = sqrt(max(1.0 - 1.0 / rho, 0.02));
+
+            // The colours are hues to be driven hard, not final pixel values.
+            // Sampling the reference gave rgb(102,119,150) for the bright side —
+            // but that is a tonemapped average, and using it as emission is why
+            // an earlier pass came out flat grey. The white-hot core is a
+            // saturated blue pushed past 1.0 and rolled off by the exposure
+            // curve, exactly as the pulsar's shell was.
+            vec3 tint = mix(u_discDim, u_discBright, clamp(1.35 - rho * 0.10, 0.0, 1.0));
+            // Fade contributions as the step budget runs out.
+            //
+            // A ray grazing the photon sphere spends about twenty steps getting
+            // in, then winds at roughly a quarter of a unit per step — so it
+            // reaches the loop limit mid-orbit. Whether its last crossing falls
+            // inside the budget or just past it is decided by where its dithered
+            // steps happen to land, and that is a whole crossing of light
+            // differing between neighbouring pixels: the dotted hairline.
+            //
+            // Cutting the ray off at a hard step count makes that difference
+            // binary. Ramping the last quarter of the budget down to zero makes
+            // it continuous, so a crossing at step 150 and one at step 190
+            // contribute nearly the same tiny amount and neither creates an
+            // edge. Unlike damping by crossing index, this leaves the early
+            // crossings — and therefore the ring's brightness — untouched.
+            float budget = 1.0 - smoothstep(0.72, 1.0, float(i) / 190.0);
+            acc0 += min(tint * emis * grain * boost * redshift * u_discGain, vec3(7.0)) * rim * budget;
+          }
+        }
+
+        pos = npos;
+        vel = nvel;
+      }
+
+      // The horizon is not drawn — it is simply where no light comes from. It
+      // is applied before the accumulated emission so that material the ray
+      // crossed in FRONT of the hole still draws over it.
+      col = mix(col, vec3(0.0), shadow);
+      // A ceiling on the whole ray, not just per crossing: without it a single
+      // ray that threads the photon sphere just right still spikes.
+      col += min(acc0, vec3(9.0)) * pulse;
+
+      // Bloom. Light this bright scatters in any real optic, and without it the
+      // disc reads as a flat decal however hot the core is. Weighted toward the
+      // beamed side so the glow is lopsided the way the disc itself is.
+      // Masked by the silhouette. Unmasked, halo evaluates to 1 inside the
+      // horizon and washes the whole shadow with a gradient — a real optic would
+      // spill a little there, but the hole has to read as absolute black.
+      float side = 0.45 + 0.75 * smoothstep(-1.0, 1.0, pp.x / max(length(pp), 1e-5));
+      float halo = exp(-max(length(pp) - R, 0.0) / (R * 2.0)) * (1.0 - shadow);
+      col += u_discBright * halo * side * 0.22 * pulse;
+    }
+  } else {
+    // Body. Treated as a sphere rather than a flat circle: spots are sampled on
+    // the hemisphere standing over the disc, so they crowd toward the edge the
+    // way markings on a real surface do instead of staying evenly sized to the rim.
+    float zz = sqrt(max(0.0, 1.0 - rr * rr));
+    vec3 sn = vec3((uv - sunP) / max(R, 1e-5), zz);
+    float s1 = gnoise(sn * 15.0 + vec3(0.0, 0.0, u_time * 0.04)) * 0.5 + 0.5;
+    float s2 = gnoise(sn * 33.0 + vec3(u_time * 0.09)) * 0.5 + 0.5;
+    // Pushed hard through a contrast curve. Plain noise averages to a smooth grey
+    // and the speckle disappears at any distance; this keeps it reading as
+    // discrete cells.
+    float spots = clamp((s1 * 0.55 + s2 * 0.45 - 0.36) * 3.4, 0.0, 1.0);
+    vec3 bodyCol = mix(u_starSpot, u_starCore, mix(1.0, spots, u_starGrain));
+
+    // No hard rim. The body fades out well before its nominal radius and a
+    // white-hot shell takes over across the edge, so the disc dissolves into its
+    // own glow. A crisp circle is the single thing that made it read as a flat
+    // cut-out rather than a star.
+    // The body has to reach almost to the rim. Fading it out early leaves the
+    // white shell covering most of the object, and the speckle — the whole point
+    // of the surface — ends up a small patch in the middle of a glare.
+    float bodyMask = 1.0 - smoothstep(0.80, 1.06, rn);
+    // Narrow, and centred outside the body rather than over it. At sigma 0.34 it
+    // spanned half a radius to one and a third and swallowed the core.
+    float shell = exp(-pow((rn - 1.02) / 0.20, 2.0));
+
+    // The halo terms clamp their exponent at the rim, so both sit at full
+    // strength across the whole disc — flooding the body with flat light and
+    // lifting the speckle's darks until the texture disappears. Fading them in
+    // from inside the body keeps the glow outside where it belongs and lets the
+    // core stay dark enough to read.
+    float haloIn = smoothstep(0.30, 0.95, rn);
+    float corona = exp(-max(sd - R, 0.0) / (0.055 * pulse)) * haloIn;
+    // Tighter than it was: a wide bloom turns the whole quarter of the sky into a
+    // grey wash and takes the blue out of everything.
+    float bloom  = exp(-max(sd - R, 0.0) / (0.26 * pulse)) * haloIn;
+
+    // Polar jets. Narrow beams on one axis, flaring into a funnel where they
+    // leave the star and reaching most of the way across the frame. The sign of
+    // the tilt decides which way the top of the axis leans — negative leans right.
+    float jets = 0.0;
+    float flare = 0.0;
+    if (u_jetStrength > 0.0) {
+      float jc = cos(u_jetTilt);
+      float js = sin(u_jetTilt);
+      vec2 d = uv - sunP;
+      vec2 j = vec2(d.x * jc + d.y * js, -d.x * js + d.y * jc);
+      float along = abs(j.y);
+      float across = abs(j.x);
+      float w = 0.017 + 0.065 * exp(-along * 8.0) + 0.014 * exp(-along * 1.2);
+      float ragged = 1.0 + 0.30 * gnoise(vec3(j * 22.0, u_time * 0.5));
+      jets = exp(-(across * across) / (w * w * ragged)) * exp(-along * 0.62);
+      jets *= u_jetStrength * pulse;
+
+      // Equatorial plumes: feathery fog combed straight out from the star, at
+      // right angles to the jets. Material thrown off the equator rather than the
+      // poles, and the thing that gives the object a waist.
+      float rad = length(j);
+      float t = max(rad - R * 0.85, 0.0);
+      float band = exp(-pow(along / (0.030 + 0.42 * t), 2.0));
+      float comb = 0.30 + 0.70 * (gnoise(vec3(atan(j.y, j.x) * 8.0, t * 9.0, u_time * 0.05)) * 0.5 + 0.5);
+      flare = band * comb * exp(-t / 0.22) * u_flareStrength * pulse;
+    }
+
+    col = mix(col, bodyCol * pulse, bodyMask);
+    // White at the shell, the star's own colour further out: the reference runs
+    // white-hot at the edge and only turns blue in the outer bloom.
+    col += vec3(1.0) * shell * 0.80 * pulse;
+    col += u_starGlow * (corona * 0.45 + bloom * 0.20) * pulse;
+    col += mix(u_starGlow, vec3(1.0), 0.45) * (jets + flare);
   }
-
-  col = mix(col, bodyCol * pulse, bodyMask);
-  // White at the shell, the star's own colour further out: the reference runs
-  // white-hot at the edge and only turns blue in the outer bloom.
-  col += vec3(1.0) * shell * 0.80 * pulse;
-  col += u_starGlow * (corona * 0.45 + bloom * 0.20) * pulse;
-  col += mix(u_starGlow, vec3(1.0), 0.45) * (jets + flare);
 
   vec2  pd   = uv - planetP;
   float pr   = length(pd) / PLANET_R;
@@ -678,6 +880,7 @@ void main() {
 
     float limbFade = smoothstep(0.0, 0.30, n.z);
     vec3 surface;
+    vec3 emissive = vec3(0.0);
     // The cloud edge is broken up by whichever surface field is in play; the
     // texture path has no turbulence field, so it keeps the neutral value.
     float turbN = 0.5;
@@ -694,6 +897,25 @@ void main() {
       // Regional brightness drift, so two visits to the same tile don't look
       // like the same place.
       surface *= 0.82 + 0.36 * activity;
+
+      // Self-luminous material. Some worlds are not rock catching a star's
+      // light — the bright parts of the map are bright because they are
+      // emitting, and multiplying those by a diffuse term turns a glowing
+      // plasma into a lit rock no matter how good the art is.
+      //
+      // Which parts count is decided by brightness weighted by saturation, so a
+      // blazing cyan channel qualifies and a pale wash does not. The result is
+      // added after the lighting rather than before it, so it survives the
+      // terminator and carries round onto the night side, while the dark veins
+      // between still shade normally.
+      if (u_emissive > 0.0) {
+        float lum = dot(surface, vec3(0.299, 0.587, 0.114));
+        float hi = max(surface.r, max(surface.g, surface.b));
+        float lo = min(surface.r, min(surface.g, surface.b));
+        float sat = hi - lo;
+        float glow = smoothstep(u_emissiveThresh, u_emissiveThresh + 0.28, lum * (0.55 + 0.85 * sat));
+        emissive = surface * glow * u_emissive;
+      }
     } else {
       vec3 q = bandSpace(flowSpace(sDir, u_shear, u_flowStrength) * u_detailScale, u_bandStretch);
 
@@ -764,12 +986,14 @@ void main() {
     // Break the cloud edge on the same field, so the deck carries structure at
     // the frequency of the ground beneath it.
     cd += (turbN - 0.5) * 0.16 * limbFade;
-    float cover = smoothstep(u_cloudCoverage, u_cloudCoverage + 0.08, cd);
+    // Edge softness is per-world: banded weather wants a crisp boundary, a
+    // high pink haze wants to dissolve into the air around it.
+    float cover = smoothstep(u_cloudCoverage, u_cloudCoverage + u_cloudSoft, cd);
     // The shadow is the cloud field sampled a little sunward — and the offset
     // has to be taken in the space the field lives in, so the light direction
     // gets rotated into texture space rather than added to it raw.
     vec3 Ltex = rotY(rotZ(Ldir, -u_tilt), -spin * u_cloudSpin);
-    float shadow = smoothstep(u_cloudCoverage, u_cloudCoverage + 0.08,
+    float shadow = smoothstep(u_cloudCoverage, u_cloudCoverage + u_cloudSoft,
                               textureCube(u_map, normalize(cDir + Ltex * 0.035)).g);
     surface *= 1.0 - shadow * 0.30;
 
@@ -783,9 +1007,17 @@ void main() {
     vec3 lit = surface * lam * u_lightTint;
     lit = mix(lit, lit * u_terminator * 1.35, graze * 0.55);
     lit += surface * 0.030 * (1.0 - lam);
+    // Unlit, and deliberately so — this is the light the ground makes itself.
+    lit += emissive;
 
     vec3 cloudLit = u_cloudColor * (lam * 0.95 + 0.06);
     cloudLit = mix(cloudLit, cloudLit * u_terminator * 1.25, graze * 0.45);
+    // Underlit by the ground. On a world that makes its own light the cloud
+    // deck is lit from below as well as from the star, so a bank drifting over
+    // a blazing channel catches its colour — and stays visible on the night
+    // side, where a purely star-lit cloud would vanish and leave the glow
+    // beneath it strangely bare.
+    cloudLit += emissive * u_cloudUnderlit;
     lit = mix(lit, cloudLit, cover * u_cloudOpacity);
 
     // ── Magnetic sandstorms ──
