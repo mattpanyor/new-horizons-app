@@ -34,11 +34,13 @@ export async function setSetting(
 }
 
 /**
- * The stored row, or null when unset or unreachable.
+ * The stored row, or null when the key is unset.
  *
- * A failed read returns null rather than throwing: these settings decorate pages
- * that must still render if the database is down, so a background lookup is
- * never allowed to take a page with it.
+ * Throws if the database is unreachable — deliberately. These settings decorate
+ * pages that must still render when it is down, but the fallback belongs to the
+ * caller: this result is cached, and a swallowed failure would be cached too,
+ * pinning the wrong value until something invalidated it. See
+ * lib/settings/service.ts, which catches around the cache rather than inside it.
  *
  * There is deliberately only one read. A `getSetting` that selected just the
  * value existed alongside this and issued different SQL for the same row, which
@@ -46,20 +48,15 @@ export async function setSetting(
  * fetched it twice.
  */
 export async function getSettingRow(key: string): Promise<AppSetting | null> {
-  try {
-    const rows = await sql`
-      SELECT key, value, updated_at, updated_by FROM app_settings WHERE key = ${key}
-    `;
-    if (!rows.length) return null;
-    const row = rows[0];
-    return {
-      key: row.key as string,
-      value: row.value as string,
-      updatedAt: String(row.updated_at),
-      updatedBy: (row.updated_by as string) ?? null,
-    };
-  } catch (err) {
-    console.error(`getSettingRow(${key}) failed:`, err);
-    return null;
-  }
+  const rows = await sql`
+    SELECT key, value, updated_at, updated_by FROM app_settings WHERE key = ${key}
+  `;
+  if (!rows.length) return null;
+  const row = rows[0];
+  return {
+    key: row.key as string,
+    value: row.value as string,
+    updatedAt: String(row.updated_at),
+    updatedBy: (row.updated_by as string) ?? null,
+  };
 }
