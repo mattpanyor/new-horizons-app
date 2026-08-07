@@ -135,7 +135,7 @@ export default function LoginPage() {
                           ? "login-blade--active w-full h-[21rem] sm:w-[20rem] sm:max-w-[85vw] sm:h-[26rem] duration-500 delay-100"
                           : isHidden
                             ? "w-full h-0 opacity-0 sm:w-0 sm:h-64 duration-300"
-                            : "w-full h-20 sm:w-24 md:w-28 sm:h-64 duration-300",
+                            : "w-full h-20 sm:w-28 sm:h-64 duration-300",
                       ].join(" ")}
                     >
                       {/* Blade frame */}
