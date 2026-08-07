@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import PlanetBackground from "@/components/PlanetBackground";
-import type { PlanetPresetName } from "@/lib/planetPresets";
 import DotGridAnimation from "@/components/DotGridAnimation";
 // TEMPORARY: card layer hidden while the planet background is being tuned.
 // import LoginCardScatter from "@/components/LoginCardScatter";
@@ -21,13 +19,7 @@ interface AvatarUser {
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
-interface Props {
-  /** Which planet theme to render behind the form. Resolved on the server so the
-   *  admin's choice is in the first paint rather than arriving after a fetch. */
-  homeArt: PlanetPresetName;
-}
-
-export default function LoginScreen({ homeArt }: Props) {
+export default function LoginScreen() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -82,7 +74,6 @@ export default function LoginScreen({ homeArt }: Props) {
 
   return (
     <>
-      <PlanetBackground preset={homeArt} />
       <DotGridAnimation exclusionZones={[{ x: 30, y: 25, width: 40, height: 50 }]} />
       {/* TEMPORARY: hidden while the planet background is being tuned.
       <LoginCardScatter variant={AVATAR_LOGIN ? "avatar" : "form"} /> */}

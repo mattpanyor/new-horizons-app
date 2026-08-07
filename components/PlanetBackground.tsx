@@ -190,15 +190,30 @@ interface Props {
   /** Fill the nearest positioned ancestor instead of the viewport. For previews;
    *  the parent supplies `relative` and a size. */
   inline?: boolean;
+  /** Stop drawing without tearing anything down. Used when the layer is mounted
+   *  but hidden, so returning to a route that shows it costs nothing. */
+  paused?: boolean;
 }
 
-export default function PlanetBackground({ preset = DEFAULT_PRESET, inline = false }: Props) {
+export default function PlanetBackground({
+  preset = DEFAULT_PRESET,
+  inline = false,
+  paused = false,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [enabled, setEnabled] = useState(false);
   const [painted, setPainted] = useState(false);
   // Once WebGL has failed on this machine, stop offering it — a later media
   // query change shouldn't retry a context that isn't coming back.
   const failed = useRef(false);
+
+  // Read through a ref inside the render loop. As a dependency of the GL effect
+  // it would tear down the context and re-bake every time the route changed,
+  // which is exactly what this prop exists to prevent.
+  const pausedRef = useRef(paused);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   const giveUp = useCallback(() => {
     failed.current = true;
@@ -395,7 +410,9 @@ export default function PlanetBackground({ preset = DEFAULT_PRESET, inline = fal
       raf = requestAnimationFrame(frame);
       const dt = now - last;
       last = now;
-      if (document.hidden) return;
+      // The bake still runs while paused — better to have it finished before the
+      // layer is ever shown than to stall on first sight of it.
+      if (document.hidden || (pausedRef.current && baked >= 6)) return;
 
       if (pendingSurface) {
         surfaceTex = healSurface(pendingSurface);
