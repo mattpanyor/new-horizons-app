@@ -54,7 +54,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (res.ok) {
-      router.push("/");
+      router.push("/sectors");
     } else {
       setError("Invalid username or password.");
       setPassword("");
