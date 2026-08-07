@@ -266,6 +266,10 @@ body {
    resolved --x/--top/--rot/--scale, so the phone media query re-points those
    four at the other set and the layout, the toss animation and the corner
    shadows all follow without a second copy of any rule. */
+.login-cards__batch {
+  display: contents;
+}
+
 .login-card {
   --x: var(--dx);
   --top: var(--dtop);
@@ -285,6 +289,13 @@ body {
   left: calc(50% + (var(--spread) * var(--x)));
   transform: translate(-50%, -50%) rotate(var(--rot)) scale(var(--scale));
   animation: login-card-toss 780ms cubic-bezier(0.16, 0.9, 0.22, 1) var(--delay) both;
+}
+
+/* The outgoing batch. Cards lift and fade rather than simply disappearing, and
+   the two batches overlap for the length of this transition so one hand is
+   always on the table. */
+.login-card--out {
+  animation: login-card-lift 900ms cubic-bezier(0.4, 0, 0.7, 0.2) both;
 }
 
 .login-card__art {
@@ -323,6 +334,18 @@ body {
   }
 }
 
+@keyframes login-card-lift {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--rot)) scale(var(--scale));
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 2rem)) rotate(calc(var(--rot) * 1.3))
+      scale(calc(var(--scale) * 0.94));
+  }
+}
+
 /* Phones: the login box is as wide as the screen, so the fan swaps to the
    corner deal (see MOBILE_SLOTS). Cards run larger but sit mostly past the
    edge, and only the first four are dealt — the rest would land on top of each
@@ -343,6 +366,10 @@ body {
     width: clamp(9rem, 44vw, 13rem);
   }
 
+  /* Was a cull of everything past the fourth card, when the deck was dealt
+     once and in full. A batch is four cards and two batches overlap while one
+     crossfades into the next, so the cull now applies per batch — the group
+     wrapper below keeps each batch's cards as its own children. */
   .login-card:nth-child(n + 5) {
     display: none;
   }

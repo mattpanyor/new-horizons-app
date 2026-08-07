@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import DotGridAnimation from "@/components/DotGridAnimation";
-// TEMPORARY: card layer hidden while the planet background is being tuned.
-// import LoginCardScatter from "@/components/LoginCardScatter";
+import LoginCardScatter from "@/components/LoginCardScatter";
 import { portraitFocus } from "@/lib/portraitFocus";
 
 // Sitewide toggle. When NEXT_PUBLIC_AVATAR_LOGIN=true, the login page shows a
@@ -75,8 +74,7 @@ export default function LoginScreen() {
   return (
     <>
       <DotGridAnimation exclusionZones={[{ x: 30, y: 25, width: 40, height: 50 }]} />
-      {/* TEMPORARY: hidden while the planet background is being tuned.
-      <LoginCardScatter variant={AVATAR_LOGIN ? "avatar" : "form"} /> */}
+      <LoginCardScatter variant={AVATAR_LOGIN ? "avatar" : "form"} />
       {/* py-10 rather than pure centring: the stacked phone blade list can run
           taller than the viewport, and a centred flex child would be clipped
           at the top instead of scrolling. */}
