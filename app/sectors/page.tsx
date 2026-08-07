@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { getAllSectors } from "@/lib/sectors";
 import { getUserByUsername } from "@/lib/db/users";
-import StarSystemBackground from "@/components/StarSystemBackground";
+import { getHomeScreenArt } from "@/lib/settings/service";
+import PlanetBackground from "@/components/PlanetBackground";
 import GalacticMap from "@/components/GalacticMap";
 import { GalacticMapBackground } from "@/components/galacticmap/GalacticMapBackground";
 import IdentityPanel from "@/components/IdentityPanel";
@@ -14,11 +15,14 @@ export default async function SectorsPage() {
 
   // The layout already guarantees a valid session; this is just for the panel copy.
   const username = (await cookies()).get("nh_user")?.value;
-  const user = username ? await getUserByUsername(username) : null;
+  const [user, homeArt] = await Promise.all([
+    username ? getUserByUsername(username) : null,
+    getHomeScreenArt(),
+  ]);
 
   return (
     <>
-      <StarSystemBackground />
+      <PlanetBackground preset={homeArt} />
       {user && (
         <IdentityPanel
           character={user.character ?? undefined}
