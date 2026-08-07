@@ -133,8 +133,12 @@ vec3 marbleWarp(vec3 p, float strength) {
 // by hand, put deliberate structure into the field: a dominant swirl and a
 // smaller counter-rotating one, which is most of what separates the reference
 // from a texture swatch. Costs no noise samples at all.
+// p is always unit here: shearSpin is a rotation and Rodrigues below preserves
+// length, so both call sites in flowSpace pass a unit vector and the normalize
+// was a no-op. (Inside the 1-2px antialias band the length is off by <5e-4, on
+// pixels that are then blended out.)
 vec3 swirl(vec3 p, vec3 axis, float strength, float falloff) {
-  float d = 1.0 - dot(normalize(p), axis);
+  float d = 1.0 - dot(p, axis);
   float amt = strength * exp(-d * falloff);
   float c = cos(amt);
   float sn = sin(amt);
@@ -340,7 +344,6 @@ uniform vec3  u_terminator;
 // When on, the star is replaced by an accretion disc around an event horizon.
 // starRadius becomes the horizon radius and jetTilt the disc's lean.
 uniform float u_blackHole;
-uniform float u_discSquash;
 uniform float u_discOuter;
 uniform float u_discIncline;
 uniform float u_discInner;
@@ -452,13 +455,24 @@ vec3 stochasticSample(vec2 uv) {
   vec3 c = vec3(0.0);
   for (int j = 0; j < 2; j++) {
     for (int i = 0; i < 2; i++) {
-      vec2 id = cell + vec2(float(i), float(j));
-      vec2 off = vec2(hash12(id * 1.7 + 3.1), hash12(id * 2.3 + 11.9));
       float wx = (i == 0) ? (1.0 - w.x) : w.x;
       float wy = (j == 0) ? (1.0 - w.y) : w.y;
-      // Sampling at uv + offset rather than fract(uv) + offset keeps the
-      // function continuous inside a cell; only the offset changes between them.
-      c += TEX_SAMPLE(uv + off, dx, dy).rgb * (wx * wy);
+      float weight = wx * wy;
+#ifdef TEX_GRAD
+      // smoothstep returns *exactly* 0.0 below its lower edge, so outside the
+      // 0.30-0.70 blend band one of the two weights is bit-exactly zero and that
+      // corner contributes nothing. Roughly two of the four fetches are pure
+      // waste, and at 8x anisotropy each is up to eight taps — this is the
+      // largest single cost on the textured presets.
+      //
+      // Only safe under TEX_GRAD. The fallback below uses implicit derivatives,
+      // and sampling those inside non-uniform control flow is undefined in
+      // ES 2.0, so that path keeps fetching unconditionally.
+      if (weight <= 0.0) continue;
+#endif
+      vec2 id = cell + vec2(float(i), float(j));
+      vec2 off = vec2(hash12(id * 1.7 + 3.1), hash12(id * 2.3 + 11.9));
+      c += TEX_SAMPLE(uv + off, dx, dy).rgb * weight;
     }
   }
   return c;
@@ -512,12 +526,19 @@ void craters(vec3 dir, inout vec3 surface) {
   vec3 id = floor(cp);
   vec3 f = fract(cp) - 0.5;
   float h = hash13(id);
-  float present = step(h, u_craterChance);
+  // Both terms below are multiplied by this, and mix(x, y, 0.0) is exactly x —
+  // so on the 97% of cells with no crater the three hashes, a length, a divide,
+  // an exp and a pow were all computed for nothing. Cells are ~100px.
+  if (h > u_craterChance) return;
   vec3 jitter = (vec3(hash13(id + 1.3), hash13(id + 3.7), hash13(id + 7.1)) - 0.5) * 0.55;
   float d = length(f - jitter) / (0.10 + 0.16 * hash13(id + 11.0));
   // Dark bowl, bright ejecta rim just outside it.
-  float bowl = (1.0 - smoothstep(0.55, 1.0, d)) * present;
-  float rim = exp(-pow((d - 1.05) * 3.2, 2.0)) * present;
+  float bowl = 1.0 - smoothstep(0.55, 1.0, d);
+  // x*x, not pow(x, 2.0): the base is negative across the whole bowl, and pow
+  // with a negative base is undefined in GLSL — drivers lowering it to
+  // exp2(y*log2(x)) produce NaN there.
+  float rimD = (d - 1.05) * 3.2;
+  float rim = exp(-rimD * rimD);
   surface = mix(surface, surface * 0.52, bowl * 0.85);
   surface += vec3(0.18, 0.17, 0.16) * rim;
 }
@@ -540,10 +561,15 @@ void craters(vec3 dir, inout vec3 surface) {
 // while the system field alone decides where storms are.
 float stormFromFlow(vec3 sq, float t) {
   float systems = fbm3m(sq * u_stormSystemScale + vec3(0.0, 0.0, t * 0.010)) * 0.5 + 0.5;
+  // The patch mask is exactly zero below the coverage threshold and the return
+  // is patch * (...), so on the ~80% of the sphere with no storm the four
+  // octaves below were computed and thrown away — twice per pixel, since the
+  // shadow samples this too.
+  float patchEarly = smoothstep(u_stormCoverage, u_stormCoverage + 0.022, systems);
+  if (patchEarly <= 0.0) return 0.0;
   float body = fbm4m(sq * u_stormScale + vec3(t * 0.030)) * 0.5 + 0.5;
-  float patch = smoothstep(u_stormCoverage, u_stormCoverage + 0.022, systems);
   float inner = smoothstep(0.44, 0.60, body);
-  return patch * (0.62 + 0.38 * inner);
+  return patchEarly * (0.62 + 0.38 * inner);
 }
 
 vec3 starLayer(vec2 p, float scale, float seed) {
@@ -551,11 +577,14 @@ vec3 starLayer(vec2 p, float scale, float seed) {
   vec2 id = floor(g);
   vec2 f = fract(g) - 0.5;
   float h = hash12(id + seed);
-  float present = step(0.930, h);
+  // Most cells hold no star, and the result was multiplied by that flag, so the
+  // four remaining hashes, a sin, a length and a smoothstep were all being
+  // computed for an exact zero. Cells are ~40px, so the branch is coherent.
+  if (h < 0.930) return vec3(0.0);
   vec2 off = (vec2(hash12(id + seed + 1.7), hash12(id + seed + 5.3)) - 0.5) * 0.7;
   float core = 1.0 - smoothstep(0.0, 0.085, length(f - off));
   float twinkle = 0.65 + 0.35 * sin(u_time * 0.7 + h * 63.0);
-  float b = present * core * twinkle * (0.35 + 0.65 * hash12(id + seed + 9.1));
+  float b = core * twinkle * (0.35 + 0.65 * hash12(id + seed + 9.1));
   vec3 tint = mix(vec3(0.75, 0.83, 1.0), vec3(1.0, 0.87, 0.72), hash12(id + seed + 3.3));
   return tint * b;
 }
@@ -568,7 +597,21 @@ void main() {
   vec2 sunP    = vec2(SUN_CX_A * aspect, SUN_CY);
   vec2 planetP = vec2(PLANET_CX_A * aspect, PLANET_CY);
 
-  vec3 col = mix(SKY_BOT, SKY_TOP, clamp(0.5 + 0.5 * uv.y, 0.0, 1.0));
+  vec2  pd   = uv - planetP;
+  float pr   = length(pd) / PLANET_R;
+  float edge = px / PLANET_R;
+
+  // Sky, stars, nebula and the star itself are skipped wherever the planet
+  // covers them completely. The composite below is mix(col, lit, mask), and
+  // mask is *exactly* 1.0 for pr <= 1 - edge, so everything computed here would
+  // be multiplied by zero — about a third of the frame, and eleven of the
+  // roughly forty-four noise evaluations a planet pixel costs. One contiguous
+  // screen region, so the branch is fully coherent.
+  bool skyVisible = pr > 1.0 - edge;
+
+  vec3 col = vec3(0.0);
+  if (skyVisible) {
+  col = mix(SKY_BOT, SKY_TOP, clamp(0.5 + 0.5 * uv.y, 0.0, 1.0));
 
   col += starLayer(uv, 26.0, 0.0);
   col += starLayer(uv * 1.9 + vec2(u_time * 0.0035, 0.0), 41.0, 7.3) * 0.55;
@@ -654,6 +697,17 @@ void main() {
       vec3 rgt = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
       vec3 upv = cross(fwd, rgt);
 
+      // The march is restricted to rays that can actually reach the disc, which
+      // is a much smaller region than the guard above. The rim mask is exactly
+      // zero for rd >= discOuter, and at a plane crossing rd equals the radius,
+      // never below perihelion — so the largest impact parameter that can reach
+      // the disc is discOuter / sqrt(1 - 1/discOuter). Since b = |pp| * B_CRIT/R
+      // exactly, that converts straight to a screen radius. The outer guard has
+      // to stay wide for the shadow and the bloom, which are still clearly
+      // visible out there; this one just avoids marching where nothing is hit.
+      float bMax = u_discOuter / sqrt(max(1.0 - 1.0 / u_discOuter, 0.1));
+      float marchR = R * 1.05 * bMax / B_CRIT;
+
       vec3 pos = ro;
       vec3 vel = normalize(fwd + rgt * (pp.x * scale) + upv * (pp.y * scale));
 
@@ -681,18 +735,25 @@ void main() {
       float bPix = DIST * scale * px * 1.5;   // ~1.5 pixels of edge softening
       float shadow = 1.0 - smoothstep(B_CRIT - bPix, B_CRIT + bPix, b);
 
+      bool marching = length(pp) < marchR;
       for (int i = 0; i < 190; i++) {
+        if (!marching) break;
         float r2 = dot(pos, pos);
         float r = sqrt(r2);
         if (r < 1.02) break;   // stop marching; the silhouette is analytic
         if (r > DIST * 2.2) break;
+        // Past perihelion r rises monotonically, and every later plane crossing
+        // is outside the disc, so rim is zero from here on. Nothing after the
+        // loop reads pos or vel. A wide ray ran ~36 steps to reach the escape
+        // test above; this ends it at ~12.
+        if (r > u_discOuter + 1.0 && dot(pos, vel) > 0.0) break;
 
         // Longer strides far away, short ones near the hole where the path
         // actually curves.
         // Finer than feels necessary. Coarse strides near the hole both miss
         // the tight windings that make the photon ring and leave the horizon's
         // edge visibly stepped, since capture is tested once per step.
-        float dt = clamp(r * 0.085, 0.02, 4.0);
+        float dt = min(r * 0.085, 4.0);   // lower bound unreachable past the r < 1.02 break
         vec3 grav = -1.5 * h2 * pos / (r2 * r2 * r);
         vec3 nvel = vel + grav * dt;
         vec3 npos = pos + nvel * dt;
@@ -711,9 +772,15 @@ void main() {
                     * (1.0 - smoothstep(u_discOuter * 0.72, u_discOuter, rd));
           if (rim > 0.002) {
             float rho = rd;
-            float phi = atan(hit.z, hit.x);
-            vec2 dir2 = vec2(cos(phi + u_time * 1.7 / pow(rho, 1.5)),
-                             sin(phi + u_time * 1.7 / pow(rho, 1.5)));
+            // (hit.x, hit.z)/rho is already the unit vector atan+cos+sin would
+            // reconstruct, so this is a plain 2D rotation of it — one
+            // transcendental pair instead of an atan2 and a pair. And
+            // rho*sqrt(rho) rather than pow(rho, 1.5).
+            float ang = u_time * 1.7 / (rho * sqrt(rho));
+            vec2 base = vec2(hit.x, hit.z) / rho;
+            float ca = cos(ang);
+            float sa = sin(ang);
+            vec2 dir2 = vec2(base.x * ca - base.y * sa, base.x * sa + base.y * ca);
 
             // Concentric ribs at constant orbital radius, plus turbulence.
             float ribs = 1.0 - u_ribDepth * (0.5 + 0.5 * sin(rho * u_ribFreq
@@ -730,7 +797,8 @@ void main() {
             // Relativistic beaming, from the orbital velocity at the hit point
             // against the ray. This is what makes one side blaze and the other
             // sink, without it being painted in.
-            vec3 tang = normalize(cross(vec3(0.0, 1.0, 0.0), hit));
+            // cross((0,1,0), hit) is (hit.z, 0, -hit.x), whose length is rho.
+            vec3 tang = vec3(hit.z, 0.0, -hit.x) / rho;
             float vmag = sqrt(0.5 / rho);
             float beta = dot(tang * vmag, normalize(nvel));
             float boost = pow(clamp(1.0 + beta, 0.05, 2.2), 3.2);
@@ -791,15 +859,21 @@ void main() {
     // Body. Treated as a sphere rather than a flat circle: spots are sampled on
     // the hemisphere standing over the disc, so they crowd toward the edge the
     // way markings on a real surface do instead of staying evenly sized to the rim.
-    float zz = sqrt(max(0.0, 1.0 - rr * rr));
-    vec3 sn = vec3((uv - sunP) / max(R, 1e-5), zz);
-    float s1 = gnoise(sn * 15.0 + vec3(0.0, 0.0, u_time * 0.04)) * 0.5 + 0.5;
-    float s2 = gnoise(sn * 33.0 + vec3(u_time * 0.09)) * 0.5 + 0.5;
-    // Pushed hard through a contrast curve. Plain noise averages to a smooth grey
-    // and the speckle disappears at any distance; this keeps it reading as
-    // discrete cells.
-    float spots = clamp((s1 * 0.55 + s2 * 0.45 - 0.36) * 3.4, 0.0, 1.0);
-    vec3 bodyCol = mix(u_starSpot, u_starCore, mix(1.0, spots, u_starGrain));
+    // bodyMask below is exactly zero beyond rn = 1.06, and the disc is 0.45% of
+    // the frame — so the two noise calls here were running on essentially every
+    // screen pixel only to be multiplied away.
+    vec3 bodyCol = vec3(0.0);
+    if (rn < 1.06) {
+      float zz = sqrt(max(0.0, 1.0 - rr * rr));
+      vec3 sn = vec3((uv - sunP) / max(R, 1e-5), zz);
+      float s1 = gnoise(sn * 15.0 + vec3(0.0, 0.0, u_time * 0.04)) * 0.5 + 0.5;
+      float s2 = gnoise(sn * 33.0 + vec3(u_time * 0.09)) * 0.5 + 0.5;
+      // Pushed hard through a contrast curve. Plain noise averages to a smooth
+      // grey and the speckle disappears at any distance; this keeps it reading
+      // as discrete cells.
+      float spots = clamp((s1 * 0.55 + s2 * 0.45 - 0.36) * 3.4, 0.0, 1.0);
+      bodyCol = mix(u_starSpot, u_starCore, mix(1.0, spots, u_starGrain));
+    }
 
     // No hard rim. The body fades out well before its nominal radius and a
     // white-hot shell takes over across the edge, so the disc dissolves into its
@@ -811,7 +885,8 @@ void main() {
     float bodyMask = 1.0 - smoothstep(0.80, 1.06, rn);
     // Narrow, and centred outside the body rather than over it. At sigma 0.34 it
     // spanned half a radius to one and a third and swallowed the core.
-    float shell = exp(-pow((rn - 1.02) / 0.20, 2.0));
+    float shellD = (rn - 1.02) / 0.20;
+  float shell = exp(-shellD * shellD);
 
     // The halo terms clamp their exponent at the rim, so both sit at full
     // strength across the whole disc — flooding the body with flat light and
@@ -858,10 +933,8 @@ void main() {
     col += u_starGlow * (corona * 0.45 + bloom * 0.20) * pulse;
     col += mix(u_starGlow, vec3(1.0), 0.45) * (jets + flare);
   }
+  }
 
-  vec2  pd   = uv - planetP;
-  float pr   = length(pd) / PLANET_R;
-  float edge = px / PLANET_R;
   vec3  Ldir = normalize(vec3(sunP - planetP, SUN_DEPTH));
 
   if (pr < 1.0 + edge * 2.0) {
@@ -948,7 +1021,8 @@ void main() {
     if (u_stormOpacity > 0.0) {
       vec3 sq = flowSpace(stormDir, u_shear, u_flowStrength);
       storm = stormFromFlow(sq, u_time);
-      stormBody = fbm3m(sq * u_stormScale * 1.7 + vec3(u_time * 0.04)) * 0.5 + 0.5;
+      // Only feeds dustLit, which is mixed at the storm mask — zero without one.
+      if (storm > 0.0) stormBody = fbm3m(sq * u_stormScale * 1.7 + vec3(u_time * 0.04)) * 0.5 + 0.5;
 
       // The shadow is the same dust sampled sunward — but the step has to be
       // taken *along the surface*, not straight toward the sun.
@@ -966,7 +1040,8 @@ void main() {
       vec3 Lflow = rotY(rotZ(Ldir, -u_tilt), -spin * u_stormSpin);
       float lnd = dot(Lflow, stormDir);
       vec3 ltan = Lflow - stormDir * lnd;
-      float ltl = length(ltan);
+      // |L - n(L.n)| == sqrt(1 - (L.n)^2) for unit L and n.
+      float ltl = sqrt(max(1.0 - lnd * lnd, 0.0));
       float shift = min(u_stormHeight * ltl / max(lnd, 0.30), 0.45);
       vec3 shadowDir = normalize(stormDir + (ltan / max(ltl, 1e-5)) * shift);
       // Re-running the flow for the displaced point costs a marbling pass, but
@@ -982,7 +1057,10 @@ void main() {
     float ice = smoothstep(u_iceExtent, u_iceExtent + 0.13, abs(sDir.y));
     surface = mix(surface, u_ice, ice * 0.90);
 
-    float cd = textureCube(u_map, cDir).g;
+    // Only the coverage fetch is skipped when the deck is invisible. The shadow
+    // fetch below is NOT skippable: it darkens the ground whatever the opacity,
+    // so removing it would change how Kantar looks.
+    float cd = u_cloudOpacity > 0.0 ? textureCube(u_map, cDir).g : 0.0;
     // Break the cloud edge on the same field, so the deck carries structure at
     // the frequency of the ground beneath it.
     cd += (turbN - 0.5) * 0.16 * limbFade;
@@ -994,7 +1072,7 @@ void main() {
     // gets rotated into texture space rather than added to it raw.
     vec3 Ltex = rotY(rotZ(Ldir, -u_tilt), -spin * u_cloudSpin);
     float shadow = smoothstep(u_cloudCoverage, u_cloudCoverage + u_cloudSoft,
-                              textureCube(u_map, normalize(cDir + Ltex * 0.035)).g);
+                              textureCube(u_map, cDir + Ltex * 0.035).g);   // cube lookup is scale-invariant
     surface *= 1.0 - shadow * 0.30;
 
     // Wrapped diffuse, so the terminator has width. A hard cosine cut-off is
@@ -1024,7 +1102,7 @@ void main() {
     // Their own rotation, faster than the ground, so they visibly drift across
     // it — that parallax between two layers is most of what stops a planet
     // reading as printed.
-    if (u_stormOpacity > 0.0) {
+    if (u_stormOpacity > 0.0 && storm > 0.0) {
       float cover = storm * u_stormOpacity * limbFade;
       // Structure inside the dust, so a system reads as banked cloud rather than
       // a flat wash laid over the ground.
@@ -1078,14 +1156,18 @@ void main() {
     col = mix(col, lit, mask);
   }
 
+  // Gated by step(1.0, pr) below, so it is exactly zero inside the planet.
+  if (pr > 1.0) {
   float outside = max((pr - 1.0) * PLANET_R, 0.0);
   float halo = exp(-outside / 0.055) * 0.55 + exp(-outside / 0.190) * 0.16;
   float haloLit = 0.5 + 0.5 * dot(normalize(pd + 1e-5), normalize(sunP - planetP));
-  col += u_atmo * halo * (0.18 + 0.82 * haloLit) * u_atmoGain * step(1.0, pr);
+  col += u_atmo * halo * (0.18 + 0.82 * haloLit) * u_atmoGain;
+  }
 
   col = 1.0 - exp(-col * 1.15);
 
-  col *= 1.0 - 0.28 * pow(length(uv * vec2(0.55, 0.85)), 2.2);
+  vec2 vig = uv * vec2(0.55, 0.85);
+  col *= 1.0 - 0.28 * pow(dot(vig, vig), 1.1);   // avoids a sqrt per pixel
   col += (hash12(gl_FragCoord.xy + fract(u_time) * 431.7) - 0.5) * 0.0055;
 
   gl_FragColor = vec4(max(col, 0.0), 1.0);

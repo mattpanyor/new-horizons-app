@@ -155,8 +155,6 @@ export interface PlanetPreset {
   /** Replace the star with an event horizon and accretion disc. starRadius
    *  becomes the horizon radius, jetTilt the disc's lean. */
   blackHole?: number;
-  /** How edge-on the disc is. Small is flatter; 1.0 would be face-on. */
-  discSquash?: number;
   /** Outer edge of the disc, in horizon radii. The disc reaches far past the
    *  horizon, so this — not starRadius — decides how much screen the object
    *  takes. */
@@ -250,7 +248,6 @@ const PRESETS = {
     jetTilt: 0.161,
     // The disc is raymarched now, so these are physical rather than screen
     // measurements: radii in Schwarzschild units, not ellipse proportions.
-    discSquash: 0.10,
     discIncline: 0.14,
     discInner: 3.0,
     discOuter: 13.0,   // camera sits at 48, comfortably clear of this

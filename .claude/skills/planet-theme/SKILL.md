@@ -142,6 +142,13 @@ such a world want `cloudUnderlit` too, or the deck vanishes on the night side an
 leaves the glow beneath it bare. Push the threshold too low and the whole planet
 self-illuminates, which erases the terminator and flattens it.
 
+**No backticks in GLSL comments.** The shaders live in JavaScript template
+literals, so a backtick inside one closes the string and the file fails to parse
+with a misleading error pointing at the next line of GLSL. Easy to do when
+quoting an identifier in a comment, and it has happened three times. Check with:
+`node -e` over the file, matching each `/* glsl */` block and asserting no
+backtick survives inside it.
+
 ## Accessibility and cost
 
 - **No fast flashing.** The star's pulse is a slow cosine swell at ~0.125 Hz.

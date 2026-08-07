@@ -50,7 +50,11 @@ const texturePath = (preset: PlanetPresetName) => `/planets/${preset}.jpg`;
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    // `decode()` does the JPEG work off the main thread. Without it the decode
+    // is deferred to the texImage2D call, so a single frame pays a full 1024²
+    // decode plus the upload plus the heal pass plus generateMipmap — tens of
+    // milliseconds, landing during the fade-in where a hitch is most visible.
+    img.onload = () => (img.decode ? img.decode().then(() => resolve(img), () => resolve(img)) : resolve(img));
     img.onerror = () => resolve(null);
     img.src = src;
   });
@@ -100,18 +104,48 @@ function link(gl: WebGLRenderingContext, vertSrc: string, fragSrc: string): WebG
   return program;
 }
 
+/** Uniform locations, resolved once per program.
+ *
+ *  `getUniformLocation` marshals a string into the driver and validates it, and
+ *  it was being called for every name on every frame — including names the
+ *  program doesn't declare, which pay the lookup and resolve to null. With ~70
+ *  preset fields against two programs that was ~146 GL calls a frame to upload
+ *  values that never change after link. */
+function locationCache(gl: WebGLRenderingContext, program: WebGLProgram) {
+  const cache = new Map<string, WebGLUniformLocation | null>();
+  return (name: string) => {
+    let loc = cache.get(name);
+    if (loc === undefined) {
+      loc = gl.getUniformLocation(program, name);
+      cache.set(name, loc);
+    }
+    return loc;
+  };
+}
+
+type Locate = ReturnType<typeof locationCache>;
+
+function setUniform(
+  gl: WebGLRenderingContext,
+  locate: Locate,
+  name: string,
+  value: number | readonly number[],
+) {
+  const loc = locate(name);
+  if (!loc) return;
+  // Sampler bindings are integers; everything else the shaders declare is float.
+  if (name === "u_map" || name === "u_tex") gl.uniform1i(loc, value as number);
+  else if (typeof value === "number") gl.uniform1f(loc, value);
+  else if (value.length === 3) gl.uniform3fv(loc, value as number[]);
+  else if (value.length === 2) gl.uniform2fv(loc, value as number[]);
+}
+
 function setUniforms(
   gl: WebGLRenderingContext,
-  program: WebGLProgram,
+  locate: Locate,
   values: Record<string, number | readonly number[]>,
 ) {
-  for (const [name, value] of Object.entries(values)) {
-    const loc = gl.getUniformLocation(program, name);
-    if (!loc) continue;
-    if (typeof value === "number") gl.uniform1f(loc, value);
-    else if (value.length === 3) gl.uniform3fv(loc, value as number[]);
-    else if (value.length === 2) gl.uniform2fv(loc, value as number[]);
-  }
+  for (const name in values) setUniform(gl, locate, name, values[name]);
 }
 
 /** Every preset field the shaders read, under its uniform name. Both programs
@@ -180,7 +214,6 @@ function presetUniforms(look: PlanetPreset) {
     u_pulseDepth: look.pulseDepth ?? 0.4,
     u_nebula: look.nebula ?? 0,
     u_blackHole: look.blackHole ?? 0,
-    u_discSquash: look.discSquash ?? 0.15,
     u_discOuter: look.discOuter ?? 9,
     u_discIncline: look.discIncline ?? 0.14,
     u_discInner: look.discInner ?? 3,
@@ -225,8 +258,10 @@ export default function PlanetBackground({
   // it would tear down the context and re-bake every time the route changed,
   // which is exactly what this prop exists to prevent.
   const pausedRef = useRef(paused);
+  const resumeRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     pausedRef.current = paused;
+    if (!paused) resumeRef.current?.();
   }, [paused]);
 
   const giveUp = useCallback(() => {
@@ -282,6 +317,13 @@ export default function PlanetBackground({
     const bakeProgram = link(gl, PLANET_VERT, PLANET_BAKE_FRAG);
     const mainProgram = link(gl, PLANET_VERT, gradPrelude + PLANET_MAIN_FRAG);
     if (!bakeProgram || !mainProgram || !healProgram) {
+      // Release whatever did link, and the context with it. Returning early
+      // skips the cleanup function entirely, so nothing else will — on a machine
+      // where compilation fails this leaked a live context per mount.
+      if (healProgram) gl.deleteProgram(healProgram);
+      if (bakeProgram) gl.deleteProgram(bakeProgram);
+      if (mainProgram) gl.deleteProgram(mainProgram);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
       giveUp();
       return;
     }
@@ -293,6 +335,9 @@ export default function PlanetBackground({
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    const bakeAt = locationCache(gl, bakeProgram);
+    const mainAt = locationCache(gl, mainProgram);
 
     // ── Cubemap the bake writes into ──
     const cube = gl.createTexture();
@@ -328,6 +373,9 @@ export default function PlanetBackground({
     // is discarded as soon as the healed copy exists.
     const healSurface = (img: HTMLImageElement) => {
       const size = img.width;
+      // Explicit, because the frame loop leaves unit 1 selected once the art is
+      // bound, and u_src reads unit 0.
+      gl.activeTexture(gl.TEXTURE0);
       const src = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, src);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -370,6 +418,18 @@ export default function PlanetBackground({
       return out;
     };
 
+    // The bake and heal programs and the framebuffer are each used once, within
+    // the first second. Held to unmount they would sit in driver memory for the
+    // whole session, which is now the life of the tab.
+    let oneShotsLive = true;
+    const releaseOneShots = () => {
+      if (!oneShotsLive || pendingSurface || surfaceTex === null) return;
+      oneShotsLive = false;
+      gl.deleteProgram(healProgram);
+      gl.deleteProgram(bakeProgram);
+      gl.deleteFramebuffer(fbo);
+    };
+
     const bakeFace = (i: number) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
@@ -379,7 +439,7 @@ export default function PlanetBackground({
       gl.viewport(0, 0, BAKE_SIZE, BAKE_SIZE);
       gl.useProgram(bakeProgram);
       const face = CUBE_FACE_BASIS[i];
-      setUniforms(gl, bakeProgram, {
+      setUniforms(gl, bakeAt, {
         ...lookUniforms,
         u_size: BAKE_SIZE,
         u_faceA: face.a,
@@ -419,18 +479,33 @@ export default function PlanetBackground({
     let raf = 0;
     let baked = 0;
     let first = true;
+    let uniformsSent = false;
+    let texBound = false;
+    let sentW = -1;
+    let sentH = -1;
+    let needsResize = true;
+    let running = true;
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = now - last;
       last = now;
       // The bake still runs while paused — better to have it finished before the
-      // layer is ever shown than to stall on first sight of it.
-      if (document.hidden || (pausedRef.current && baked >= 6)) return;
+      // layer is ever shown than to stall on first sight of it. Once it is done
+      // the loop stops entirely rather than spinning on an early return: the
+      // layer stays mounted for the whole session, so on /admin and /game that
+      // was sixty no-op callbacks a second, forever, beside three.js.
+      if (document.hidden) return;
+      if (pausedRef.current && baked >= 6) {
+        running = false;
+        cancelAnimationFrame(raf);
+        return;
+      }
 
       if (pendingSurface) {
         surfaceTex = healSurface(pendingSurface);
         pendingSurface = null;
+        if (baked >= 6) releaseOneShots();
       }
 
       // One face per frame. All six in a single frame is a visible hitch on
@@ -446,29 +521,46 @@ export default function PlanetBackground({
           gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
           gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
           gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+          releaseOneShots();
         }
         return;
       }
 
       elapsed += Math.min(dt, 100);
-      resize();
+      if (needsResize) {
+        needsResize = false;
+        resize();
+      }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, w, h);
       gl.useProgram(mainProgram);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
-      gl.uniform1i(gl.getUniformLocation(mainProgram, "u_map"), 0);
-      if (surfaceTex) {
+
+      // The preset block is constant for the life of the context, and uniform
+      // state is per-program and survives until relink — so it is uploaded once
+      // rather than re-sent every frame. Only the three values below actually
+      // change: time every frame, resolution on resize, and the texture flag
+      // exactly once when the art finishes loading.
+      if (!uniformsSent) {
+        uniformsSent = true;
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
+        setUniform(gl, mainAt, "u_map", 0);
+        setUniforms(gl, mainAt, lookUniforms);
+      }
+      if (surfaceTex && !texBound) {
+        texBound = true;
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, surfaceTex);
-        gl.uniform1i(gl.getUniformLocation(mainProgram, "u_tex"), 1);
+        setUniform(gl, mainAt, "u_tex", 1);
+        setUniform(gl, mainAt, "u_hasTex", 1);
       }
-      setUniforms(gl, mainProgram, {
-        ...lookUniforms,
-        u_res: [w, h],
-        u_time: elapsed / 1000,
-        u_hasTex: surfaceTex ? 1 : 0,
-      });
+      if (w !== sentW || h !== sentH) {
+        sentW = w;
+        sentH = h;
+        setUniform(gl, mainAt, "u_res", [w, h]);
+      }
+      setUniform(gl, mainAt, "u_time", elapsed / 1000);
+
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       if (first) {
@@ -478,12 +570,35 @@ export default function PlanetBackground({
     };
     raf = requestAnimationFrame(frame);
 
-    const onResize = () => resize();
+    // Restarting after a pause resets the clock's reference point; without it
+    // `dt` would be the whole time spent paused and the planet would jump.
+    const resume = () => {
+      if (running || disposed) return;
+      running = true;
+      last = performance.now();
+      needsResize = true;
+      raf = requestAnimationFrame(frame);
+    };
+    resumeRef.current = resume;
+
+    // A ResizeObserver rather than reading clientWidth/clientHeight every frame.
+    // The rAF callback runs after React commits, so on a page with a live layout
+    // that read forces a style and layout recalculation inside the render loop.
+    // The observer also catches container-driven resizes in `inline` mode, which
+    // the window listener alone misses.
+    const onResize = () => {
+      needsResize = true;
+    };
     window.addEventListener("resize", onResize);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    ro?.observe(canvas);
 
     return () => {
+      running = false;
+      resumeRef.current = null;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
+      ro?.disconnect();
       canvas.removeEventListener("webglcontextlost", onLost);
       gl.deleteBuffer(buffer);
       gl.deleteFramebuffer(fbo);
