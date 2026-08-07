@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import PlanetBackground from "@/components/PlanetBackground";
 import type { PlanetPresetName } from "@/lib/planetPresets";
 
@@ -15,7 +15,11 @@ interface Props {
   overriddenBy: PlanetPresetName | null;
 }
 
-function formatDate(value: string | null): string {
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The viewer's own locale and time zone. Client only — see below. */
+function formatLocal(value: string | null): string {
   if (!value) return "never";
   return new Date(value).toLocaleString(undefined, {
     year: "numeric",
@@ -24,6 +28,38 @@ function formatDate(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Identical on any runtime: fixed month names, UTC, no locale data involved. */
+function formatUtc(value: string | null): string {
+  if (!value) return "never";
+  const d = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()} `
+    + `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+}
+
+/**
+ * A timestamp in the viewer's locale cannot be rendered on the server: it
+ * depends on their time zone, and `toLocaleString` also depends on the
+ * runtime's ICU data — Node and the browser disagree on the separator alone
+ * ("Aug 7, 2026 at 02:11" against "Aug 7, 2026, 02:11"), which is enough for
+ * React to throw a hydration mismatch and rebuild the tree.
+ *
+ * `useSyncExternalStore` resolves that properly: the server snapshot is used for
+ * SSR *and* for the hydrating render, so the two agree by construction, and the
+ * local version takes over immediately afterwards. There is no effect and no
+ * extra state — the alternative, setting a mounted flag in an effect, is the
+ * cascading-render pattern the lint rules reject.
+ */
+const neverChanges = () => () => {};
+
+function useDisplayDate(value: string | null): string {
+  return useSyncExternalStore(
+    neverChanges,
+    () => formatLocal(value),
+    () => formatUtc(value),
+  );
 }
 
 export default function AppearancePanel({
@@ -40,6 +76,7 @@ export default function AppearancePanel({
   const [stamp, setStamp] = useState({ at: updatedAt, by: updatedBy });
 
   const dirty = value !== saved;
+  const changedAt = useDisplayDate(stamp.at);
 
   async function save() {
     setSaving(true);
@@ -132,7 +169,7 @@ export default function AppearancePanel({
           {saving ? "Saving…" : dirty ? "Save" : "Saved"}
         </button>
         <span className="text-[11px] text-slate-500">
-          Last changed {formatDate(stamp.at)}
+          Last changed {changedAt}
           {stamp.by ? ` by ${stamp.by}` : ""}
         </span>
       </div>
