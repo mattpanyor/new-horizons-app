@@ -121,6 +121,27 @@ The heal pass renders a tileable copy at load. Do not switch to `MIRRORED_REPEAT
 to avoid it — that trades a seam problem for symmetry axes at every tile edge,
 which the eye catches faster.
 
+**Fake a process and you will never converge.** Six rounds went into building
+the reference's black hole out of stacked ellipses. The disc, its thickness and
+its beaming all came right; the thin line tracing the horizon that hooks down and
+inward never did, because it is the disc's second image — light that went most of
+the way round the photon sphere. It is not a shape, it is what happens when the
+path curves, and no arrangement of shapes contains it. Marching the ray under the
+Schwarzschild deflection term produced it, the photon ring, the Einstein pinch and
+correct beaming at once, in less code than the fake.
+
+The tell: when a missing feature is described as "the way it folds" or "how it
+wraps" rather than as a thing with a position and a size, the model is wrong, not
+the parameters.
+
+**Emissive surfaces.** Worlds that glow rather than being lit need `emissive` and
+`emissiveThreshold`, which add the bright saturated parts of the texture after
+the diffuse term rather than multiplying them by it — so the glow survives the
+terminator and carries round the limb while dark regions still shade. Clouds over
+such a world want `cloudUnderlit` too, or the deck vanishes on the night side and
+leaves the glow beneath it bare. Push the threshold too low and the whole planet
+self-illuminates, which erases the terminator and flattens it.
+
 ## Accessibility and cost
 
 - **No fast flashing.** The star's pulse is a slow cosine swell at ~0.125 Hz.
@@ -135,6 +156,20 @@ which the eye catches faster.
   more than texture fetches.
 
 ## Working method
+
+**Measure the reference, don't recall it.** Three separate values were confidently
+wrong from eyeballing a thumbnail: an axis angle inverted, a thickness out by a
+factor of ten, and a beaming direction reversed. Each survived several rounds of
+adjustment because adjusting a sign never converges. Sampling the image took a
+few minutes and settled all three — brightness by quadrant for a lighting
+gradient, mirror difference for symmetry, a circle fit through three limb points
+for geometry, mean-crossings per scanline for feature scale, percentiles for
+setting a threshold.
+
+Colours sampled from a reference are a trap of their own: they are *tonemapped
+display values*, not radiance. Feeding rgb(102,119,150) in as emission produced
+flat grey. Bright material has to be authored as a saturated hue driven past 1.0
+and rolled off by the exposure curve.
 
 **Look at the result.** Most of the wrong turns in this system came from tuning
 against reasoning instead of a render. Screenshot the page, compare against the

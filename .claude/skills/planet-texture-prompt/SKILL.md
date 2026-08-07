@@ -58,6 +58,29 @@ Five paragraphs, in this order. It survives contact with most models.
    wallpaper.
 5. **Lighting** — flat, even, shadowless, a colour map not a render.
 
+**State feature size as a fraction of the frame.** Image models default to a
+comfortable composition of a handful of large forms, and asking for "fine
+detail" does not move them, because they think the large forms *are* the detail.
+Say "no single feature wider than a fortieth of the frame, and no one shape
+dominating". Measured, a good map's features run 2–4% of frame width; a failed
+one ran 8% and read as four enormous ribbons.
+
+Do not try to fix coarse features by tiling the texture more often. It shrinks
+them, but it multiplies how often those same few shapes come round — trading a
+scale problem for a repetition problem, which is worse.
+
+**Ask for districts.** Six or seven clearly different regions within the one
+image, meeting at irregular boundaries, each named: one dense with filigree, one
+of roiling storm cells, one nearly black and quiet, one shattered into angular
+fractures, and so on.
+
+This matters because of how the texture is sampled. Stochastic tiling shows a
+different window of the image in every cell, so a uniform image makes every cell
+look alike and the planet reads as wallpaper however fine the detail is. With
+distinct districts, different cells land on different ones and the sphere gets
+real regional variety out of a single map. It is the closest thing to a sense of
+place a tiled texture can give, and it costs nothing but asking.
+
 Then a negative list: sun, shadows, highlights, vignette, sphere, globe, planet
 from space, curved horizon, atmosphere, stars, borders, text, watermark — plus
 whatever this world must not contain.
@@ -88,6 +111,22 @@ Do these before installing it. Two are measurable — measure rather than squint
 There's no PIL or ImageMagick here. `sips` resizes and converts; a small pure-
 Python PNG decoder (zlib + unfilter) is enough for quadrant means and mirror
 differences on a downscaled copy.
+
+## Self-luminous worlds
+
+If the world glows rather than being lit — plasma, lava, a nebula surface — say
+so explicitly and repeatedly: "every bright area is bright because the material
+itself is emitting", and exclude terminator, day/night and shading in the
+negative list. Insist the darks go genuinely black; grey darks kill the glow,
+since the contrast between a near-white core and a black vein beside it is what
+sells it.
+
+The prompt alone is not enough. The shader multiplies the surface by the diffuse
+term, so however luminous the art is, the terminator still crosses it and the
+night side still goes dark — it will read as a lit rock. Such a world needs the
+preset's `emissive` and `emissiveThreshold` set, which add the bright saturated
+parts of the map *after* lighting instead of before. Set them once the art
+exists: the right threshold depends on the image's actual histogram.
 
 ## Installing
 
