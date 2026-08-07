@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserByUsername } from "@/lib/db/users";
-import WelcomeScreen from "@/components/WelcomeScreen";
 
 export default async function Home() {
   const cookieStore = await cookies();
@@ -12,12 +11,5 @@ export default async function Home() {
   const user = await getUserByUsername(username);
   if (!user) redirect("/login");
 
-  return (
-    <WelcomeScreen
-      username={user.username}
-      character={user.character ?? undefined}
-      role={user.role ?? undefined}
-      group={user.group}
-    />
-  );
+  redirect("/sectors");
 }

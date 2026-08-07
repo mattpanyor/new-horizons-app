@@ -1,7 +1,10 @@
+import { cookies } from "next/headers";
 import { getAllSectors } from "@/lib/sectors";
+import { getUserByUsername } from "@/lib/db/users";
 import StarSystemBackground from "@/components/StarSystemBackground";
 import GalacticMap from "@/components/GalacticMap";
 import { GalacticMapBackground } from "@/components/galacticmap/GalacticMapBackground";
+import IdentityPanel from "@/components/IdentityPanel";
 import NavIcon from "@/components/NavIcon";
 
 export default async function SectorsPage() {
@@ -9,9 +12,20 @@ export default async function SectorsPage() {
   const coreSector = sectors.find((s) => s.slug === "core");
   const outerSectors = sectors.filter((s) => s.slug !== "core");
 
+  // The layout already guarantees a valid session; this is just for the panel copy.
+  const username = (await cookies()).get("nh_user")?.value;
+  const user = username ? await getUserByUsername(username) : null;
+
   return (
     <>
       <StarSystemBackground />
+      {user && (
+        <IdentityPanel
+          character={user.character ?? undefined}
+          role={user.role ?? undefined}
+          group={user.group}
+        />
+      )}
       <NavIcon href="/ship" label="Ship">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
           {/* Sun + concentric orbit rings — top right */}
