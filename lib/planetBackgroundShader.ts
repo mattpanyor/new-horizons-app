@@ -648,6 +648,25 @@ void main() {
     col += u_starGlow * neb * exp(-sd * 0.55) * u_nebula;
   }
 
+// Compiled only for presets that actually have a black hole.
+//
+// The march below is a 190-iteration loop, and the driver translates it whether
+// or not the preset ever enters the branch: u_blackHole is a uniform, so the
+// compiler cannot fold the branch away. ANGLE hands it to D3D's compiler, which
+// unrolls constant-bounded loops — so this one block is believed to dominate
+// the cold-compile time of a ~49KB shader, and three worlds out of four were
+// paying it without ever running a step of the loop.
+//
+// That compile is what froze the browser on first load: it happens in the GPU
+// process, which every tab shares. See PlanetBackground for the other half of
+// the fix, which stops it blocking at all.
+//
+// BLACK_HOLE is defined in PlanetBackground from the preset's blackHole field.
+//
+// With the define absent this collapses to a bare block around the star path,
+// which is why the else is split across the #endif below rather than the whole
+// if/else being duplicated.
+#ifdef BLACK_HOLE
   if (u_blackHole > 0.5) {
     // ── Event horizon and accretion disc, by actually bending the light ──
     //
@@ -855,7 +874,9 @@ void main() {
       float halo = exp(-max(length(pp) - R, 0.0) / (R * 2.0)) * (1.0 - shadow);
       col += u_discBright * halo * side * 0.22 * pulse;
     }
-  } else {
+  } else
+#endif
+  {
     // Body. Treated as a sphere rather than a flat circle: spots are sampled on
     // the hemisphere standing over the disc, so they crowd toward the edge the
     // way markings on a real surface do instead of staying evenly sized to the rim.

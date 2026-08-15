@@ -70,38 +70,82 @@ function setAnisotropy(gl: WebGLRenderingContext) {
   }
 }
 
-function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error("PlanetBackground shader:", gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
+interface Pending {
+  program: WebGLProgram;
+  vert: WebGLShader;
+  frag: WebGLShader;
 }
 
-function link(gl: WebGLRenderingContext, vertSrc: string, fragSrc: string): WebGLProgram | null {
-  const vert = compile(gl, gl.VERTEX_SHADER, vertSrc);
-  const frag = compile(gl, gl.FRAGMENT_SHADER, fragSrc);
-  if (!vert || !frag) return null;
+/** Hand a program to the driver without waiting for it.
+ *
+ *  Nothing here queries COMPILE_STATUS or LINK_STATUS, and that omission is the
+ *  point. Those queries force the driver to finish translating on the spot, and
+ *  since compilation happens in the GPU process — which every tab shares — a
+ *  slow one does not merely stall this page, it stops compositing browser-wide.
+ *  On this shader that was minutes on a cold load, which is what a first visit
+ *  or any deploy that changes the source always is.
+ *
+ *  Readiness is polled from the render loop instead; see `settled` below. */
+function startProgram(
+  gl: WebGLRenderingContext,
+  vertSrc: string,
+  fragSrc: string,
+): Pending | null {
+  const vert = gl.createShader(gl.VERTEX_SHADER);
+  const frag = gl.createShader(gl.FRAGMENT_SHADER);
   const program = gl.createProgram();
-  if (!program) return null;
+  if (!vert || !frag || !program) {
+    if (vert) gl.deleteShader(vert);
+    if (frag) gl.deleteShader(frag);
+    if (program) gl.deleteProgram(program);
+    return null;
+  }
+  gl.shaderSource(vert, vertSrc);
+  gl.compileShader(vert);
+  gl.shaderSource(frag, fragSrc);
+  gl.compileShader(frag);
   gl.attachShader(program, vert);
   gl.attachShader(program, frag);
   // Pin the attribute so every program shares one enabled vertex array.
   gl.bindAttribLocation(program, 0, "a_pos");
   gl.linkProgram(program);
+  return { program, vert, frag };
+}
+
+/** Whether the driver has finished, when it can tell us.
+ *
+ *  Without KHR_parallel_shader_compile there is no way to ask, so this reports
+ *  ready and the status query below blocks — but by then it is one frame after
+ *  mount rather than inside it. The extension is present on the Chromium and
+ *  Firefox builds where the stall is worst, which is where it matters. */
+function settled(
+  gl: WebGLRenderingContext,
+  ext: { COMPLETION_STATUS_KHR: number } | null,
+  pending: Pending,
+): boolean {
+  if (!ext) return true;
+  return !!gl.getProgramParameter(pending.program, ext.COMPLETION_STATUS_KHR);
+}
+
+/** Collect the result once the driver is done, and release the shaders. Returns
+ *  false if anything failed to compile or link. */
+function finishProgram(gl: WebGLRenderingContext, pending: Pending): boolean {
+  const { program, vert, frag } = pending;
+  let ok = true;
+  for (const [shader, label] of [[vert, "vertex"], [frag, "fragment"]] as const) {
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.error(`PlanetBackground ${label} shader:`, gl.getShaderInfoLog(shader));
+      ok = false;
+    }
+  }
+  if (ok && !gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error("PlanetBackground link:", gl.getProgramInfoLog(program));
+    ok = false;
+  }
+  // Detached implicitly by deletion once the program stops referencing them.
   gl.deleteShader(vert);
   gl.deleteShader(frag);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.error("PlanetBackground link:", gl.getProgramInfoLog(program));
-    gl.deleteProgram(program);
-    return null;
-  }
-  return program;
+  return ok;
 }
 
 /** Uniform locations, resolved once per program.
@@ -313,20 +357,41 @@ export default function PlanetBackground({
         "#define TEX_GRAD 1\n"
       : "";
 
-    const healProgram = link(gl, PLANET_VERT, PLANET_HEAL_FRAG);
-    const bakeProgram = link(gl, PLANET_VERT, PLANET_BAKE_FRAG);
-    const mainProgram = link(gl, PLANET_VERT, gradPrelude + PLANET_MAIN_FRAG);
-    if (!bakeProgram || !mainProgram || !healProgram) {
-      // Release whatever did link, and the context with it. Returning early
+    // The accretion-disc raymarch is compiled only where it is used. It is a
+    // 190-iteration loop that the driver unrolls, and it dominates this shader's
+    // translation time — see the comment on the block in planetBackgroundShader.
+    // Uniforms cannot gate it: the compiler has to translate a branch it cannot
+    // fold away, so the gate has to be a preprocessor one. Must follow the
+    // #extension lines, which have to lead the source.
+    const bhPrelude = look.blackHole ? "#define BLACK_HOLE 1\n" : "";
+
+    // Lets the driver translate on its own thread and be asked later whether it
+    // is done, instead of us demanding the answer immediately and blocking every
+    // tab until it arrives.
+    const parallel = gl.getExtension("KHR_parallel_shader_compile") as
+      | { COMPLETION_STATUS_KHR: number }
+      | null;
+
+    const healPending = startProgram(gl, PLANET_VERT, PLANET_HEAL_FRAG);
+    const bakePending = startProgram(gl, PLANET_VERT, PLANET_BAKE_FRAG);
+    const mainPending = startProgram(gl, PLANET_VERT, gradPrelude + bhPrelude + PLANET_MAIN_FRAG);
+    if (!bakePending || !mainPending || !healPending) {
+      // Release whatever was allocated, and the context with it. Returning early
       // skips the cleanup function entirely, so nothing else will — on a machine
-      // where compilation fails this leaked a live context per mount.
-      if (healProgram) gl.deleteProgram(healProgram);
-      if (bakeProgram) gl.deleteProgram(bakeProgram);
-      if (mainProgram) gl.deleteProgram(mainProgram);
+      // where allocation fails this leaked a live context per mount.
+      for (const p of [healPending, bakePending, mainPending]) {
+        if (!p) continue;
+        gl.deleteShader(p.vert);
+        gl.deleteShader(p.frag);
+        gl.deleteProgram(p.program);
+      }
       gl.getExtension("WEBGL_lose_context")?.loseContext();
       giveUp();
       return;
     }
+    const healProgram = healPending.program;
+    const bakeProgram = bakePending.program;
+    const mainProgram = mainPending.program;
 
     // One triangle large enough to cover the clip volume — cheaper than a quad
     // and there's no seam down the diagonal.
@@ -485,6 +550,7 @@ export default function PlanetBackground({
     let sentH = -1;
     let needsResize = true;
     let running = true;
+    let linked = false;
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
@@ -496,6 +562,28 @@ export default function PlanetBackground({
       // layer stays mounted for the whole session, so on /admin and /game that
       // was sixty no-op callbacks a second, forever, beside three.js.
       if (document.hidden) return;
+
+      // Wait for the driver rather than demanding it finish. Nothing below may
+      // touch a program before this passes — not even a uniform lookup — so the
+      // gate sits above everything, including the bake. The star field is the
+      // background meanwhile, exactly as it is during the bake, so the only
+      // visible consequence of a slow compile is a later fade-in.
+      if (!linked) {
+        if (!settled(gl, parallel, mainPending) ||
+            !settled(gl, parallel, bakePending) ||
+            !settled(gl, parallel, healPending)) {
+          return;
+        }
+        if (!finishProgram(gl, healPending) ||
+            !finishProgram(gl, bakePending) ||
+            !finishProgram(gl, mainPending)) {
+          cancelAnimationFrame(raf);
+          giveUp();
+          return;
+        }
+        linked = true;
+      }
+
       if (pausedRef.current && baked >= 6) {
         running = false;
         cancelAnimationFrame(raf);
@@ -605,6 +693,15 @@ export default function PlanetBackground({
       gl.deleteTexture(cube);
       disposed = true;
       if (surfaceTex) gl.deleteTexture(surfaceTex);
+      // Unmounted mid-compile: finishProgram never ran, so the shaders were
+      // never released. Deleting the program alone would leave them attached
+      // and alive.
+      if (!linked) {
+        for (const p of [healPending, bakePending, mainPending]) {
+          gl.deleteShader(p.vert);
+          gl.deleteShader(p.frag);
+        }
+      }
       gl.deleteProgram(healProgram);
       gl.deleteProgram(bakeProgram);
       gl.deleteProgram(mainProgram);
