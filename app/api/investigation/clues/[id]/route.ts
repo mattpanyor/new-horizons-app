@@ -16,6 +16,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const result = await updateClueAs(user, Number(idStr), {
     text: body.text,
     factionSlugs: body.factionSlugs,
+    sessionNumber: body.sessionNumber,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });

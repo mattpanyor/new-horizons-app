@@ -14,6 +14,11 @@ import { ALLEGIANCES } from "@/lib/allegiances";
 export const MAX_CLUE_TEXT = 2000;
 export const MAX_CHAPTER_TITLE = 200;
 
+// Upper bound on the session number. It is a free, unmanaged integer — there is
+// no session table and no sequence — so this only exists to reject typos and
+// junk, not to say anything about how many sessions the campaign has.
+export const MAX_SESSION_NUMBER = 9999;
+
 const VALID_FACTION_SLUGS = new Set(Object.keys(ALLEGIANCES));
 
 export type FieldResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -48,6 +53,31 @@ export function validateClueText(input: unknown): FieldResult<string> {
     return { ok: false, error: `Text must be ${MAX_CLUE_TEXT} characters or fewer` };
   }
   return { ok: true, value: trimmed };
+}
+
+/**
+ * The game session a clue was discovered in. Optional everywhere in the data
+ * model: `null`, `undefined` and `""` all mean "not recorded", which is what
+ * every clue written before this field existed has.
+ *
+ * Surfaces that need it *supplied* enforce that themselves — the MCP create
+ * tool does, via ActorConstraints in ../investigation/service.ts. This function
+ * only answers whether a given value is a usable session number.
+ *
+ * Accepts a numeric string so form bodies can be passed through unparsed.
+ */
+export function validateSessionNumber(input: unknown): FieldResult<number | null> {
+  if (input === null || input === undefined) return { ok: true, value: null };
+  if (typeof input === "string" && input.trim() === "") return { ok: true, value: null };
+
+  const n = typeof input === "string" ? Number(input.trim()) : input;
+  if (!Number.isInteger(n) || (n as number) < 1 || (n as number) > MAX_SESSION_NUMBER) {
+    return {
+      ok: false,
+      error: `Session must be a whole number between 1 and ${MAX_SESSION_NUMBER}`,
+    };
+  }
+  return { ok: true, value: n as number };
 }
 
 export function validateChapterTitle(input: unknown): FieldResult<string> {

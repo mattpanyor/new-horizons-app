@@ -40,6 +40,7 @@ import {
   sanitizeFactionSlugs,
   validateChapterTitle,
   validateClueText,
+  validateSessionNumber,
 } from "./validation";
 
 export type ServiceResult<T> =
@@ -60,6 +61,19 @@ export type ServiceResult<T> =
 export interface ActorConstraints {
   /** Refuse writes to records the actor did not author, whatever their level. */
   ownRecordsOnly?: boolean;
+  /**
+   * Refuse to create a clue without a session number.
+   *
+   * The field is optional in the app — the web composer lets a player skip it,
+   * and clues written before it existed have none. This forces an AI client to
+   * stop and ask which session the clue came from instead of filing it
+   * untagged, because a human at the board can fix an omission later in two
+   * clicks and an AI batch-writing clues will not.
+   *
+   * Only applies to creation. Updates never require it, so an AI can still fix
+   * the text of an old clue without having to invent a session for it.
+   */
+  requireSessionNumber?: boolean;
 }
 
 function ok<T>(data: T): ServiceResult<T> {
@@ -120,6 +134,28 @@ function resolveFactionSlugs(
     return fail("Tag at least one faction", 400);
   }
   return ok(slugs);
+}
+
+// Resolves the session number for a write. Optional by default; a calling
+// surface may demand one via ActorConstraints.requireSessionNumber.
+function resolveSessionNumber(
+  input: unknown,
+  constraints: ActorConstraints
+): ServiceResult<number | null> {
+  const validated = validateSessionNumber(input);
+  if (!validated.ok) return fail(validated.error, 400);
+
+  if (validated.value === null && constraints.requireSessionNumber) {
+    // Worded at the model, not at the end user: the point is to make it ask
+    // rather than pick a plausible-looking number.
+    return fail(
+      "sessionNumber is required when creating a clue through this connection. Ask the user " +
+        "which game session this clue was discovered in and pass the number they give you. " +
+        "Do not guess, infer it from the current chapter, or reuse a number from another clue.",
+      400
+    );
+  }
+  return ok(validated.value);
 }
 
 // Resolves the author for a write. Writing as someone else is superadmin-only;
@@ -248,6 +284,11 @@ export async function searchCluesAs(
       return fail("Invalid chapter", 400);
     }
   }
+  if (filters.session !== undefined) {
+    const session = validateSessionNumber(filters.session);
+    if (!session.ok) return fail(session.error, 400);
+    if (session.value === null) return fail("Invalid session", 400);
+  }
   return ok(await searchClues(filters));
 }
 
@@ -265,8 +306,10 @@ export async function createClueAs(
     chapter?: number | null;
     text: unknown;
     factionSlugs?: unknown;
+    sessionNumber?: unknown;
     author?: string;
-  }
+  },
+  constraints: ActorConstraints = {}
 ): Promise<ServiceResult<Clue>> {
   if (!can(actor, "clue:create")) return fail("Forbidden", 403);
 
@@ -275,6 +318,9 @@ export async function createClueAs(
 
   const slugs = resolveFactionSlugs(actor, input.factionSlugs);
   if (!slugs.ok) return slugs;
+
+  const session = resolveSessionNumber(input.sessionNumber, constraints);
+  if (!session.ok) return session;
 
   const author = await resolveAuthor(actor, input.author);
   if (!author.ok) return author;
@@ -287,6 +333,7 @@ export async function createClueAs(
       chapter: chapter.data,
       text: text.value,
       factionSlugs: slugs.data,
+      sessionNumber: session.data,
       createdBy: author.data,
     })
   );
@@ -295,7 +342,12 @@ export async function createClueAs(
 export async function updateClueAs(
   actor: User,
   id: number,
-  input: { text?: unknown; factionSlugs?: unknown; author?: string },
+  input: {
+    text?: unknown;
+    factionSlugs?: unknown;
+    sessionNumber?: unknown;
+    author?: string;
+  },
   constraints: ActorConstraints = {}
 ): Promise<ServiceResult<Clue>> {
   if (!can(actor, "clue:update")) return fail("Forbidden", 403);
@@ -318,7 +370,12 @@ export async function updateClueAs(
     );
   }
 
-  const fields: { text?: string; factionSlugs?: string[]; createdBy?: string } = {};
+  const fields: {
+    text?: string;
+    factionSlugs?: string[];
+    sessionNumber?: number | null;
+    createdBy?: string;
+  } = {};
 
   if (input.text !== undefined) {
     const text = validateClueText(input.text);
@@ -332,6 +389,15 @@ export async function updateClueAs(
     fields.factionSlugs = slugs.data;
   }
 
+  // Never required on update, whatever the calling surface asks for: an old
+  // clue with no session number must stay editable without inventing one.
+  // Passing null explicitly clears it; omitting the key leaves it alone.
+  if (input.sessionNumber !== undefined) {
+    const session = resolveSessionNumber(input.sessionNumber, {});
+    if (!session.ok) return session;
+    fields.sessionNumber = session.data;
+  }
+
   if (input.author !== undefined) {
     const author = await resolveAuthor(actor, input.author);
     if (!author.ok) return author;
@@ -341,6 +407,7 @@ export async function updateClueAs(
   if (
     fields.text === undefined &&
     fields.factionSlugs === undefined &&
+    fields.sessionNumber === undefined &&
     fields.createdBy === undefined
   ) {
     return fail("Nothing to update", 400);

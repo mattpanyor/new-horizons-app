@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useId } from "react";
 import FactionPicker from "./FactionPicker";
 import MentionPicker, { type MentionEntity } from "./MentionPicker";
 import { buildMentionMarkup, parseClueText } from "@/lib/investigation/clueText";
+import { MAX_SESSION_NUMBER, validateSessionNumber } from "@/lib/investigation/validation";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -21,7 +22,13 @@ const TEXT_BOX_STYLE: React.CSSProperties = {
 interface ClueEditorProps {
   initialText: string;
   initialFactionSlugs: string[];
-  onSave: (text: string, factionSlugs: string[]) => void | Promise<void>;
+  /** Null when the clue has no session recorded — always optional on the web. */
+  initialSessionNumber: number | null;
+  onSave: (
+    text: string,
+    factionSlugs: string[],
+    sessionNumber: number | null
+  ) => void | Promise<void>;
   onCancel: () => void;
   /** When true, an empty submit becomes a cancel instead of a save */
   emptyMeansCancel?: boolean;
@@ -49,6 +56,7 @@ function detectMention(text: string, cursor: number): MentionState | null {
 export default function ClueEditor({
   initialText,
   initialFactionSlugs,
+  initialSessionNumber,
   onSave,
   onCancel,
   emptyMeansCancel,
@@ -56,10 +64,17 @@ export default function ClueEditor({
 }: ClueEditorProps) {
   const [text, setText] = useState(initialText);
   const [factionSlugs, setFactionSlugs] = useState<string[]>(initialFactionSlugs);
+  // Held as a string, not a number: an <input type="number"> that is mid-edit
+  // or empty has no number to hold, and empty is a legitimate value here.
+  const [session, setSession] = useState(
+    initialSessionNumber === null ? "" : String(initialSessionNumber)
+  );
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mention, setMention] = useState<MentionState | null>(null);
   const [entities, setEntities] = useState<MentionEntity[]>([]);
   const [factionError, setFactionError] = useState(false);
+  const sessionInputId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const highlighterInnerRef = useRef<HTMLDivElement | null>(null);
@@ -99,8 +114,12 @@ export default function ClueEditor({
     }
   }, [autoFocusText]);
 
+  const initialSessionText =
+    initialSessionNumber === null ? "" : String(initialSessionNumber);
+
   const isUnchanged =
     text.trim() === initialText.trim() &&
+    session.trim() === initialSessionText &&
     factionSlugs.length === initialFactionSlugs.length &&
     factionSlugs.every((s, i) => s === initialFactionSlugs[i]);
 
@@ -130,18 +149,30 @@ export default function ClueEditor({
       return;
     }
 
+    // Same rule the server applies — blank is fine, junk is not. Keep the
+    // editor open on a bad value so a click-outside doesn't discard the text.
+    const validatedSession = validateSessionNumber(session);
+    if (!validatedSession.ok) {
+      setSessionError(validatedSession.error);
+      return;
+    }
+
     setBusy(true);
     try {
-      await onSave(trimmed, factionSlugs);
+      await onSave(trimmed, factionSlugs, validatedSession.value);
     } finally {
       setBusy(false);
     }
-  }, [busy, text, factionSlugs, emptyMeansCancel, isUnchanged, onSave, onCancel]);
+  }, [busy, text, factionSlugs, session, emptyMeansCancel, isUnchanged, onSave, onCancel]);
 
   // Clear the error as soon as the user picks a faction.
   useEffect(() => {
     if (factionSlugs.length > 0) setFactionError(false);
   }, [factionSlugs]);
+
+  useEffect(() => {
+    setSessionError(null);
+  }, [session]);
 
   // Click outside → commit (save or close)
   useEffect(() => {
@@ -282,6 +313,36 @@ export default function ClueEditor({
         selected={factionSlugs}
         onChange={setFactionSlugs}
       />
+      <div className="flex items-center gap-2">
+        <label
+          htmlFor={sessionInputId}
+          className="text-[8px] tracking-[0.2em] uppercase text-white/35 shrink-0"
+          style={cinzel}
+        >
+          Session
+        </label>
+        <input
+          id={sessionInputId}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={MAX_SESSION_NUMBER}
+          value={session}
+          onChange={(e) => setSession(e.target.value)}
+          placeholder="optional"
+          disabled={busy}
+          className="w-20 rounded px-1.5 py-0.5 text-[10px] tabular-nums bg-black/25 text-white/70 placeholder:text-white/20 outline-none focus:ring-1 focus:ring-indigo-400/40"
+          style={{ boxShadow: "inset 0 0 0 1px rgba(99,102,241,0.18)" }}
+        />
+      </div>
+      {sessionError && (
+        <p
+          className="text-[8px] tracking-[0.2em] uppercase text-red-400/80"
+          style={cinzel}
+        >
+          {sessionError}
+        </p>
+      )}
       {factionError && (
         <p
           className="text-[8px] tracking-[0.2em] uppercase text-red-400/80"

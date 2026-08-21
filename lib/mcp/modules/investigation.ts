@@ -9,7 +9,11 @@ import { getAllKankaEntities, getKankaEntityByEntityId } from "@/lib/db/kankaEnt
 import { kankaEntityUrl } from "@/lib/kanka";
 import { parseClueText } from "@/lib/investigation/clueText";
 import { CLUE_SEARCH_DEFAULT_LIMIT, CLUE_SEARCH_MAX_LIMIT } from "@/lib/db/clues";
-import { MAX_CHAPTER_TITLE, MAX_CLUE_TEXT } from "@/lib/investigation/validation";
+import {
+  MAX_CHAPTER_TITLE,
+  MAX_CLUE_TEXT,
+  MAX_SESSION_NUMBER,
+} from "@/lib/investigation/validation";
 import {
   can,
   createChapterAs,
@@ -82,6 +86,14 @@ const tools: ToolDef[] = [
       type: "object",
       properties: {
         chapter: { type: "integer", minimum: 1, description: "Restrict to one chapter number." },
+        session: {
+          type: "integer",
+          minimum: 1,
+          maximum: MAX_SESSION_NUMBER,
+          description:
+            "Restrict to clues discovered in one game session. Clues recorded before this field " +
+            "existed have no session number and never match.",
+        },
         faction: {
           type: "string",
           description: "Faction slug the clue is tagged with. See investigation_list_factions.",
@@ -102,6 +114,7 @@ const tools: ToolDef[] = [
       fromService(
         await searchCluesAs(ctx.user, {
           chapter: args.chapter === undefined ? undefined : num(args.chapter),
+          session: args.session === undefined ? undefined : num(args.session),
           faction: args.faction as string | undefined,
           author: args.author as string | undefined,
           query: args.query as string | undefined,
@@ -189,6 +202,9 @@ const tools: ToolDef[] = [
     description:
       `Add a clue to the investigation board. Text is limited to ${MAX_CLUE_TEXT} characters and must be ` +
       "tagged with at least one faction. Omit `chapter` to file it under the current (highest) chapter. " +
+      "`sessionNumber` is REQUIRED: ask the user which game session the clue was discovered in and use " +
+      "the number they give you. Never guess it, never derive it from the chapter number, and never " +
+      "copy it from another clue — if the user has not said, ask before calling this tool. " +
       MENTION_SYNTAX,
     inputSchema: {
       type: "object",
@@ -200,6 +216,14 @@ const tools: ToolDef[] = [
           minItems: 1,
           description: "Faction slugs from investigation_list_factions.",
         },
+        sessionNumber: {
+          type: "integer",
+          minimum: 1,
+          maximum: MAX_SESSION_NUMBER,
+          description:
+            "The game session this clue was discovered in, as stated by the user. Required. Ask them " +
+            "if you do not already know it — do not infer or invent a number.",
+        },
         chapter: {
           type: "integer",
           minimum: 1,
@@ -210,7 +234,7 @@ const tools: ToolDef[] = [
           description: "Attribute the clue to another user. Superadmin only; defaults to you.",
         },
       },
-      required: ["text", "factionSlugs"],
+      required: ["text", "factionSlugs", "sessionNumber"],
       additionalProperties: false,
     },
     available: (user) => can(user, "clue:create"),
@@ -218,13 +242,20 @@ const tools: ToolDef[] = [
       const missing = await findUnknownMentions(args.text);
       if (missing.length > 0) return mentionError(missing);
 
+      // `required` in the schema is a hint a client may not enforce, so the
+      // real check is requireSessionNumber in the service layer.
       return fromService(
-        await createClueAs(ctx.user, {
-          chapter: args.chapter === undefined ? undefined : num(args.chapter),
-          text: args.text,
-          factionSlugs: args.factionSlugs,
-          author: args.author as string | undefined,
-        })
+        await createClueAs(
+          ctx.user,
+          {
+            chapter: args.chapter === undefined ? undefined : num(args.chapter),
+            text: args.text,
+            factionSlugs: args.factionSlugs,
+            sessionNumber: args.sessionNumber,
+            author: args.author as string | undefined,
+          },
+          { requireSessionNumber: true }
+        )
       );
     },
   },
@@ -232,7 +263,9 @@ const tools: ToolDef[] = [
   {
     name: "investigation_update_clue",
     description:
-      "Edit one of YOUR OWN clues — text and/or faction tags. Pass only the fields to change. " +
+      "Edit one of YOUR OWN clues — text, faction tags and/or session number. Pass only the fields " +
+      "to change. Unlike creation, `sessionNumber` is optional here: leave it out to keep whatever " +
+      "the clue already has, including none at all. " +
       "Clues written by other players cannot be edited through this connection, even by an admin; " +
       "use the web board for that. " +
       MENTION_SYNTAX,
@@ -242,6 +275,14 @@ const tools: ToolDef[] = [
         id: { type: "integer", minimum: 1 },
         text: { type: "string", maxLength: MAX_CLUE_TEXT },
         factionSlugs: { type: "array", items: { type: "string" }, minItems: 1 },
+        sessionNumber: {
+          type: ["integer", "null"],
+          minimum: 1,
+          maximum: MAX_SESSION_NUMBER,
+          description:
+            "Change the game session this clue was discovered in. Omit to leave it untouched; " +
+            "pass null to clear it. Only set this when the user tells you the session.",
+        },
         author: {
           type: "string",
           description: "Reassign the clue's author. Superadmin only.",
@@ -265,6 +306,7 @@ const tools: ToolDef[] = [
           {
             text: args.text,
             factionSlugs: args.factionSlugs,
+            sessionNumber: args.sessionNumber,
             author: args.author as string | undefined,
           },
           { ownRecordsOnly: true }

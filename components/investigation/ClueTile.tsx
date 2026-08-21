@@ -59,7 +59,12 @@ function ClueTextWithMentions({ text }: { text: string }) {
 interface ClueTileProps {
   clue: Clue;
   canDelete: boolean;
-  onSave: (id: number, text: string, factionSlugs: string[]) => Promise<void>;
+  onSave: (
+    id: number,
+    text: string,
+    factionSlugs: string[],
+    sessionNumber: number | null
+  ) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }
 
@@ -96,8 +101,9 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
         <ClueEditor
           initialText={clue.text}
           initialFactionSlugs={clue.factionSlugs}
-          onSave={async (text, factionSlugs) => {
-            await onSave(clue.id, text, factionSlugs);
+          initialSessionNumber={clue.sessionNumber}
+          onSave={async (text, factionSlugs, sessionNumber) => {
+            await onSave(clue.id, text, factionSlugs, sessionNumber);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
@@ -108,6 +114,10 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
   }
 
   const accent = clue.creatorColor ?? "#6366f1";
+  // The session line sits below the faction tags, so it only claims a row of
+  // vertical space on tiles that actually have one. Clues written before the
+  // field existed keep the original layout rather than showing a blank gap.
+  const hasSession = clue.sessionNumber !== null;
 
   return (
     <div
@@ -137,12 +147,16 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
       <span className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b border-r opacity-50" style={{ borderColor: accent }} />
 
       {/* clue text — top-aligned, reserves space at bottom for tags + avatar */}
-      <p className="text-[10px] leading-snug text-white/65 group-hover:text-white/90 transition-colors pr-6 pb-7">
+      <p
+        className={`text-[10px] leading-snug text-white/65 group-hover:text-white/90 transition-colors pr-6 ${hasSession ? "pb-12" : "pb-7"}`}
+      >
         <ClueTextWithMentions text={clue.text} />
       </p>
 
-      {/* faction tags — bottom-left, single row, clipped if too many */}
-      <div className="absolute left-3 bottom-1.5 right-9 flex gap-1 overflow-hidden">
+      {/* faction tags — single row above the session line, clipped if too many */}
+      <div
+        className={`absolute left-3 right-9 flex gap-1 overflow-hidden ${hasSession ? "bottom-6" : "bottom-1.5"}`}
+      >
         {clue.factionSlugs.map((slug) => {
           const f = ALLEGIANCES[slug as AllegianceKey];
           if (!f) return null;
@@ -159,6 +173,17 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
           );
         })}
       </div>
+
+      {/* session the clue was discovered in — below the tags, omitted when unset */}
+      {hasSession && (
+        <span
+          className="absolute left-3 bottom-1.5 text-[8px] tracking-[0.2em] uppercase text-white/30 whitespace-nowrap"
+          style={cinzel}
+          title={`Discovered in session ${clue.sessionNumber}`}
+        >
+          Session {clue.sessionNumber}
+        </span>
+      )}
 
       {/* creator avatar bottom-right */}
       <div className="absolute bottom-1.5 right-1.5">

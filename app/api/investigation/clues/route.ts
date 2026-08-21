@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     chapter: body.chapter,
     text: body.text,
     factionSlugs: body.factionSlugs,
+    sessionNumber: body.sessionNumber,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });

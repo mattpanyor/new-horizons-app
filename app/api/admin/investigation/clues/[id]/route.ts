@@ -14,6 +14,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const result = await updateClueAs(admin, Number(idStr), {
     text: body.text,
     factionSlugs: body.factionSlugs,
+    sessionNumber: body.sessionNumber,
     author: body.createdBy,
   });
   if (!result.ok) {
