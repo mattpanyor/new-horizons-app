@@ -114,9 +114,6 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
   }
 
   const accent = clue.creatorColor ?? "#6366f1";
-  // The session line sits below the faction tags, so it only claims a row of
-  // vertical space on tiles that actually have one. Clues written before the
-  // field existed keep the original layout rather than showing a blank gap.
   const hasSession = clue.sessionNumber !== null;
 
   return (
@@ -147,43 +144,41 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
       <span className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b border-r opacity-50" style={{ borderColor: accent }} />
 
       {/* clue text — top-aligned, reserves space at bottom for tags + avatar */}
-      <p
-        className={`text-[10px] leading-snug text-white/65 group-hover:text-white/90 transition-colors pr-6 ${hasSession ? "pb-12" : "pb-7"}`}
-      >
+      <p className="text-[10px] leading-snug text-white/65 group-hover:text-white/90 transition-colors pr-6 pb-7">
         <ClueTextWithMentions text={clue.text} />
       </p>
 
-      {/* faction tags — single row above the session line, clipped if too many */}
-      <div
-        className={`absolute left-3 right-9 flex gap-1 overflow-hidden ${hasSession ? "bottom-6" : "bottom-1.5"}`}
-      >
-        {clue.factionSlugs.map((slug) => {
-          const f = ALLEGIANCES[slug as AllegianceKey];
-          if (!f) return null;
-          const initials = factionShort(slug, f.name);
-          return (
-            <span
-              key={slug}
-              title={f.name}
-              className="shrink-0 text-[9px] tracking-[0.15em] uppercase px-1.5 py-0.5 rounded-sm whitespace-nowrap"
-              style={{ ...cinzel, background: `${f.color}25`, color: f.color }}
-            >
-              {initials}
-            </span>
-          );
-        })}
+      {/* bottom row — faction tags left, session right, both clear of the avatar.
+          Only the tag list clips when it overruns; the session label is shrink-0
+          so it stays readable however many factions a clue carries. */}
+      <div className="absolute left-3 bottom-1.5 right-9 flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex gap-1 overflow-hidden">
+          {clue.factionSlugs.map((slug) => {
+            const f = ALLEGIANCES[slug as AllegianceKey];
+            if (!f) return null;
+            const initials = factionShort(slug, f.name);
+            return (
+              <span
+                key={slug}
+                title={f.name}
+                className="shrink-0 text-[9px] tracking-[0.15em] uppercase px-1.5 py-0.5 rounded-sm whitespace-nowrap"
+                style={{ ...cinzel, background: `${f.color}25`, color: f.color }}
+              >
+                {initials}
+              </span>
+            );
+          })}
+        </div>
+        {hasSession && (
+          <span
+            className="shrink-0 text-[8px] tracking-[0.15em] uppercase text-white/30 whitespace-nowrap"
+            style={cinzel}
+            title={`Discovered in session ${clue.sessionNumber}`}
+          >
+            Session {clue.sessionNumber}
+          </span>
+        )}
       </div>
-
-      {/* session the clue was discovered in — below the tags, omitted when unset */}
-      {hasSession && (
-        <span
-          className="absolute left-3 bottom-1.5 text-[8px] tracking-[0.2em] uppercase text-white/30 whitespace-nowrap"
-          style={cinzel}
-          title={`Discovered in session ${clue.sessionNumber}`}
-        >
-          Session {clue.sessionNumber}
-        </span>
-      )}
 
       {/* creator avatar bottom-right */}
       <div className="absolute bottom-1.5 right-1.5">
