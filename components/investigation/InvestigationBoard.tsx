@@ -37,6 +37,7 @@ export default function InvestigationBoard({
   const [clues, setClues] = useState<Clue[]>(initialClues);
   const [loading, setLoading] = useState(false);
   const [activeFactions, setActiveFactions] = useState<Set<string>>(new Set());
+  const [activeSessions, setActiveSessions] = useState<Set<number>>(new Set());
   const [playerTotals, setPlayerTotals] = useState<Record<string, number>>(initialPlayerTotals);
 
   const canDelete = accessLevel >= 66;
@@ -44,6 +45,7 @@ export default function InvestigationBoard({
   // Reset filters when switching chapters
   useEffect(() => {
     setActiveFactions(new Set());
+    setActiveSessions(new Set());
   }, [selectedChapter]);
 
   // Faction chips show only factions that appear in this chapter's clues
@@ -56,10 +58,32 @@ export default function InvestigationBoard({
       .sort((a, b) => a.allegiance.name.localeCompare(b.allegiance.name));
   }, [clues]);
 
+  // Session chips show only the sessions represented in this chapter's clues,
+  // ascending. Clues with no session number contribute none and are filtered
+  // out whenever a session chip is active.
+  const usedSessions = useMemo(() => {
+    const set = new Set<number>();
+    for (const c of clues) if (c.sessionNumber !== null) set.add(c.sessionNumber);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [clues]);
+
+  // The two filters intersect: pick a faction and a session and you get the
+  // clues matching both.
   const visibleClues = useMemo(() => {
-    if (activeFactions.size === 0) return clues;
-    return clues.filter((c) => c.factionSlugs.some((s) => activeFactions.has(s)));
-  }, [clues, activeFactions]);
+    if (activeFactions.size === 0 && activeSessions.size === 0) return clues;
+    return clues.filter((c) => {
+      if (activeFactions.size > 0 && !c.factionSlugs.some((s) => activeFactions.has(s))) {
+        return false;
+      }
+      if (
+        activeSessions.size > 0 &&
+        (c.sessionNumber === null || !activeSessions.has(c.sessionNumber))
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [clues, activeFactions, activeSessions]);
 
   // Per-player stats (only users present in `players` — i.e. accessLevel < 127
   // per the server-side filter). Shows "this chapter / total".
@@ -85,6 +109,15 @@ export default function InvestigationBoard({
       const next = new Set(prev);
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
+      return next;
+    });
+  };
+
+  const toggleSession = (session: number) => {
+    setActiveSessions((prev) => {
+      const next = new Set(prev);
+      if (next.has(session)) next.delete(session);
+      else next.add(session);
       return next;
     });
   };
@@ -115,12 +148,16 @@ export default function InvestigationBoard({
     fetchClues(selectedChapter);
   }, [selectedChapter, fetchClues]);
 
-  const handleAdd = async (text: string, factionSlugs: string[]) => {
+  const handleAdd = async (
+    text: string,
+    factionSlugs: string[],
+    sessionNumber: number | null
+  ) => {
     if (selectedChapter === null) return;
     const res = await fetch("/api/investigation/clues", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chapter: selectedChapter, text, factionSlugs }),
+      body: JSON.stringify({ chapter: selectedChapter, text, factionSlugs, sessionNumber }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -135,11 +172,16 @@ export default function InvestigationBoard({
     }
   };
 
-  const handleSave = async (id: number, text: string, factionSlugs: string[]) => {
+  const handleSave = async (
+    id: number,
+    text: string,
+    factionSlugs: string[],
+    sessionNumber: number | null
+  ) => {
     const res = await fetch(`/api/investigation/clues/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, factionSlugs }),
+      body: JSON.stringify({ text, factionSlugs, sessionNumber }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -234,38 +276,78 @@ export default function InvestigationBoard({
           </div>
           <div className="w-32 h-px mt-3 bg-gradient-to-r from-indigo-400/60 via-indigo-400/20 to-transparent" />
 
-          {usedFactions.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-5">
-              {usedFactions.map(({ slug, allegiance }) => {
-                const active = activeFactions.has(slug);
-                return (
-                  <button
-                    key={slug}
-                    onClick={() => toggleFaction(slug)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer"
-                    style={{
-                      ...cinzel,
-                      borderColor: active ? allegiance.color : "rgba(255,255,255,0.1)",
-                      background: active ? `${allegiance.color}1f` : "rgba(255,255,255,0.02)",
-                    }}
+          {(usedFactions.length > 0 || usedSessions.length > 0) && (
+            <div className="flex flex-col gap-2 mt-5">
+              {usedFactions.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {usedFactions.map(({ slug, allegiance }) => {
+                    const active = activeFactions.has(slug);
+                    return (
+                      <button
+                        key={slug}
+                        onClick={() => toggleFaction(slug)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer"
+                        style={{
+                          ...cinzel,
+                          borderColor: active ? allegiance.color : "rgba(255,255,255,0.1)",
+                          background: active ? `${allegiance.color}1f` : "rgba(255,255,255,0.02)",
+                        }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: allegiance.color, opacity: active ? 1 : 0.5 }}
+                        />
+                        <span className={`text-[9px] tracking-[0.2em] uppercase ${active ? "text-white/90" : "text-white/45"}`}>
+                          {allegiance.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {usedSessions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="text-[8px] tracking-[0.3em] uppercase text-white/25 mr-1"
+                    style={cinzel}
                   >
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ background: allegiance.color, opacity: active ? 1 : 0.5 }}
-                    />
-                    <span className={`text-[9px] tracking-[0.2em] uppercase ${active ? "text-white/90" : "text-white/45"}`}>
-                      {allegiance.name}
-                    </span>
-                  </button>
-                );
-              })}
-              {activeFactions.size > 0 && (
+                    Session
+                  </span>
+                  {usedSessions.map((session) => {
+                    const active = activeSessions.has(session);
+                    return (
+                      <button
+                        key={session}
+                        onClick={() => toggleSession(session)}
+                        className="px-3 py-1.5 rounded-full border transition-all cursor-pointer"
+                        style={{
+                          ...cinzel,
+                          borderColor: active ? "rgba(129,140,248,0.75)" : "rgba(255,255,255,0.1)",
+                          background: active ? "rgba(129,140,248,0.15)" : "rgba(255,255,255,0.02)",
+                        }}
+                      >
+                        <span
+                          className={`text-[9px] tracking-[0.2em] tabular-nums ${active ? "text-white/90" : "text-white/45"}`}
+                        >
+                          {session}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {(activeFactions.size > 0 || activeSessions.size > 0) && (
                 <button
-                  onClick={() => setActiveFactions(new Set())}
-                  className="px-3 py-1.5 text-[9px] tracking-[0.2em] uppercase text-white/30 hover:text-white/65 cursor-pointer"
+                  onClick={() => {
+                    setActiveFactions(new Set());
+                    setActiveSessions(new Set());
+                  }}
+                  className="self-start px-3 py-1 text-[9px] tracking-[0.2em] uppercase text-white/30 hover:text-white/65 cursor-pointer"
                   style={cinzel}
                 >
-                  Clear
+                  Clear filters
                 </button>
               )}
             </div>

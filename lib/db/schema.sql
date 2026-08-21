@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS clues (
   chapter       INTEGER NOT NULL REFERENCES chapters(number) ON DELETE CASCADE,
   text          TEXT NOT NULL,
   faction_slugs TEXT[] NOT NULL DEFAULT '{}',
+  -- Which real-world game session the clue was discovered in. Free integer,
+  -- not managed anywhere: no session table, no sequence, gaps are fine.
+  -- Nullable because clues predating the field have no answer.
+  session_number INTEGER,
   created_by    TEXT NOT NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

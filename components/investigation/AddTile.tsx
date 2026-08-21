@@ -7,7 +7,11 @@ const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
 interface AddTileProps {
   disabled?: boolean;
-  onAdd: (text: string, factionSlugs: string[]) => Promise<void>;
+  onAdd: (
+    text: string,
+    factionSlugs: string[],
+    sessionNumber: number | null
+  ) => Promise<void>;
 }
 
 export default function AddTile({ disabled, onAdd }: AddTileProps) {
@@ -18,8 +22,9 @@ export default function AddTile({ disabled, onAdd }: AddTileProps) {
       <ClueEditor
         initialText=""
         initialFactionSlugs={[]}
-        onSave={async (text, factionSlugs) => {
-          await onAdd(text, factionSlugs);
+        initialSessionNumber={null}
+        onSave={async (text, factionSlugs, sessionNumber) => {
+          await onAdd(text, factionSlugs, sessionNumber);
           setActive(false);
         }}
         onCancel={() => setActive(false)}

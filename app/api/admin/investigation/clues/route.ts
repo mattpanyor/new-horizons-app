@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     chapter: body.chapter,
     text: body.text,
     factionSlugs: body.factionSlugs,
+    sessionNumber: body.sessionNumber,
     author: body.createdBy,
   });
   if (!result.ok) {

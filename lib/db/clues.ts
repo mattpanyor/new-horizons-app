@@ -9,6 +9,7 @@ function rowToClue(row: Record<string, unknown>): Clue {
     chapter: row.chapter as number,
     text: row.text as string,
     factionSlugs: (row.faction_slugs as string[]) ?? [],
+    sessionNumber: (row.session_number as number) ?? null,
     createdBy: row.created_by as string,
     createdAt: row.created_at as string,
     creatorImageUrl: (row.creator_image_url as string) ?? null,
@@ -21,7 +22,7 @@ function rowToClue(row: Record<string, unknown>): Clue {
 // is the only interface that takes a dynamically built WHERE clause.
 const SELECT = `
   SELECT
-    c.id, c.chapter, c.text, c.faction_slugs, c.created_by, c.created_at,
+    c.id, c.chapter, c.text, c.faction_slugs, c.session_number, c.created_by, c.created_at,
     u.image_url AS creator_image_url,
     u.color     AS creator_color
   FROM clues c
@@ -30,6 +31,7 @@ const SELECT = `
 
 export interface ClueFilters {
   chapter?: number;
+  session?: number;
   faction?: string;
   author?: string;
   query?: string;
@@ -55,6 +57,10 @@ export async function searchClues(filters: ClueFilters = {}): Promise<Clue[]> {
   if (filters.chapter !== undefined) {
     params.push(filters.chapter);
     where.push(`c.chapter = $${params.length}`);
+  }
+  if (filters.session !== undefined) {
+    params.push(filters.session);
+    where.push(`c.session_number = $${params.length}`);
   }
   if (filters.author !== undefined) {
     params.push(filters.author);
@@ -88,7 +94,7 @@ export async function searchClues(filters: ClueFilters = {}): Promise<Clue[]> {
 export async function getCluesByChapter(chapter: number): Promise<Clue[]> {
   const rows = await sql`
     SELECT
-      c.id, c.chapter, c.text, c.faction_slugs, c.created_by, c.created_at,
+      c.id, c.chapter, c.text, c.faction_slugs, c.session_number, c.created_by, c.created_at,
       u.image_url AS creator_image_url,
       u.color     AS creator_color
     FROM clues c
@@ -102,7 +108,7 @@ export async function getCluesByChapter(chapter: number): Promise<Clue[]> {
 export async function getClueById(id: number): Promise<Clue | null> {
   const rows = await sql`
     SELECT
-      c.id, c.chapter, c.text, c.faction_slugs, c.created_by, c.created_at,
+      c.id, c.chapter, c.text, c.faction_slugs, c.session_number, c.created_by, c.created_at,
       u.image_url AS creator_image_url,
       u.color     AS creator_color
     FROM clues c
@@ -116,17 +122,18 @@ export async function createClue(fields: {
   chapter: number;
   text: string;
   factionSlugs: string[];
+  sessionNumber: number | null;
   createdBy: string;
 }): Promise<Clue> {
   // Single round-trip: INSERT then SELECT with the users join in one CTE.
   const rows = await sql`
     WITH inserted AS (
-      INSERT INTO clues (chapter, text, faction_slugs, created_by)
-      VALUES (${fields.chapter}, ${fields.text}, ${fields.factionSlugs}, ${fields.createdBy})
-      RETURNING id, chapter, text, faction_slugs, created_by, created_at
+      INSERT INTO clues (chapter, text, faction_slugs, session_number, created_by)
+      VALUES (${fields.chapter}, ${fields.text}, ${fields.factionSlugs}, ${fields.sessionNumber}, ${fields.createdBy})
+      RETURNING id, chapter, text, faction_slugs, session_number, created_by, created_at
     )
     SELECT
-      i.id, i.chapter, i.text, i.faction_slugs, i.created_by, i.created_at,
+      i.id, i.chapter, i.text, i.faction_slugs, i.session_number, i.created_by, i.created_at,
       u.image_url AS creator_image_url,
       u.color     AS creator_color
     FROM inserted i
@@ -137,7 +144,12 @@ export async function createClue(fields: {
 
 export async function updateClue(
   id: number,
-  fields: { text?: string; factionSlugs?: string[]; createdBy?: string }
+  fields: {
+    text?: string;
+    factionSlugs?: string[];
+    sessionNumber?: number | null;
+    createdBy?: string;
+  }
 ): Promise<Clue | null> {
   // Only touch columns whose values were explicitly passed.
   if (fields.text !== undefined) {
@@ -145,6 +157,10 @@ export async function updateClue(
   }
   if (fields.factionSlugs !== undefined) {
     await sql`UPDATE clues SET faction_slugs = ${fields.factionSlugs} WHERE id = ${id}`;
+  }
+  // Explicit null is meaningful here — it clears the session number.
+  if (fields.sessionNumber !== undefined) {
+    await sql`UPDATE clues SET session_number = ${fields.sessionNumber} WHERE id = ${id}`;
   }
   if (fields.createdBy !== undefined) {
     await sql`UPDATE clues SET created_by = ${fields.createdBy} WHERE id = ${id}`;

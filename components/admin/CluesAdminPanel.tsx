@@ -5,6 +5,7 @@ import type { Chapter, Clue } from "@/types/investigation";
 import ChapterDropdown, { toRoman } from "@/components/investigation/ChapterDropdown";
 import FactionPicker from "@/components/investigation/FactionPicker";
 import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
+import { MAX_SESSION_NUMBER } from "@/lib/investigation/validation";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -22,6 +23,8 @@ interface CluesAdminPanelProps {
 interface FormState {
   text: string;
   factionSlugs: string[];
+  /** Kept as a string so an empty box round-trips as "no session recorded". */
+  sessionNumber: string;
   createdBy: string;
 }
 
@@ -78,6 +81,28 @@ function UserSelect({
   );
 }
 
+function SessionInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={MAX_SESSION_NUMBER}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="optional"
+      className="w-28 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm tabular-nums placeholder:text-white/25 focus:outline-none focus:border-white/40"
+      style={cinzel}
+    />
+  );
+}
+
 export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProps) {
   const usersByName = new Map(users.map((u) => [u.username, u]));
   const defaultChapter = chapters.length > 0 ? chapters[chapters.length - 1].number : null;
@@ -118,6 +143,11 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
       body: JSON.stringify({
         text: editing.form.text,
         factionSlugs: editing.form.factionSlugs,
+        // "" means the admin cleared the box — send null so the column is
+        // cleared rather than left at its previous value.
+        sessionNumber: editing.form.sessionNumber.trim() === ""
+          ? null
+          : Number(editing.form.sessionNumber),
         createdBy: editing.form.createdBy,
       }),
     });
@@ -140,6 +170,9 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
         chapter: selectedChapter,
         text: adding.text,
         factionSlugs: adding.factionSlugs,
+        sessionNumber: adding.sessionNumber.trim() === ""
+          ? null
+          : Number(adding.sessionNumber),
         createdBy: adding.createdBy,
       }),
     });
@@ -170,6 +203,7 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
     setAdding({
       text: "",
       factionSlugs: [],
+      sessionNumber: "",
       createdBy: users[0]?.username ?? "",
     });
     setEditing(null);
@@ -181,6 +215,7 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
       form: {
         text: clue.text,
         factionSlugs: clue.factionSlugs,
+        sessionNumber: clue.sessionNumber === null ? "" : String(clue.sessionNumber),
         createdBy: clue.createdBy,
       },
     });
@@ -261,6 +296,17 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
                     />
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] tracking-[0.2em] uppercase text-white/45 w-20" style={cinzel}>
+                        Session
+                      </span>
+                      <SessionInput
+                        value={editing.form.sessionNumber}
+                        onChange={(v) =>
+                          setEditing({ ...editing, form: { ...editing.form, sessionNumber: v } })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-white/45 w-20" style={cinzel}>
                         Author
                       </span>
                       <UserSelect
@@ -320,6 +366,9 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
                     </div>
                     <span className="text-[8px] tracking-[0.15em] uppercase text-white/30" style={cinzel}>
                       by {clue.createdBy}
+                      {clue.sessionNumber !== null && (
+                        <> · Session {clue.sessionNumber}</>
+                      )}
                     </span>
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -379,6 +428,15 @@ export default function CluesAdminPanel({ chapters, users }: CluesAdminPanelProp
                 selected={adding.factionSlugs}
                 onChange={(next) => setAdding({ ...adding, factionSlugs: next })}
               />
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] tracking-[0.2em] uppercase text-white/45 w-20" style={cinzel}>
+                  Session
+                </span>
+                <SessionInput
+                  value={adding.sessionNumber}
+                  onChange={(v) => setAdding({ ...adding, sessionNumber: v })}
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] tracking-[0.2em] uppercase text-white/45 w-20" style={cinzel}>
                   Author

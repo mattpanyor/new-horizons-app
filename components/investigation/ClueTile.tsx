@@ -59,7 +59,12 @@ function ClueTextWithMentions({ text }: { text: string }) {
 interface ClueTileProps {
   clue: Clue;
   canDelete: boolean;
-  onSave: (id: number, text: string, factionSlugs: string[]) => Promise<void>;
+  onSave: (
+    id: number,
+    text: string,
+    factionSlugs: string[],
+    sessionNumber: number | null
+  ) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }
 
@@ -96,8 +101,9 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
         <ClueEditor
           initialText={clue.text}
           initialFactionSlugs={clue.factionSlugs}
-          onSave={async (text, factionSlugs) => {
-            await onSave(clue.id, text, factionSlugs);
+          initialSessionNumber={clue.sessionNumber}
+          onSave={async (text, factionSlugs, sessionNumber) => {
+            await onSave(clue.id, text, factionSlugs, sessionNumber);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
@@ -108,6 +114,7 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
   }
 
   const accent = clue.creatorColor ?? "#6366f1";
+  const hasSession = clue.sessionNumber !== null;
 
   return (
     <div
@@ -141,23 +148,36 @@ export default function ClueTile({ clue, canDelete, onSave, onDelete }: ClueTile
         <ClueTextWithMentions text={clue.text} />
       </p>
 
-      {/* faction tags — bottom-left, single row, clipped if too many */}
-      <div className="absolute left-3 bottom-1.5 right-9 flex gap-1 overflow-hidden">
-        {clue.factionSlugs.map((slug) => {
-          const f = ALLEGIANCES[slug as AllegianceKey];
-          if (!f) return null;
-          const initials = factionShort(slug, f.name);
-          return (
-            <span
-              key={slug}
-              title={f.name}
-              className="shrink-0 text-[9px] tracking-[0.15em] uppercase px-1.5 py-0.5 rounded-sm whitespace-nowrap"
-              style={{ ...cinzel, background: `${f.color}25`, color: f.color }}
-            >
-              {initials}
-            </span>
-          );
-        })}
+      {/* bottom row — faction tags left, session right, both clear of the avatar.
+          Only the tag list clips when it overruns; the session label is shrink-0
+          so it stays readable however many factions a clue carries. */}
+      <div className="absolute left-3 bottom-1.5 right-9 flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex gap-1 overflow-hidden">
+          {clue.factionSlugs.map((slug) => {
+            const f = ALLEGIANCES[slug as AllegianceKey];
+            if (!f) return null;
+            const initials = factionShort(slug, f.name);
+            return (
+              <span
+                key={slug}
+                title={f.name}
+                className="shrink-0 text-[9px] tracking-[0.15em] uppercase px-1.5 py-0.5 rounded-sm whitespace-nowrap"
+                style={{ ...cinzel, background: `${f.color}25`, color: f.color }}
+              >
+                {initials}
+              </span>
+            );
+          })}
+        </div>
+        {hasSession && (
+          <span
+            className="shrink-0 text-[8px] tracking-[0.15em] uppercase text-white/30 whitespace-nowrap"
+            style={cinzel}
+            title={`Discovered in session ${clue.sessionNumber}`}
+          >
+            Session {clue.sessionNumber}
+          </span>
+        )}
       </div>
 
       {/* creator avatar bottom-right */}
