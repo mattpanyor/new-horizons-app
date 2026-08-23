@@ -21,9 +21,9 @@ export const ALLEGIANCES = {
     logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/feyrose_logo.png",
   },
   imperial: {
-    name: "Imperial",
+    name: "Imperatorium",
     color: "#FFE87A",
-    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/feyrose_logo.png",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/imperatorium_logo.png",
   },
   lenard: {
     name: "House Lenard",
@@ -52,13 +52,18 @@ export const ALLEGIANCES = {
   },
   alien_feral: {
     name: "Unkown Alien - feral",
-    color: "#AADD33",
-    logo: ""
+    color: "#c600bc",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/karnix_logo.png"
   },
   alien_int: {
+    name: "Hessian",
+    color: "#2c59fa",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/hessian_logo.png"
+  },
+  alien_ai: {
     name: "Unkown Alien - intelligent",
     color: "#8B5CF6",
-    logo: ""
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/alien_ai_logo.png"
   }
 } as const satisfies Record<string, Allegiance>;
 
