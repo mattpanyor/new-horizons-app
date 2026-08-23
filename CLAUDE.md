@@ -177,9 +177,50 @@ Name tools `<domain>_<verb>_<noun>` to avoid collisions and help model selection
 ## Database
 
 - Neon Postgres via `@neondatabase/serverless`
-- Tables: `users`, `messages`, `message_recipients`, `kanka_entities`, `game_sessions`, `mcp_tokens`
 - Auth: bcryptjs password hashing
-- No migrations directory — schema changes are manual
+- `lib/db/schema.sql` lists every table. Read it rather than a list here, which goes stale.
+
+### This database is production
+
+There is no staging database, no local database, and no seed environment.
+`DATABASE_URL` in `.env` points at the live Neon instance the group actually
+plays on. Every write is immediately visible to the players, and there is no
+snapshot to roll back to.
+
+- **NEVER write placeholder, demo, or test rows.** Not to "see how it looks",
+  not to fill an empty screen for a screenshot. An empty state is a real state
+  and rendering it is a valid check.
+- **If verifying something genuinely needs a row, say so before writing it, and
+  delete it afterwards** — then tell the user exactly what was written and
+  removed. Never leave test data behind and never report a task complete
+  without mentioning it.
+- **NEVER invent campaign content.** Names, lore, clue text, NPC descriptions
+  and faction standings are the GM's, not yours. If a field needs prose, ask,
+  or take it from what already exists (the clue board via the MCP tools, or
+  Kanka). Inventing it and storing it puts fiction the GM never wrote in front
+  of their players.
+- **Reads are free; writes are not.** `SELECT` freely to answer questions.
+  Before any `UPDATE`, `DELETE`, `DROP` or `ALTER`, confirm with the user and
+  show what it will touch.
+- Destructive DDL that cascades (`DROP TABLE`, dropping a FK parent) needs
+  explicit confirmation naming what will be destroyed and how many rows.
+
+### Keeping schema.sql in sync
+
+`lib/db/schema.sql` DESCRIBES the live database. It is not a migration runner —
+there is no migrations directory, and nothing executes it. Its only value is
+being accurate.
+
+- **Applying DDL by hand and updating `schema.sql` are one change, not two.**
+  Do both or neither. A column that exists only in the database is invisible to
+  the next reader; one that exists only in the file is a lie.
+- **Verify the file edit actually landed.** A find-and-replace that silently
+  fails to match leaves the two out of sync with no error — this has already
+  happened once. `grep` for the new column after editing.
+- **Do not record applied migrations as comments in the file.** History belongs
+  in `git log -p lib/db/schema.sql`, which cannot drift. Comments in the file
+  should explain why a column is shaped the way it is, not how to replay it.
+- Keep the descriptive block above each table current when its meaning changes.
 
 ## Development
 

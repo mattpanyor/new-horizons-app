@@ -1,3 +1,13 @@
+-- Schema for the New Horizons Neon database.
+--
+-- This file DESCRIBES the live database; it does not migrate it. There is no
+-- migrations directory and no runner — DDL is applied by hand, and this file is
+-- updated in the same change so the two never drift. Applied migrations are not
+-- kept here as comments: `git log -p lib/db/schema.sql` is the history, and it
+-- cannot go stale.
+--
+-- The database this points at is PRODUCTION. See CLAUDE.md before writing to it.
+
 CREATE TABLE IF NOT EXISTS users (
   id         SERIAL PRIMARY KEY,
   username   VARCHAR(50)  UNIQUE NOT NULL,
@@ -78,16 +88,6 @@ CREATE TABLE IF NOT EXISTS game_sessions (
   launched_at       TIMESTAMPTZ,
   finished_at       TIMESTAMPTZ
 );
-
--- Migration for existing tables:
--- ALTER TABLE ship_items ADD COLUMN item_type VARCHAR(30);
--- UPDATE ship_items SET item_type = 'general' WHERE category = 'cargo' AND item_type IS NULL;
--- UPDATE ship_items SET item_type = 'live-specimen' WHERE category = 'isolation' AND item_type IS NULL;
--- ALTER TABLE ship_items ALTER COLUMN item_type SET NOT NULL;
--- ALTER TABLE ship_items ADD CONSTRAINT ship_items_item_type_check CHECK (item_type IN (
---   'general', 'ordnance', 'precious', 'contraband', 'mission',
---   'biogenic-seed', 'live-specimen', 'cadaver', 'excised-tissue', 'phytosample'
--- ));
 
 -- ── Map content (sectors, systems, stars, bodies, vortexes, connections, markers) ──
 -- See map-migration.md for the full design rationale.
@@ -227,9 +227,7 @@ CREATE INDEX IF NOT EXISTS markers_sector_idx ON markers (sector_id);
 -- and the loader (markersByConnection) are singular, so a second marker on the
 -- same connection would be silently dropped on read. Enforce it at the DB so
 -- writes fail loudly instead. Partial index since free markers have NULL
--- connection_id. Migration for an existing DB (dedupe first if needed):
---   CREATE UNIQUE INDEX markers_connection_uniq ON markers (connection_id)
---     WHERE connection_id IS NOT NULL;
+-- connection_id.
 CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
   ON markers (connection_id) WHERE connection_id IS NOT NULL;
 
@@ -254,9 +252,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
 --
 -- Revocation is a timestamp rather than a DELETE so a revoked token's
 -- last_used_at survives for auditing.
---
--- Migration for an existing DB:
---   ALTER TABLE mcp_tokens ADD COLUMN IF NOT EXISTS token_encrypted TEXT;
 CREATE TABLE IF NOT EXISTS mcp_tokens (
   id              SERIAL PRIMARY KEY,
   username        VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
@@ -342,10 +337,6 @@ CREATE TABLE IF NOT EXISTS faction_standings (
 -- "Unique Asset —". It lives here rather than in the component because what a
 -- subject *is* to the campaign differs per subject, while the prefix does not.
 -- Empty is valid: the separator is dropped and the eyebrow reads "Unique Asset".
---
--- Migration for an existing DB:
---   ALTER TABLE vips ADD COLUMN tagline VARCHAR(80)
---     NOT NULL DEFAULT 'Continuity Critical';
 CREATE TABLE IF NOT EXISTS vips (
   slug             VARCHAR(40) PRIMARY KEY,
   name             VARCHAR(120) NOT NULL,
@@ -383,13 +374,3 @@ CREATE TABLE IF NOT EXISTS anonymity_entries (
 );
 CREATE INDEX IF NOT EXISTS anonymity_entries_vip_idx
   ON anonymity_entries (vip_slug, kind, created_at);
-
--- Migration from the single-subject version of this page (libra_state, and an
--- anonymity log with no VIP column):
---   ALTER TABLE anonymity_entries ADD COLUMN vip_slug VARCHAR(40);
---   UPDATE anonymity_entries SET vip_slug = 'libra' WHERE vip_slug IS NULL;
---   ALTER TABLE anonymity_entries ALTER COLUMN vip_slug SET NOT NULL;
---   ALTER TABLE anonymity_entries ADD CONSTRAINT anonymity_entries_vip_fkey
---     FOREIGN KEY (vip_slug) REFERENCES vips(slug) ON DELETE CASCADE;
---   DROP INDEX IF EXISTS anonymity_entries_kind_idx;
---   DROP TABLE libra_state;
