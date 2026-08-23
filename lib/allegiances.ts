@@ -33,7 +33,7 @@ export const ALLEGIANCES = {
   liix: {
     name: "Lenard Institute of Interspecies and Xenosciences",
     color: "#F59E0B",
-    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/liix_logo.jpeg",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/liix_logo.png",
   },
   cultists: {
     name: "Crimson Dusk",

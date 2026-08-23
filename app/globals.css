@@ -402,3 +402,173 @@ body {
     transform: none;
   }
 }
+
+/* ── Campaign trackers (/campaign) ─────────────────────────────────────
+   The page is a showcase board rather than a form, so the motion here is
+   ambient: nothing animates in response to input, everything runs slowly and
+   loops, and all of it is switched off under prefers-reduced-motion at the
+   bottom of this block. */
+
+/* Faint hex weave behind the panels. Two 60°-offset line gradients read as a
+   honeycomb at low opacity without costing an image. */
+.ct-weave {
+  background-image:
+    repeating-linear-gradient(60deg, rgba(129, 140, 248, 0.05) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(-60deg, rgba(129, 140, 248, 0.05) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(0deg, rgba(129, 140, 248, 0.035) 0 1px, transparent 1px 34px);
+  background-position: center;
+}
+
+/* A single slow light sweeping the width of a panel. */
+.ct-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Above the panel content (z-2), so the light crosses the glass rather than
+     hiding behind it. */
+  z-index: 4;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgba(165, 180, 252, 0.07) 48%,
+    rgba(224, 231, 255, 0.13) 50%,
+    rgba(165, 180, 252, 0.07) 52%,
+    transparent 65%
+  );
+  transform: translateX(-100%);
+  animation: ct-sweep 9s ease-in-out infinite;
+}
+@keyframes ct-sweep {
+  0%, 55% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Diagnostic scan line drifting down the Libra panel. */
+.ct-scan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 22%;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(129, 140, 248, 0.13),
+    transparent
+  );
+  animation: ct-scan 6.5s linear infinite;
+}
+@keyframes ct-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(560%); }
+}
+
+/* Counter-rotating rings framing Libra's portrait. */
+.ct-ring-cw { animation: ct-spin 34s linear infinite; transform-origin: 50% 50%; }
+.ct-ring-ccw { animation: ct-spin 26s linear infinite reverse; transform-origin: 50% 50%; }
+@keyframes ct-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Failing integrity cells breathe; the surviving ones sit still. */
+.ct-hex-critical { animation: ct-hex-critical 1.9s ease-in-out infinite; }
+@keyframes ct-hex-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Sections rise into place once on load, staggered by an inline delay. */
+.ct-reveal { animation: ct-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes ct-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Title underline that draws itself outward from the centre. */
+.ct-rule { animation: ct-rule 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+@keyframes ct-rule {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-sweep::after,
+  .ct-scan::before { animation: none; opacity: 0; }
+  .ct-ring-cw,
+  .ct-ring-ccw,
+  .ct-hex-critical { animation: none; }
+  /* End state, not start state — otherwise the sections never appear. */
+  .ct-reveal { animation: none; }
+  .ct-rule { animation: none; }
+}
+
+/* ── Campaign background ───────────────────────────────────────────────
+   A live network rather than a starfield: nodes wired together with light
+   running along the links. Every path carries pathLength="100", so one set of
+   keyframes drives every line regardless of its real length — duration and
+   delay are the only per-line variables.
+
+   All of it is CSS on the compositor. Nothing here re-renders React, and the
+   whole block is switched off under prefers-reduced-motion at the bottom. */
+
+/* A short bright dash chasing along a link. */
+.cbg-flow {
+  stroke-dasharray: 3 97;
+  animation: cbg-flow 8s linear infinite;
+}
+@keyframes cbg-flow {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Nodes breathing out of phase with each other. */
+.cbg-node { animation: cbg-node 5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes cbg-node {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 0.85; }
+}
+
+/* The whole mesh drifting, so the composition never sits still. */
+.cbg-drift { animation: cbg-drift 46s ease-in-out infinite alternate; }
+@keyframes cbg-drift {
+  from { transform: translate3d(-1.2%, -0.8%, 0) scale(1.03); }
+  to   { transform: translate3d(1.2%, 0.8%, 0) scale(1.06); }
+}
+
+/* Slow counter-rotating survey rings behind everything. */
+.cbg-spin-cw  { animation: cbg-spin 150s linear infinite; transform-origin: 50% 50%; }
+.cbg-spin-ccw { animation: cbg-spin 110s linear infinite reverse; transform-origin: 50% 50%; }
+@keyframes cbg-spin { to { transform: rotate(360deg); } }
+
+/* A wide beam sweeping the field every so often. */
+.cbg-sweep {
+  animation: cbg-sweep 17s ease-in-out infinite;
+}
+@keyframes cbg-sweep {
+  0%, 62%  { transform: translateX(-60%); opacity: 0; }
+  70%      { opacity: 1; }
+  100%     { transform: translateX(160%); opacity: 0; }
+}
+
+/* Nebula wash breathing under the mesh. */
+.cbg-bloom { animation: cbg-bloom 24s ease-in-out infinite alternate; }
+@keyframes cbg-bloom {
+  from { opacity: 0.55; transform: scale(1); }
+  to   { opacity: 0.9;  transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cbg-flow,
+  .cbg-node,
+  .cbg-drift,
+  .cbg-spin-cw,
+  .cbg-spin-ccw,
+  .cbg-sweep,
+  .cbg-bloom { animation: none; }
+  /* The flow dash would otherwise freeze mid-link as a stray tick mark. */
+  .cbg-flow { stroke-dasharray: none; opacity: 0.25; }
+}

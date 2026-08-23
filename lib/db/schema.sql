@@ -290,3 +290,106 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_by VARCHAR(50)
 );
+
+-- ── Campaign trackers (/campaign) ────────────────────────────────────────────
+-- Bespoke state for this campaign: where the party stands with each faction,
+-- and the condition of the VIPs whose deaths would end the campaign.
+
+-- One row per faction the party has a standing with. Every allegiance is shown
+-- on the tracker whether or not it has a row here, so a missing row means
+-- 0/0 ("Unknown") rather than "not tracked" — the row appears on first edit.
+--
+-- red and green are independent counts, not two ends of one score: the party
+-- can be simultaneously resented and useful to a faction, and 1 red / 2 green
+-- is a real state the display must be able to show. The label comes from
+-- whichever side has more cells (see lib/campaign/standing.ts), which is why
+-- neither can be derived from the other.
+--
+-- hidden lets a superadmin drop an irrelevant faction off the page without
+-- deleting its standing — un-hiding restores the cells as they were.
+CREATE TABLE IF NOT EXISTS faction_standings (
+  allegiance_slug VARCHAR(40) PRIMARY KEY REFERENCES allegiances(slug) ON DELETE CASCADE,
+  red             SMALLINT NOT NULL DEFAULT 0 CHECK (red   BETWEEN 0 AND 4),
+  green           SMALLINT NOT NULL DEFAULT 0 CHECK (green BETWEEN 0 AND 4),
+  hidden          BOOLEAN  NOT NULL DEFAULT false,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by      VARCHAR(50)
+);
+
+-- VIPs: campaign-critical NPCs whose survival the campaign depends on. Libra is
+-- the one this page was built for, but nothing here is specific to her — a
+-- replacement or a second subject is a row, not a code change.
+--
+-- cells is a 10-bit mask of the integrity honeycomb: bit i set means cell i is
+-- intact. A mask rather than a count because the cluster is toggled cell by
+-- cell — the GM clicks the one that failed — so which cells are gone is real
+-- information a count cannot carry. Integrity is the popcount; see
+-- lib/campaign/integrity.ts, which owns every operation on the mask.
+--
+-- Ten bits is fixed rather than per-VIP: the cluster's 3-4-3 honeycomb is drawn
+-- for exactly ten cells, and a different count needs a generated layout, not a
+-- column.
+--
+-- min_access_level gates who sees the VIP at all, using the app's usual scale
+-- (0 player, 66 admin, 127 superadmin). A restricted VIP is absent from the
+-- tab strip for everyone below the bar, and its anonymity log is unreachable
+-- for them too — checked in lib/campaign/service.ts, not just hidden in the UI.
+--
+-- kanka_entity_id links the portrait and dossier. Nullable: a VIP with no Kanka
+-- record still tracks, it just renders from `name` alone.
+--
+-- tagline is the second half of the panel's eyebrow, after the constant
+-- "Unique Asset —". It lives here rather than in the component because what a
+-- subject *is* to the campaign differs per subject, while the prefix does not.
+-- Empty is valid: the separator is dropped and the eyebrow reads "Unique Asset".
+--
+-- Migration for an existing DB:
+--   ALTER TABLE vips ADD COLUMN tagline VARCHAR(80)
+--     NOT NULL DEFAULT 'Continuity Critical';
+CREATE TABLE IF NOT EXISTS vips (
+  slug             VARCHAR(40) PRIMARY KEY,
+  name             VARCHAR(120) NOT NULL,
+  kanka_entity_id  INTEGER,
+  blurb            TEXT NOT NULL DEFAULT '',
+  tagline          VARCHAR(80) NOT NULL DEFAULT 'Continuity Critical',
+  cells            INTEGER NOT NULL DEFAULT 1023 CHECK (cells BETWEEN 0 AND 1023),
+  min_access_level INTEGER NOT NULL DEFAULT 0,
+  sort_order       INTEGER NOT NULL DEFAULT 0,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by       VARCHAR(50)
+);
+
+-- The anonymity log: who knows a VIP is what they are. One log per VIP.
+--   'confirmed' — established in play, someone knows
+--   'suspicion' — a guess about who or what might be aware
+--
+-- Any logged-in player who can see the VIP may add, edit, or delete a line;
+-- created_by records who opened it and updated_by who last touched it, so a
+-- rewritten line still shows both hands.
+--
+-- vip_slug cascades: a VIP's log dies with the VIP. It also carries the read
+-- gate — a line on a locked VIP is unreachable for anyone below that VIP's
+-- min_access_level, enforced in lib/campaign/service.ts rather than by
+-- filtering in the UI, so ids cannot be guessed.
+CREATE TABLE IF NOT EXISTS anonymity_entries (
+  id         SERIAL PRIMARY KEY,
+  vip_slug   VARCHAR(40) NOT NULL REFERENCES vips(slug) ON DELETE CASCADE,
+  kind       TEXT NOT NULL CHECK (kind IN ('confirmed', 'suspicion')),
+  text       TEXT NOT NULL,
+  created_by VARCHAR(50) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by VARCHAR(50),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS anonymity_entries_vip_idx
+  ON anonymity_entries (vip_slug, kind, created_at);
+
+-- Migration from the single-subject version of this page (libra_state, and an
+-- anonymity log with no VIP column):
+--   ALTER TABLE anonymity_entries ADD COLUMN vip_slug VARCHAR(40);
+--   UPDATE anonymity_entries SET vip_slug = 'libra' WHERE vip_slug IS NULL;
+--   ALTER TABLE anonymity_entries ALTER COLUMN vip_slug SET NOT NULL;
+--   ALTER TABLE anonymity_entries ADD CONSTRAINT anonymity_entries_vip_fkey
+--     FOREIGN KEY (vip_slug) REFERENCES vips(slug) ON DELETE CASCADE;
+--   DROP INDEX IF EXISTS anonymity_entries_kind_idx;
+--   DROP TABLE libra_state;
