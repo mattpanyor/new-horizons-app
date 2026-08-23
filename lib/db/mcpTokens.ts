@@ -96,6 +96,39 @@ export async function listAllTokensRevealed(): Promise<McpTokenRevealed[]> {
   });
 }
 
+/** One token, without its plaintext. For authorisation checks before a write. */
+export async function getTokenById(id: number): Promise<McpToken | null> {
+  const rows = await sql`
+    SELECT id, username, label, scopes, issued_by, created_at, last_used_at, revoked_at
+    FROM mcp_tokens
+    WHERE id = ${id}
+  `;
+  return rows.length > 0 ? rowToToken(rows[0]) : null;
+}
+
+/**
+ * Replaces a token's scopes, leaving the secret itself untouched.
+ *
+ * This is how an existing token picks up a module added after it was issued —
+ * the alternative is revoking and re-issuing, which means everyone holding one
+ * reconfigures their client. The hash and the encrypted copy are not rewritten,
+ * so the URL the user already has keeps working.
+ *
+ * Revoked tokens are excluded: widening a dead token would quietly resurrect
+ * nothing, but it would make the panel show a scope list that can never apply.
+ * Callers are responsible for the authorisation check — see the privilege rule
+ * in app/api/admin/mcp/tokens/route.ts.
+ */
+export async function updateTokenScopes(id: number, scopes: string[]): Promise<McpToken | null> {
+  const rows = await sql`
+    UPDATE mcp_tokens
+    SET scopes = ${scopes}
+    WHERE id = ${id} AND revoked_at IS NULL
+    RETURNING id, username, label, scopes, issued_by, created_at, last_used_at, revoked_at
+  `;
+  return rows.length > 0 ? rowToToken(rows[0]) : null;
+}
+
 export async function revokeToken(id: number): Promise<boolean> {
   const rows = await sql`
     UPDATE mcp_tokens

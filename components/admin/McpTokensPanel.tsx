@@ -44,6 +44,11 @@ export default function McpTokensPanel({
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
+  // Scope editing on an existing token. `editingId` is the row open for edit;
+  // `draftScopes` is that row's working copy, seeded when the row is opened.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draftScopes, setDraftScopes] = useState<string[]>([]);
+
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const endpoint = `${origin}/api/mcp/server`;
 
@@ -78,6 +83,42 @@ export default function McpTokensPanel({
       setTokens((prev) => [data.token, ...prev]);
       setRevealed((prev) => new Set(prev).add(data.token.id));
       setLabel("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startEditScopes = (token: McpTokenRevealed) => {
+    // Seed from the token, not from whatever the previous row held.
+    setDraftScopes(token.scopes);
+    setEditingId(token.id);
+  };
+
+  const toggleDraftScope = (scope: string) =>
+    setDraftScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]
+    );
+
+  const handleSaveScopes = async (token: McpTokenRevealed) => {
+    if (draftScopes.length === 0) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/mcp/tokens", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: token.id, scopes: draftScopes }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        alert(data?.error ?? "Failed to update scopes");
+        return;
+      }
+      // PATCH deliberately returns no plaintext, so keep the one already held
+      // rather than blanking the Show URL button.
+      setTokens((prev) =>
+        prev.map((t) => (t.id === token.id ? { ...t, scopes: data.token.scopes } : t))
+      );
+      setEditingId(null);
     } finally {
       setBusy(false);
     }
@@ -244,6 +285,14 @@ export default function McpTokensPanel({
                     {!revoked && (
                       <div className="flex shrink-0 gap-2">
                         <button
+                          onClick={() =>
+                            editingId === token.id ? setEditingId(null) : startEditScopes(token)
+                          }
+                          className="rounded border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:bg-white/10 transition-colors"
+                        >
+                          {editingId === token.id ? "Cancel" : "Scopes"}
+                        </button>
+                        <button
                           onClick={() => toggleReveal(token.id)}
                           disabled={!token.plaintext}
                           title={token.plaintext ? undefined : "Token cannot be decrypted"}
@@ -261,6 +310,50 @@ export default function McpTokensPanel({
                       </div>
                     )}
                   </div>
+
+                  {editingId === token.id && (
+                    <div className="space-y-2 border-t border-white/[0.07] pt-2">
+                      <p className="text-[11px] text-white/40">
+                        Changing scopes does not change the token. {token.username} keeps the URL
+                        they already have — it just reaches more, or fewer, tools.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {scopes.map((s) => {
+                          const on = draftScopes.includes(s.scope);
+                          return (
+                            <button
+                              key={s.scope}
+                              type="button"
+                              onClick={() => toggleDraftScope(s.scope)}
+                              title={s.description}
+                              className={`rounded border px-3 py-1.5 text-xs transition-colors ${
+                                on
+                                  ? "border-indigo-400/50 bg-indigo-500/15 text-indigo-200/90"
+                                  : "border-white/10 text-white/40 hover:bg-white/5"
+                              }`}
+                            >
+                              {on ? "✓ " : ""}
+                              {s.title}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-3 pt-1">
+                        <button
+                          onClick={() => handleSaveScopes(token)}
+                          disabled={busy || draftScopes.length === 0}
+                          className="rounded border border-indigo-400/40 px-3 py-1.5 text-xs text-indigo-200/90 hover:bg-indigo-500/10 disabled:opacity-40 transition-colors"
+                        >
+                          Save scopes
+                        </button>
+                        {draftScopes.length === 0 && (
+                          <span className="text-[11px] text-amber-300/70">
+                            A token needs at least one scope. Revoke it instead.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {isOpen && token.plaintext && (
                     <div className="space-y-2 border-t border-white/[0.07] pt-2">
