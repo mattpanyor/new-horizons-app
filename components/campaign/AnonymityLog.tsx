@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { AnonymityEntry, AnonymityKind } from "@/types/campaign";
 import { ANONYMITY_TEXT_MAX } from "@/lib/campaign/constants";
+import { parseClueText } from "@/lib/investigation/clueText";
+import MentionField from "./MentionField";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -25,7 +27,37 @@ const KIND_STYLE = {
   },
 } as const;
 
-/** A single line: read-only until clicked, then an inline textarea. */
+/**
+ * Renders @[Name](kanka:ID) markup as links out to the campaign wiki.
+ *
+ * The same markup and parser the investigation board uses, so a line copied
+ * between the two renders identically. The anchor stops propagation because the
+ * row around it is click-to-edit.
+ */
+function TextWithMentions({ text }: { text: string }) {
+  return (
+    <>
+      {parseClueText(text).map((tok, i) =>
+        tok.kind === "text" ? (
+          <span key={i}>{tok.value}</span>
+        ) : (
+          <a
+            key={i}
+            href={tok.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-indigo-300/85 hover:text-indigo-200 underline decoration-dotted underline-offset-2"
+          >
+            {tok.name}
+          </a>
+        )
+      )}
+    </>
+  );
+}
+
+/** A single line: read-only until clicked, then an inline editor. */
 function EntryRow({
   entry,
   index,
@@ -77,12 +109,13 @@ function EntryRow({
       <div className="min-w-0 flex-1">
         {editing ? (
           <div className="flex flex-col gap-2">
-            <textarea
+            <MentionField
+              multiline
               value={draft}
               autoFocus
               rows={2}
               maxLength={ANONYMITY_TEXT_MAX}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={setDraft}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -119,8 +152,11 @@ function EntryRow({
             </div>
           </div>
         ) : (
-          <button
-            type="button"
+          // A div rather than a button: mention links live inside this text,
+          // and an anchor nested in a button is invalid and unclickable.
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => {
               // Re-seed from the entry: someone else may have rewritten this
               // line since the row mounted, and `draft` would still hold the
@@ -128,11 +164,18 @@ function EntryRow({
               setDraft(entry.text);
               setEditing(true);
             }}
-            className="block w-full text-left text-[13px] leading-relaxed text-white/80 hover:text-white transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setDraft(entry.text);
+                setEditing(true);
+              }
+            }}
+            className="block w-full cursor-pointer text-left text-[13px] leading-relaxed text-white/80 hover:text-white transition-colors"
             title="Click to edit"
           >
-            {entry.text}
-          </button>
+            <TextWithMentions text={entry.text} />
+          </div>
         )}
 
         {!editing && (
@@ -193,21 +236,25 @@ function Composer({
       <span className="text-white/20 text-sm leading-none" aria-hidden>
         +
       </span>
-      <input
-        value={text}
-        maxLength={ANONYMITY_TEXT_MAX}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            void submit();
+      <div className="flex-1">
+        <MentionField
+          value={text}
+          maxLength={ANONYMITY_TEXT_MAX}
+          onChange={setText}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder={
+            kind === "confirmed"
+              ? "Who has confirmed knowledge… (@ to mention)"
+              : "Who might suspect… (@ to mention)"
           }
-        }}
-        placeholder={
-          kind === "confirmed" ? "Who has confirmed knowledge…" : "Who might suspect…"
-        }
-        className="flex-1 bg-transparent text-[13px] text-white/80 placeholder:text-white/35 outline-none"
-      />
+          className="w-full bg-transparent text-[13px] text-white/80 placeholder:text-white/35 outline-none"
+        />
+      </div>
       {text.trim() && (
         <button
           type="button"

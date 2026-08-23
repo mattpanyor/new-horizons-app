@@ -11,6 +11,7 @@
 import type { User } from "@/lib/db/users";
 import { getAllAllegiances } from "@/lib/db/allegiances";
 import { getKankaEntityByEntityId } from "@/lib/db/kankaEntities";
+import { parseClueText } from "@/lib/investigation/clueText";
 import { kankaEntityUrl } from "@/lib/kanka";
 import type {
   AnonymityEntry,
@@ -372,6 +373,33 @@ export async function setVipTaglineAs(
 
 /* ----------------------------------------------------- anonymity log */
 
+/**
+ * Rejects @[Name](kanka:ID) markup pointing at entities that do not exist.
+ *
+ * The composer inserts mentions from a picker so it cannot produce a bad id,
+ * but the field is free text — pasted or hand-typed markup can, and a wrong id
+ * renders as a dead link on the board. Checked in the service so any future
+ * surface (an MCP write tool) inherits it rather than re-implementing it.
+ */
+async function findUnknownMentions(text: string): Promise<number[]> {
+  const ids = Array.from(
+    new Set(parseClueText(text).flatMap((t) => (t.kind === "mention" ? [t.entityId] : [])))
+  );
+  if (ids.length === 0) return [];
+  const found = await Promise.all(ids.map((id) => getKankaEntityByEntityId(id)));
+  return ids.filter((_, i) => found[i] === null);
+}
+
+function mentionError(missing: number[]): { ok: false; error: string; status: number } {
+  return {
+    ok: false,
+    status: 400,
+    error:
+      `Unknown campaign entity id(s): ${missing.join(", ")}. ` +
+      "Pick the mention from the list instead of typing the markup by hand.",
+  };
+}
+
 function validateText(input: unknown): ServiceResult<string> {
   if (typeof input !== "string") return fail("text must be a string", 400);
   const trimmed = input.trim();
@@ -418,6 +446,9 @@ export async function createAnonymityAs(
   const text = validateText(input.text);
   if (!text.ok) return text;
 
+  const missing = await findUnknownMentions(text.data);
+  if (missing.length > 0) return mentionError(missing);
+
   return ok(
     await createAnonymityEntry({
       vipSlug: vip.slug,
@@ -451,6 +482,9 @@ export async function updateAnonymityAs(
 
   const validated = validateText(text);
   if (!validated.ok) return validated;
+
+  const missing = await findUnknownMentions(validated.data);
+  if (missing.length > 0) return mentionError(missing);
 
   const entry = await updateAnonymityEntry(id, validated.data, actor.username);
   if (!entry) return fail("Not found", 404);
