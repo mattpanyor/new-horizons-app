@@ -7,10 +7,11 @@
 // minting a token.
 
 import type { User } from "@/lib/db/users";
+import { campaignModule } from "./modules/campaign";
 import { investigationModule } from "./modules/investigation";
 import type { ToolDef, ToolModule } from "./types";
 
-export const MODULES: ToolModule[] = [investigationModule];
+export const MODULES: ToolModule[] = [investigationModule, campaignModule];
 
 export interface ScopeInfo {
   scope: string;

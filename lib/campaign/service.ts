@@ -39,6 +39,28 @@ import {
   type VipRow,
 } from "@/lib/db/campaign";
 
+/**
+ * Extra restrictions a *calling surface* may impose on top of the app's rules.
+ *
+ * These only ever narrow, never widen — the access-level rules in `can()`
+ * remain the ceiling. Same contract as ActorConstraints in the investigation
+ * service.
+ */
+export interface CampaignConstraints {
+  /**
+   * Drop hidden factions from the result at every access level, including
+   * superadmin.
+   *
+   * The web board shows a superadmin their hidden factions, because hiding is a
+   * display choice they made and they need to be able to undo it. An AI client
+   * is a different audience: it summarises and relays, often into a channel the
+   * players can read, and it has no way to know that a faction being on the
+   * list is itself the secret. So the MCP surface drops them outright rather
+   * than labelling them and trusting the model to stay quiet.
+   */
+  excludeHidden?: boolean;
+}
+
 export type ServiceResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status: number };
@@ -113,11 +135,12 @@ export function can(actor: User, action: CampaignAction): boolean {
  */
 export async function listStandingsAs(
   actor: User,
+  constraints: CampaignConstraints = {},
 ): Promise<ServiceResult<FactionStanding[]>> {
   if (!can(actor, "standing:read")) return fail("Forbidden", 403);
 
   const [allegiances, stored] = await Promise.all([getAllAllegiances(), getStandings()]);
-  const canSeeHidden = can(actor, "standing:update");
+  const canSeeHidden = can(actor, "standing:update") && !constraints.excludeHidden;
 
   const standings = allegiances.map((a): FactionStanding => {
     const row = stored.get(a.slug);
