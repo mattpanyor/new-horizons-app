@@ -1,20 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AnonymityEntry,
   AnonymityKind,
   FactionStanding,
   Vip,
 } from "@/types/campaign";
+import { FACTION_CATEGORIES, type FactionCategory } from "@/lib/allegiances";
 import { countIntact, integrityTier } from "@/lib/campaign/integrity";
-import {
-  STANDING_SPECTRUM,
-  standingCounterweight,
-  standingVerdict,
-  type StandingStep,
-} from "@/lib/campaign/standing";
-import FactionStandingCard from "./FactionStandingCard";
+import { standingVerdict } from "@/lib/campaign/standing";
+import CategoryPanel from "./CategoryPanel";
 import StandingBar from "./StandingBar";
 import VipPanel from "./VipPanel";
 import AnonymityLog from "./AnonymityLog";
@@ -64,95 +60,6 @@ const WITHHELD_TONE: Record<string, string> = {
   friendly: "rgba(110,231,183,0.7)",
   neutral: "rgba(255,255,255,0.35)",
 };
-
-/** The palette of one rung. Depth tracks the count, so the row of headings is
- *  itself the gradient: pale at the middle, saturated at the two ends. */
-function stepTone(step: StandingStep): { mark: string; text: string } {
-  if (step.tone === "neutral") {
-    return { mark: "rgba(226,232,240,0.5)", text: "rgba(255,255,255,0.42)" };
-  }
-  // 1 cell is the faintest rung of its side, 4 the fiercest.
-  const depth = [0.42, 0.58, 0.76, 1][Math.max(0, (step.cells ?? 1) - 1)];
-  return step.tone === "hostile"
-    ? { mark: `rgba(239,68,68,${depth})`, text: `rgba(252,165,165,${0.35 + depth * 0.55})` }
-    : { mark: `rgba(16,185,129,${depth})`, text: `rgba(110,231,183,${0.35 + depth * 0.55})` };
-}
-
-/** The cell pattern that earns a step, drawn small under its name. */
-function StepMarks({ cells, color }: { cells: number; color: string }) {
-  return (
-    <span className="mt-1.5 flex justify-center gap-[2px]" aria-hidden>
-      {Array.from({ length: cells }, (_, i) => (
-        <span
-          key={i}
-          className="h-2 w-1"
-          style={{ transform: "skewX(-12deg)", background: color, boxShadow: `0 0 6px ${color}` }}
-        />
-      ))}
-    </span>
-  );
-}
-
-/**
- * One rung of the spectrum: its name at the head, and every faction that holds
- * it stacked underneath.
- *
- * Only occupied rungs are drawn. Across is the scarce axis — an empty column
- * would take room from the cards to say nothing — so the scale is carried by
- * the order and the colour of the headings rather than by placeholders.
- */
-function SpectrumColumn({
-  step,
-  standings,
-  editable,
-  onChange,
-}: {
-  step: StandingStep;
-  standings: FactionStanding[];
-  editable: boolean;
-  onChange: (slug: string, fields: { red?: number; green?: number; hidden?: boolean }) => void;
-}) {
-  const tone = stepTone(step);
-
-  return (
-    <div className="flex min-w-[9rem] max-w-[12rem] flex-1 shrink-0 flex-col">
-      <header className="px-1 text-center">
-        <span
-          className="block whitespace-nowrap text-[11px] tracking-[0.22em] uppercase"
-          style={{ ...cinzel, color: tone.text }}
-        >
-          {step.label}
-        </span>
-        {step.cells !== null ? (
-          <StepMarks cells={step.cells} color={tone.mark} />
-        ) : (
-          <span
-            className="mx-auto mt-1.5 block h-2 w-2 rotate-45 border"
-            style={{ borderColor: tone.mark }}
-            aria-hidden
-          />
-        )}
-        <span
-          className="mt-2 block h-px w-full"
-          style={{ background: `linear-gradient(to right, transparent, ${tone.mark}, transparent)` }}
-        />
-      </header>
-
-      {/* The overhanging sigil eats most of the space between two stacked
-          cards, so the gap is small on purpose. */}
-      <div className="mt-1 flex flex-col gap-2">
-        {standings.map((standing) => (
-          <FactionStandingCard
-            key={standing.slug}
-            standing={standing}
-            editable={editable}
-            onChange={onChange}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /**
  * A withheld faction, as one line.
@@ -231,6 +138,8 @@ export default function CampaignTrackers({
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TrackerTab>("standings");
+  // Null is the resting board: three covers, no section claiming the row.
+  const [openCategory, setOpenCategory] = useState<FactionCategory | null>(null);
 
   // Standings and integrity are GM state; the anonymity log is open to all.
   // Mirrors `can()` in lib/campaign/service.ts, which is what actually enforces
@@ -254,31 +163,54 @@ export default function CampaignTrackers({
     }),
   ];
 
-  // Which rung a faction sits on. The verdict word is the key, so the row a
-  // card lands in and the word printed on it can never disagree.
-  const byStep = new Map<string, FactionStanding[]>(
-    STANDING_SPECTRUM.map((step) => [step.label, []]),
-  );
-  // Hidden factions are dropped from the scale and listed below instead —
+  // Hidden factions are dropped from the board and listed below instead —
   // they are only ever in `standings` at all for someone who can unhide them.
   const withheld: FactionStanding[] = [];
-  for (const s of standings) {
-    if (s.hidden) withheld.push(s);
-    else byStep.get(standingVerdict(s.red, s.green).label)?.push(s);
-  }
-  for (const rung of byStep.values()) {
-    rung.sort(
-      (a, b) =>
-        standingCounterweight(a.red, a.green) - standingCounterweight(b.red, b.green) ||
-        a.name.localeCompare(b.name),
-    );
-  }
+  const shown: FactionStanding[] = [];
+  for (const s of standings) (s.hidden ? withheld : shown).push(s);
   withheld.sort((a, b) => a.name.localeCompare(b.name));
 
   const activeVipIndex = tab.startsWith(VIP_TAB_PREFIX)
     ? vips.findIndex((v) => v.slug === tab.slice(VIP_TAB_PREFIX.length))
     : -1;
   const activeVip = activeVipIndex >= 0 ? vips[activeVipIndex] : null;
+
+  // The row is one height, whichever section has the floor: the height the
+  // fullest section needs when it is open. Opening one must not shove the page
+  // around, and three covers of different heights would not read as thirds.
+  //
+  // A card slot is 10rem wide by 5:7, plus the overhang its crest stands in —
+  // 17.5rem all told — and six of them fit an open panel at the desktop
+  // measure. Narrower than that they wrap, and the card area scrolls rather
+  // than the row growing.
+  const fullest = Math.max(
+    1,
+    ...FACTION_CATEGORIES.map((cat) => shown.filter((s) => s.category === cat.key).length),
+  );
+  const bandHeight = `calc(${Math.ceil(fullest / 6)} * 17.5rem + 4.5rem)`;
+
+  // Clicking off the board puts the sections back to thirds — the same gesture
+  // as clicking the open one shut. Escape does it from the keyboard. The
+  // listener only exists while a section is open, so the resting page carries
+  // nothing on the document.
+  const bandRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openCategory === null) return;
+
+    const dismiss = (event: PointerEvent) => {
+      if (!bandRef.current?.contains(event.target as Node)) setOpenCategory(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenCategory(null);
+    };
+
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openCategory]);
 
   /* ------------------------------------------------------------- writes */
 
@@ -492,51 +424,28 @@ export default function CampaignTrackers({
           </div>
         ) : (
           <>
-            <p className="mb-6 text-[11px] tracking-[0.08em] text-white/50">
-              How each power of the sector reads the party.
-              {canEditTrackers && " Click a cell to set it."}
-            </p>
-
-            {/* The scale, read across: antagonism at the left, regard at the
-                right, one column per rung anybody holds. The columns are
-                separate — the gradient rule above is what carries the reading
-                from one end to the other. */}
-            <div className="mb-4 flex items-center gap-3">
-              <span className="text-[9px] tracking-[0.3em] uppercase text-red-300/70" style={cinzel}>
-                Antagonism
-              </span>
-              <span
-                className="h-px flex-1"
-                style={{
-                  background:
-                    "linear-gradient(to right, rgba(239,68,68,0.5), rgba(255,255,255,0.1)," +
-                    "rgba(16,185,129,0.5))",
-                }}
-              />
-              <span
-                className="text-[9px] tracking-[0.3em] uppercase text-emerald-300/70"
-                style={cinzel}
-              >
-                Regard
-              </span>
-            </div>
-
-            {/* pr-2 is room for the withhold control, which sits half off the top
-                  right corner of a card — without it the last column's button
-                  hangs 8px past the content edge and the band scrolls by that
-                  much, for no visible reason. */}
-              <div className="ct-band flex gap-3 overflow-x-auto pb-2 pr-2 sm:gap-4">
-              {STANDING_SPECTRUM.filter((step) => (byStep.get(step.label)?.length ?? 0) > 0).map(
-                (step) => (
-                  <SpectrumColumn
-                    key={step.label}
-                    step={step}
-                    standings={byStep.get(step.label) ?? []}
-                    editable={canEditTrackers}
-                    onChange={patchStanding}
-                  />
-                ),
-              )}
+            {/* Three sections, side by side. At rest each holds a third of
+                the row behind its cover; opening one gives it the floor and
+                puts the other two down to a labelled sliver. One at a time —
+                clicking the open one shuts it and the thirds come back. */}
+            <div
+              ref={bandRef}
+              className="flex items-stretch gap-3 sm:gap-4"
+              style={{ height: bandHeight }}
+            >
+              {FACTION_CATEGORIES.map((cat) => (
+                <CategoryPanel
+                  key={cat.key}
+                  category={cat.key}
+                  label={cat.label}
+                  standings={shown.filter((s) => s.category === cat.key)}
+                  open={openCategory === cat.key}
+                  collapsed={openCategory !== null && openCategory !== cat.key}
+                  onToggle={() => setOpenCategory(openCategory === cat.key ? null : cat.key)}
+                  editable={canEditTrackers}
+                  onChange={patchStanding}
+                />
+              ))}
             </div>
 
             {canEditTrackers && withheld.length > 0 && (

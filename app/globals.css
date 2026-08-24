@@ -515,6 +515,24 @@ body {
   background: rgba(129, 140, 248, 0.5);
 }
 
+/* A section's cards, fading in behind the width transition.
+   The panel takes 500ms to reach its full width and the cards rewrap as it
+   goes — two to a line at a third of the row, six at full width. The fade
+   starts late enough that the rewrapping happens out of sight; the row's
+   height never moves, because the band is sized once for the fullest section
+   and a panel that cannot fit its cards scrolls them. */
+.ct-panel-body {
+  animation: ct-panel-body 260ms ease 260ms both;
+}
+@keyframes ct-panel-body {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-panel-body { animation: none; }
+}
+
 /* ── Faction standing cards ────────────────────────────────────────────
    Playing-card proportions, dealt into the three standing columns. Tilt and
    highlight both follow the pointer through --fc-px/--fc-py, written straight

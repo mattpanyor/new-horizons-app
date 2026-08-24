@@ -76,18 +76,22 @@ export const STANDING_SPECTRUM: readonly StandingStep[] = [
   })),
 ];
 
-/**
- * How strongly the other side pulls, for ordering within one step.
+/** Where a standing sits on the red-to-green axis, for ordering a row of them.
  *
- * A faction rated 2 green with no red is more purely Aligned than one rated
- * 2 green against a red, so the counterweight sorts ascending. Ties have no
- * "other side", so they sort by how hard both sides are pulling.
+ * The rung decides the decade, so every Enemy comes before every Threat. Inside
+ * a rung the opposing cells break the tie in the direction the axis runs: an
+ * Enemy carrying two green sits to the right of one carrying none, and an
+ * Aligned carrying a red sits to the left of one that is clean — the further
+ * right a card is, the better the party is doing with it.
  */
-export function standingCounterweight(red: number, green: number): number {
+export function standingOrder(red: number, green: number): number {
   const verdict = standingVerdict(red, green);
-  if (verdict.tone === "hostile") return clampCells(green);
-  if (verdict.tone === "friendly") return clampCells(red);
-  return -(clampCells(red) + clampCells(green));
+  const rung = STANDING_SPECTRUM.findIndex((step) => step.label === verdict.label);
+  const lean =
+    verdict.tone === "hostile"
+      ? clampCells(green)
+      : STANDING_MAX - clampCells(red);
+  return rung * 10 + lean;
 }
 
 /** Coerces anything into a valid cell count. Used by the display, not by writes. */
