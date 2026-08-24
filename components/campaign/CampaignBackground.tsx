@@ -1,5 +1,18 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 // The campaign page's own backdrop: an Imperial network with light running
 // along it, rather than another starfield.
+//
+// Not on a phone. Everything below runs continuously and full-screen — two
+// nebula blooms scaling, two star layers twinkling, a drifting mesh, and twenty
+// paths carrying a lit dash through a Gaussian blur — and on a touch device it
+// costs more than it is worth. There it is one flat ground instead.
+//
+// The ground has to be drawn rather than left to the page: the app's own
+// --background is white under a light colour scheme, and this page is written
+// for a dark one.
 //
 // It is deliberately not the shared StarSystemBackground or the home art —
 // this page is about custodians holding networks together, so the background
@@ -92,6 +105,22 @@ function SurveyRings() {
 }
 
 export default function CampaignBackground() {
+  const [lightweight, setLightweight] = useState(false);
+
+  useEffect(() => {
+    // Touch as well as width: a phone held sideways is ~850px across, and the
+    // cost is the device's, not the viewport's.
+    const query = window.matchMedia("(max-width: 639px), (pointer: coarse)");
+    const sync = () => setLightweight(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  if (lightweight) {
+    return <div className="fixed inset-0 -z-10" style={{ background: "#03020c" }} />;
+  }
+
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: "#03020c" }}>
       {/* Nebula washes. Two blooms breathing out of phase keep the field from
