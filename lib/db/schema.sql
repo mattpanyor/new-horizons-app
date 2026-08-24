@@ -92,11 +92,20 @@ CREATE TABLE IF NOT EXISTS game_sessions (
 -- ── Map content (sectors, systems, stars, bodies, vortexes, connections, markers) ──
 -- See map-migration.md for the full design rationale.
 
+-- Faction slugs, and nothing else.
+--
+-- This is the anchor the allegiance_slug foreign keys point at — systems,
+-- celestial_bodies, markers, faction_standings — not a description of the
+-- factions. Who a faction is, its name, colour and crest, lives in
+-- lib/allegiances.ts, which the map layers, the clue board, the investigation
+-- tools and the campaign trackers all read.
+--
+-- It carried name/color/logo_url once. Only the trackers ever read them, and
+-- the two copies drifted the first time a crest was replaced in one and not the
+-- other. Adding a faction is two steps: the entry in lib/allegiances.ts, and a
+-- row here so it can be referenced.
 CREATE TABLE IF NOT EXISTS allegiances (
-  slug      VARCHAR(40) PRIMARY KEY,
-  name      VARCHAR(120) NOT NULL,
-  color     VARCHAR(7)   NOT NULL,
-  logo_url  TEXT
+  slug VARCHAR(40) PRIMARY KEY
 );
 
 CREATE TABLE IF NOT EXISTS biomes (

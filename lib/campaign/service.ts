@@ -9,7 +9,7 @@
 // functions and inherit every rule below unchanged.
 
 import type { User } from "@/lib/db/users";
-import { getAllAllegiances } from "@/lib/db/allegiances";
+import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
 import { getKankaEntityByEntityId } from "@/lib/db/kankaEntities";
 import { parseClueText } from "@/lib/investigation/clueText";
 import { kankaEntityUrl } from "@/lib/kanka";
@@ -133,6 +133,11 @@ export function can(actor: User, action: CampaignAction): boolean {
  * nobody has rated yet still appears, at 0/0. Hidden factions are filtered out
  * for everyone who cannot unhide them, so a player never sees a gap they have
  * no way to explain.
+ *
+ * Identity — name, colour, logo — comes from lib/allegiances.ts, the same
+ * module the map, the clue board and the investigation tools read. The
+ * `allegiances` table holds nothing but the slug now: it is the anchor the
+ * foreign keys point at, not a second copy of who the factions are.
  */
 export async function listStandingsAs(
   actor: User,
@@ -140,16 +145,16 @@ export async function listStandingsAs(
 ): Promise<ServiceResult<FactionStanding[]>> {
   if (!can(actor, "standing:read")) return fail("Forbidden", 403);
 
-  const [allegiances, stored] = await Promise.all([getAllAllegiances(), getStandings()]);
+  const stored = await getStandings();
   const canSeeHidden = can(actor, "standing:update") && !constraints.excludeHidden;
 
-  const standings = allegiances.map((a): FactionStanding => {
-    const row = stored.get(a.slug);
+  const standings = Object.entries(ALLEGIANCES).map(([slug, a]): FactionStanding => {
+    const row = stored.get(slug);
     return {
-      slug: a.slug,
+      slug,
       name: a.name,
       color: a.color,
-      logoUrl: a.logoUrl,
+      logoUrl: a.logo,
       red: row?.red ?? 0,
       green: row?.green ?? 0,
       hidden: row?.hidden ?? false,
@@ -174,8 +179,9 @@ export async function updateStandingAs(
 ): Promise<ServiceResult<FactionStanding>> {
   if (!can(actor, "standing:update")) return fail("Forbidden", 403);
 
-  const allegiances = await getAllAllegiances();
-  const allegiance = allegiances.find((a) => a.slug === slug);
+  const allegiance = ALLEGIANCES[slug as AllegianceKey] as
+    | (typeof ALLEGIANCES)[AllegianceKey]
+    | undefined;
   if (!allegiance) return fail("Unknown faction", 404);
 
   if (input.red === undefined && input.green === undefined && input.hidden === undefined) {
@@ -205,10 +211,10 @@ export async function updateStandingAs(
   );
 
   return ok({
-    slug: allegiance.slug,
+    slug,
     name: allegiance.name,
     color: allegiance.color,
-    logoUrl: allegiance.logoUrl,
+    logoUrl: allegiance.logo,
     red: row.red,
     green: row.green,
     hidden: row.hidden,

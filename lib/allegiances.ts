@@ -38,7 +38,7 @@ export const ALLEGIANCES = {
   cultists: {
     name: "Crimson Dusk",
     color: "#B91C1C",
-    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/cultist_logo.png",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/crimson_dusk_logo.png",
   },
   exploratorium: {
     name: "Exploratorium",
@@ -49,6 +49,11 @@ export const ALLEGIANCES = {
     name: "Inquisitorium",
     color: "#FFD700",
     logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/inquisitorium_logo.png",
+  },
+  sanctum_arcanum: {
+    name: "Sanctum Arcanum",
+    color: "#7C3AED",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/sanctum_arcanum_logo.png",
   },
   alien_feral: {
     name: "Unkown Alien - feral",
