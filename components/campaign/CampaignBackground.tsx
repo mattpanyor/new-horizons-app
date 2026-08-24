@@ -190,17 +190,6 @@ export default function CampaignBackground() {
         </g>
       </svg>
 
-      {/* Survey beam crossing the field */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 overflow-hidden">
-        <div
-          className="cbg-sweep h-full w-full"
-          style={{
-            background:
-              "linear-gradient(100deg, transparent 0%, rgba(129,140,248,0.05) 45%, rgba(199,210,254,0.1) 50%, rgba(129,140,248,0.05) 55%, transparent 100%)",
-          }}
-        />
-      </div>
-
       {/* Vignette — pulls the edges down so page text always has ground under it */}
       <div
         className="absolute inset-0"

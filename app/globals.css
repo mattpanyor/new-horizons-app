@@ -495,6 +495,73 @@ body {
   to { transform: scaleX(1); }
 }
 
+/* ── Faction standing cards ────────────────────────────────────────────
+   Playing-card proportions, dealt into the three standing columns. Tilt and
+   highlight both follow the pointer through --fc-px/--fc-py, written straight
+   onto the element by the component rather than held in React state — a card
+   under the cursor would otherwise re-render on every mouse move.
+   --fc-edge and --fc-halo are set per card, from the faction's colour. */
+.fc-card {
+  --fc-px: 50%;
+  --fc-py: 50%;
+  --fc-rx: 0deg;
+  --fc-ry: 0deg;
+  --fc-lift: 0px;
+  --fc-scale: 1;
+  --fc-edge: rgba(255, 255, 255, 0.18);
+  --fc-halo: rgba(148, 163, 184, 0.35);
+  transform: perspective(900px) rotateX(var(--fc-rx)) rotateY(var(--fc-ry))
+    translateY(var(--fc-lift)) scale(var(--fc-scale));
+  box-shadow: 0 12px 26px -18px rgba(2, 6, 23, 0.95);
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 280ms ease,
+    border-color 280ms ease;
+}
+
+/* The dealt card, picked out of the hand: it rises, and the halo is the
+   faction's own colour, so a lit card names its house rather than its mood. */
+.fc-card:hover,
+.fc-card:focus-within {
+  --fc-lift: -12px;
+  --fc-scale: 1.04;
+  box-shadow:
+    0 30px 60px -26px rgba(2, 6, 23, 0.95),
+    0 0 0 1px var(--fc-edge),
+    0 0 42px -8px var(--fc-halo);
+}
+
+/* Gloss pooling under the cursor. Above the card's content (z-3) so the light
+   crosses the face, and pointer-transparent so it never eats a click on a
+   standing cell underneath it. */
+.fc-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms ease;
+  background:
+    radial-gradient(40% 32% at var(--fc-px) var(--fc-py), rgba(255, 255, 255, 0.17), transparent 72%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, transparent 38%);
+}
+.fc-card:hover::after,
+.fc-card:focus-within::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The lift and the gloss stay — they are the affordance; only the tilt,
+     which tracks the pointer continuously, goes. */
+  .fc-card {
+    --fc-rx: 0deg !important;
+    --fc-ry: 0deg !important;
+    transition: box-shadow 280ms ease, border-color 280ms ease;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ct-sweep::after,
   .ct-scan::before { animation: none; opacity: 0; }
@@ -544,16 +611,6 @@ body {
 .cbg-spin-ccw { animation: cbg-spin 110s linear infinite reverse; transform-origin: 50% 50%; }
 @keyframes cbg-spin { to { transform: rotate(360deg); } }
 
-/* A wide beam sweeping the field every so often. */
-.cbg-sweep {
-  animation: cbg-sweep 17s ease-in-out infinite;
-}
-@keyframes cbg-sweep {
-  0%, 62%  { transform: translateX(-60%); opacity: 0; }
-  70%      { opacity: 1; }
-  100%     { transform: translateX(160%); opacity: 0; }
-}
-
 /* Nebula wash breathing under the mesh. */
 .cbg-bloom { animation: cbg-bloom 24s ease-in-out infinite alternate; }
 @keyframes cbg-bloom {
@@ -567,7 +624,6 @@ body {
   .cbg-drift,
   .cbg-spin-cw,
   .cbg-spin-ccw,
-  .cbg-sweep,
   .cbg-bloom { animation: none; }
   /* The flow dash would otherwise freeze mid-link as a stray tick mark. */
   .cbg-flow { stroke-dasharray: none; opacity: 0.25; }

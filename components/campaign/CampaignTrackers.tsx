@@ -10,6 +10,7 @@ import type {
 import { countIntact, integrityTier } from "@/lib/campaign/integrity";
 import { standingVerdict } from "@/lib/campaign/standing";
 import FactionStandingCard from "./FactionStandingCard";
+import StandingBar from "./StandingBar";
 import VipPanel from "./VipPanel";
 import AnonymityLog from "./AnonymityLog";
 import TrackerTabs, { type TabSpec, type TrackerTab } from "./TrackerTabs";
@@ -52,6 +53,13 @@ function SectionHeader({
 
 const VIP_TAB_PREFIX = "vip:";
 
+/** Dimmer than the card palette: these lines sit under the columns, not in them. */
+const WITHHELD_TONE: Record<string, string> = {
+  hostile: "rgba(252,165,165,0.7)",
+  friendly: "rgba(110,231,183,0.7)",
+  neutral: "rgba(255,255,255,0.35)",
+};
+
 /**
  * One standing column.
  *
@@ -75,7 +83,7 @@ function StandingColumn({
   onChange: (slug: string, fields: { red?: number; green?: number; hidden?: boolean }) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3 px-1">
         <span
           className="text-[9px] tracking-[0.3em] uppercase whitespace-nowrap"
@@ -92,16 +100,79 @@ function StandingColumn({
       {standings.length === 0 ? (
         <p className="px-1 text-[11px] italic text-white/40">None.</p>
       ) : (
-        standings.map((standing) => (
-          <FactionStandingCard
-            key={standing.slug}
-            standing={standing}
-            editable={editable}
-            onChange={onChange}
-          />
-        ))
+        // Two cards to a row, so a column reads as a dealt hand and the cards
+        // keep their playing-card size instead of stretching to the column.
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          {standings.map((standing) => (
+            <FactionStandingCard
+              key={standing.slug}
+              standing={standing}
+              editable={editable}
+              onChange={onChange}
+            />
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A withheld faction, as one line.
+ *
+ * Hidden factions are a superadmin's own working state — the server never sends
+ * them to anyone else — so they are kept out of the dealt columns entirely and
+ * listed underneath instead. The standing stays editable here: a faction can be
+ * rated without being shown to the table.
+ */
+function WithheldRow({
+  standing,
+  onChange,
+}: {
+  standing: FactionStanding;
+  onChange: (slug: string, fields: { red?: number; green?: number; hidden?: boolean }) => void;
+}) {
+  const verdict = standingVerdict(standing.red, standing.green);
+
+  return (
+    <li className="flex items-center gap-3 px-1 py-2 transition-colors hover:bg-white/[0.03]">
+      <span
+        className="h-1.5 w-1.5 shrink-0 rotate-45"
+        style={{ background: standing.color, boxShadow: `0 0 8px ${standing.color}88` }}
+        aria-hidden
+      />
+
+      <span
+        className="min-w-0 flex-1 truncate text-[10px] tracking-[0.16em] uppercase text-white/55"
+        style={cinzel}
+        title={standing.name}
+      >
+        {standing.name}
+      </span>
+
+      <span
+        className="hidden sm:block w-24 shrink-0 text-right text-[9px] tracking-[0.16em] uppercase"
+        style={{ ...cinzel, color: WITHHELD_TONE[verdict.tone] }}
+      >
+        {verdict.label}
+      </span>
+
+      <StandingBar
+        red={standing.red}
+        green={standing.green}
+        onChange={(fields) => onChange(standing.slug, fields)}
+      />
+
+      <button
+        type="button"
+        onClick={() => onChange(standing.slug, { hidden: false })}
+        className="w-14 shrink-0 text-right text-[9px] tracking-[0.18em] uppercase text-white/35 transition-colors hover:text-white/85"
+        style={cinzel}
+        title="Show this faction to players"
+      >
+        Reveal
+      </button>
+    </li>
   );
 }
 
@@ -153,9 +224,14 @@ export default function CampaignTrackers({
     neutral: [] as FactionStanding[],
     friendly: [] as FactionStanding[],
   };
+  // Hidden factions are dropped from the columns and listed below instead —
+  // they are only ever in `standings` at all for someone who can unhide them.
+  const withheld: FactionStanding[] = [];
   for (const s of standings) {
-    grouped[standingVerdict(s.red, s.green).tone].push(s);
+    if (s.hidden) withheld.push(s);
+    else grouped[standingVerdict(s.red, s.green).tone].push(s);
   }
+  withheld.sort((a, b) => a.name.localeCompare(b.name));
   grouped.hostile.sort((a, b) => b.red - a.red || a.name.localeCompare(b.name));
   grouped.friendly.sort((a, b) => b.green - a.green || a.name.localeCompare(b.name));
   grouped.neutral.sort((a, b) => b.red + b.green - (a.red + a.green) || a.name.localeCompare(b.name));
@@ -379,7 +455,7 @@ export default function CampaignTrackers({
               {canEditTrackers && " Click a cell to set it."}
             </p>
 
-            <div className="grid gap-6 md:gap-4 lg:gap-5 md:grid-cols-3 items-start">
+            <div className="grid gap-8 md:gap-4 lg:gap-6 md:grid-cols-3 items-start">
               <StandingColumn
                 title="Antagonism"
                 accent="#fca5a5"
@@ -402,6 +478,26 @@ export default function CampaignTrackers({
                 onChange={patchStanding}
               />
             </div>
+
+            {canEditTrackers && withheld.length > 0 && (
+              <div className="mt-14">
+                <SectionHeader
+                  numeral="01·W"
+                  title="Withheld"
+                  caption="Kept off the board — no one below your access level sees these, on the page or over MCP."
+                  meta={`${withheld.length} ${withheld.length === 1 ? "faction" : "factions"}`}
+                />
+                <ul className="divide-y divide-white/5 border-y border-white/[0.07]">
+                  {withheld.map((standing) => (
+                    <WithheldRow
+                      key={standing.slug}
+                      standing={standing}
+                      onChange={patchStanding}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
       </section>

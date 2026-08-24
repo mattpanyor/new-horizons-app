@@ -14,9 +14,11 @@ const CELL_COUNTS = [1, 2, 3, 4] as const;
 
 export type BarSize = "sm" | "lg";
 
-const SIZE_CLASS: Record<BarSize, { cell: string; spine: string; gap: string }> = {
-  sm: { cell: "h-6 w-5 md:w-4 lg:w-6", spine: "h-7", gap: "gap-[3px]" },
-  lg: { cell: "h-8 w-7 sm:h-9 sm:w-9", spine: "h-11", gap: "gap-[4px]" },
+const SIZE_CLASS: Record<BarSize, { cell: string; spine: string; gap: string; spineMx: string }> = {
+  // `sm` is sized to the foot of a standing card: eight cells, both spines and
+  // every gap have to clear the card's 5:7 width with its padding taken off.
+  sm: { cell: "h-5 w-3", spine: "h-6", gap: "gap-[2px]", spineMx: "mx-1.5" },
+  lg: { cell: "h-8 w-7 sm:h-9 sm:w-9", spine: "h-11", gap: "gap-[4px]", spineMx: "mx-2" },
 };
 
 interface CellProps {
@@ -96,7 +98,9 @@ export default function StandingBar({ red, green, size = "sm", onChange }: Stand
       ))}
 
       {/* Spine — the neutral gap both fronts advance toward */}
-      <div className={`mx-2 w-px bg-white/25 ${SIZE_CLASS[size].spine}`} />
+      <div
+        className={`w-px bg-white/25 ${SIZE_CLASS[size].spineMx} ${SIZE_CLASS[size].spine}`}
+      />
 
       {greenCells.map((n) => (
         <Cell

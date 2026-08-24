@@ -1,54 +1,64 @@
 "use client";
 
+import { useRef, type CSSProperties, type PointerEvent } from "react";
 import type { FactionStanding } from "@/types/campaign";
 import { standingVerdict, type StandingTone } from "@/lib/campaign/standing";
 import StandingBar from "./StandingBar";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
-// A card, sized to sit in one of the three standing columns. The verdict is
-// the largest thing on it — the bar is the evidence, the word is the point.
+// A playing card, dealt into one of the three standing columns. Proportions are
+// a real card's 5:7 and the sigil hangs off the top edge, so a column reads as a
+// hand rather than as a list of panels. The verdict is still the largest thing
+// on the face — the bar is the evidence, the word is the point.
 
-const TONE = {
-  hostile: { text: "#fca5a5", glow: "rgba(239,68,68,0.18)", edge: "rgba(239,68,68,0.45)" },
-  friendly: { text: "#6ee7b7", glow: "rgba(16,185,129,0.18)", edge: "rgba(16,185,129,0.45)" },
-  neutral: { text: "rgba(255,255,255,0.45)", glow: "transparent", edge: "rgba(255,255,255,0.14)" },
-} as const satisfies Record<StandingTone, { text: string; glow: string; edge: string }>;
+// Only the verdict word is coloured by the standing. Everything else on the
+// card — frame, edge light, halo, wash — is the faction's own colour, so a
+// column of cards reads as a row of houses rather than a block of red or green.
+const VERDICT_COLOR = {
+  hostile: "#fca5a5",
+  friendly: "#6ee7b7",
+  neutral: "rgba(255,255,255,0.5)",
+} as const satisfies Record<StandingTone, string>;
 
-// Equilateral pointy-top hexagon. The vertices are inset to 6.7%/93.3%
-// horizontally because a regular hexagon is only 0.866 as wide as it is tall —
-// stretching one to fill a square box makes the four slanted sides 11.8% longer
-// than the two vertical ones, which reads as a slightly bloated hex.
-// components/HexAvatar.tsx still uses the square-filling version; this is
-// deliberately local until that convention is changed app-wide.
-const HEX_CLIP = "polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%)";
-
-/** The faction's sigil, framed. Falls back to its colour and initial. */
-function FactionMark({ standing }: { standing: FactionStanding }) {
+/**
+ * The faction's sigil, standing up out of the top of the card.
+ *
+ * It sits inside the card element so it tilts with it, but outside the clipped
+ * face — the overhang is the point, and the slot above reserves room for it.
+ * The art is the only mark on the card now, so it is drawn at full strength
+ * with a shadow under it to lift it off the face.
+ */
+function FactionSigil({ standing }: { standing: FactionStanding }) {
   const logo = standing.logoUrl?.trim() ? standing.logoUrl : null;
 
   return (
-    <div className="relative w-12 h-12 shrink-0">
-      <div
-        className="absolute inset-0 p-[1.5px] transition-all duration-500 group-hover:brightness-125"
-        style={{
-          clipPath: HEX_CLIP,
-          background: `${standing.color}88`,
-          filter: `drop-shadow(0 0 10px ${standing.color}44)`,
-        }}
-      >
-        <div
-          className="w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden"
-          style={{ clipPath: HEX_CLIP }}
-        >
-          {logo ? (
-            <img src={logo} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-lg leading-none" style={{ ...cinzel, color: standing.color }}>
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[4] flex justify-center">
+      <div className="w-[92%] aspect-square -translate-y-[33%] transition-transform duration-500 group-hover:-translate-y-[38%]">
+        {logo ? (
+          <img
+            src={logo}
+            alt=""
+            className="w-full h-full object-contain transition-all duration-500 group-hover:brightness-115"
+            style={{
+              filter: `drop-shadow(0 10px 16px rgba(2,6,23,0.75)) drop-shadow(0 0 22px ${standing.color}55)`,
+            }}
+          />
+        ) : (
+          // No art on file: the initial, set as large as the sigil would be.
+          <div className="flex h-full w-full items-end justify-center">
+            <span
+              className="text-5xl leading-none"
+              style={{
+                ...cinzel,
+                color: standing.color,
+                textShadow: `0 0 26px ${standing.color}66`,
+              }}
+            >
               {standing.name.replace(/^House\s+/i, "").charAt(0).toUpperCase()}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -63,86 +73,128 @@ interface Props {
 
 export default function FactionStandingCard({ standing, editable, onChange }: Props) {
   const verdict = standingVerdict(standing.red, standing.green);
-  const tone = TONE[verdict.tone];
-  const logo = standing.logoUrl?.trim() ? standing.logoUrl : null;
+  const verdictColor = VERDICT_COLOR[verdict.tone];
+  const accent = standing.color;
+  const cardRef = useRef<HTMLElement>(null);
+
+  // Written straight onto the node: the cursor moves far more often than
+  // anything on this card changes, and a state update per pointer event would
+  // re-render every column. See .fc-card in globals.css for what reads them.
+  const track = (event: PointerEvent<HTMLElement>) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    el.style.setProperty("--fc-px", `${(x * 100).toFixed(1)}%`);
+    el.style.setProperty("--fc-py", `${(y * 100).toFixed(1)}%`);
+    el.style.setProperty("--fc-rx", `${((0.5 - y) * 8).toFixed(2)}deg`);
+    el.style.setProperty("--fc-ry", `${((x - 0.5) * 10).toFixed(2)}deg`);
+  };
+
+  // Back to the class defaults — the card settles flat rather than holding the
+  // last angle the pointer left it at.
+  const release = () => {
+    const el = cardRef.current;
+    if (!el) return;
+    for (const prop of ["--fc-px", "--fc-py", "--fc-rx", "--fc-ry"]) {
+      el.style.removeProperty(prop);
+    }
+  };
 
   return (
-    <article
-      className={`group relative overflow-hidden rounded-lg border border-white/[0.07] bg-slate-950/72 backdrop-blur-md transition-all duration-300 hover:border-white/25 hover:bg-slate-950/82 ${
-        standing.hidden ? "opacity-40" : ""
-      }`}
-    >
-      {/* Lit top edge in the verdict's colour */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{ background: `linear-gradient(to right, transparent, ${tone.edge}, transparent)` }}
-      />
+    // The slot reserves the overhang, so the sigil of a card in the second row
+    // never lands on the card above it.
+    <div className="relative pt-[31%]">
+      <article
+        ref={cardRef}
+        onPointerMove={track}
+        onPointerLeave={release}
+        className="fc-card group relative aspect-[5/7] rounded-xl border border-white/[0.09] hover:border-white/25 hover:z-10"
+        style={{ "--fc-edge": `${accent}80`, "--fc-halo": `${accent}99` } as CSSProperties}
+      >
+        {/* The face — everything that has to stay inside the card's frame. */}
+        <div className="absolute inset-0 overflow-hidden rounded-xl bg-[#060a16]/85 backdrop-blur-md">
+          {/* Faction colour washing down from the top edge */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `radial-gradient(115% 62% at 50% 0%, ${accent}3d, transparent 64%)`,
+            }}
+          />
 
-      {/* Verdict glow pooling at the top of the card */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-20 transition-opacity duration-500"
-        style={{ background: `linear-gradient(to bottom, ${tone.glow}, transparent)` }}
-      />
+          <div className="ct-weave absolute inset-0 opacity-40" aria-hidden />
 
-      {/* Sigil watermark, bleeding off the corner */}
-      {logo && (
-        <div
-          className="pointer-events-none absolute -right-5 -top-4 w-28 h-28 opacity-[0.06] group-hover:opacity-[0.13] transition-opacity duration-700"
-          aria-hidden
-        >
-          <img src={logo} alt="" className="w-full h-full object-contain" />
+          {/* Foot shadow, so the bar sits on something */}
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/55 to-transparent" />
+
+          {/* Lit top edge in the verdict's colour */}
+          <div
+            className="absolute inset-x-0 top-0 h-px"
+            style={{ background: `linear-gradient(to right, transparent, ${accent}c0, transparent)` }}
+          />
         </div>
-      )}
 
-      <div className="relative px-4 py-4">
-        <div className="flex items-center gap-3">
-          <FactionMark standing={standing} />
+        {/* Inner rule, the way a card frames its art */}
+        <div
+          className="pointer-events-none absolute inset-[5px] rounded-[9px] border transition-colors duration-500"
+          style={{ borderColor: `${accent}33` }}
+        />
 
-          <div className="min-w-0 flex-1">
-            <h3
-              className="text-[10px] tracking-[0.18em] uppercase text-white/70 truncate transition-colors duration-500 group-hover:text-white/90"
-              style={cinzel}
-              title={standing.name}
-            >
-              {standing.name}
-            </h3>
+        <FactionSigil standing={standing} />
+
+        {editable && (
+          /* Tucked into the top corner, over the transparent edge of the art,
+             and shown only while the card is under the pointer — the foot of
+             the card belongs to the bar. */
+          <button
+            type="button"
+            onClick={() => onChange(standing.slug, { hidden: true })}
+            className="absolute right-1 top-1 z-[6] rounded bg-slate-950/75 px-1.5 py-0.5 text-[7.5px] tracking-[0.18em] uppercase text-white/50 opacity-0 backdrop-blur-sm transition-opacity duration-300 hover:text-white/95 focus-visible:opacity-100 group-hover:opacity-100"
+            style={cinzel}
+            title="Hide this faction from players"
+          >
+            Hide
+          </button>
+        )}
+
+        <div className="relative z-[3] flex h-full flex-col items-center px-3 pb-3 pt-[68%] text-center">
+          <h3
+            className="line-clamp-3 text-[11px] leading-[1.35] tracking-[0.09em] uppercase text-white/75 transition-colors duration-500 group-hover:text-white"
+            style={cinzel}
+            title={standing.name}
+          >
+            {standing.name}
+          </h3>
+
+          <div className="my-auto flex flex-col items-center gap-2">
             <span
-              className="mt-1 block text-sm lg:text-base tracking-[0.12em] lg:tracking-[0.16em] uppercase leading-none transition-colors duration-500"
+              className="h-px w-7"
+              style={{ background: `linear-gradient(to right, transparent, ${accent}aa)` }}
+            />
+            <span
+              className="block text-[15px] leading-none tracking-[0.1em] uppercase transition-colors duration-500"
               style={{
                 ...cinzel,
-                color: tone.text,
-                textShadow: verdict.tone === "neutral" ? "none" : `0 0 22px ${tone.glow}`,
+                color: verdictColor,
+                textShadow: verdict.tone === "neutral" ? "none" : `0 0 24px ${verdictColor}66`,
               }}
             >
               {verdict.label}
             </span>
+            <span
+              className="h-px w-7"
+              style={{ background: `linear-gradient(to left, transparent, ${accent}aa)` }}
+            />
           </div>
 
-          {editable && (
-            <button
-              type="button"
-              onClick={() => onChange(standing.slug, { hidden: !standing.hidden })}
-              className="shrink-0 self-start text-[9px] tracking-[0.18em] uppercase text-white/35 hover:text-white/80 transition-colors"
-              style={cinzel}
-              title={
-                standing.hidden
-                  ? "Show this faction to players"
-                  : "Hide this faction from players"
-              }
-            >
-              {standing.hidden ? "Hidden" : "Hide"}
-            </button>
-          )}
-        </div>
-
-        <div className="mt-4 flex justify-center">
           <StandingBar
             red={standing.red}
             green={standing.green}
             onChange={editable ? (fields) => onChange(standing.slug, fields) : undefined}
           />
         </div>
-      </div>
-    </article>
+      </article>
+    </div>
   );
 }
