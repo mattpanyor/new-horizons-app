@@ -12,11 +12,22 @@ export interface KankaEntityRow {
   title: string | null;
   /** Kanka's description, raw HTML. See the note on rendering below. */
   entry: string | null;
+  /**
+   * Who belongs to this group. Populated for organisations and families,
+   * null for kinds that cannot have members. `role` is Kanka's free-text
+   * title and only organisations carry one.
+   */
+  members: KankaMember[] | null;
+}
+
+export interface KankaMember {
+  entityId: number;
+  role?: string;
 }
 
 export async function getAllKankaEntities(): Promise<KankaEntityRow[]> {
   const rows = await sql`
-    SELECT id, entity_id, name, type, image_url, title, entry
+    SELECT id, entity_id, name, type, image_url, title, entry, members
     FROM kanka_entities
     ORDER BY name
   `;
@@ -29,12 +40,13 @@ export async function getAllKankaEntities(): Promise<KankaEntityRow[]> {
     imageUrl: (row.image_url as string) ?? null,
     title: (row.title as string) ?? null,
     entry: (row.entry as string) ?? null,
+    members: (row.members as KankaMember[]) ?? null,
   }));
 }
 
 export async function getKankaEntityByEntityId(entityId: number): Promise<KankaEntityRow | null> {
   const rows = await sql`
-    SELECT id, entity_id, name, type, image_url, title, entry
+    SELECT id, entity_id, name, type, image_url, title, entry, members
     FROM kanka_entities
     WHERE entity_id = ${entityId}
   `;
@@ -50,6 +62,7 @@ export async function getKankaEntityByEntityId(entityId: number): Promise<KankaE
     imageUrl: (row.image_url as string) ?? null,
     title: (row.title as string) ?? null,
     entry: (row.entry as string) ?? null,
+    members: (row.members as KankaMember[]) ?? null,
   };
 }
 
@@ -83,17 +96,20 @@ export async function upsertKankaEntity(fields: {
   imageUrl: string | null;
   title: string | null;
   entry: string | null;
+  members: KankaMember[] | null;
 }): Promise<void> {
   await sql`
-    INSERT INTO kanka_entities (entity_id, name, type, image_url, title, entry, updated_at)
+    INSERT INTO kanka_entities (entity_id, name, type, image_url, title, entry, members, updated_at)
     VALUES (${fields.entityId}, ${fields.name}, ${fields.type}, ${fields.imageUrl}, ${fields.title},
-            ${fields.entry}, NOW())
+            ${fields.entry},
+            ${fields.members === null ? null : JSON.stringify(fields.members)}::jsonb, NOW())
     ON CONFLICT (entity_id) DO UPDATE SET
       name = EXCLUDED.name,
       type = EXCLUDED.type,
       image_url = EXCLUDED.image_url,
       title = EXCLUDED.title,
       entry = EXCLUDED.entry,
+      members = EXCLUDED.members,
       updated_at = NOW()
   `;
 }

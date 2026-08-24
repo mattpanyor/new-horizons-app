@@ -312,6 +312,27 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
 -- Nothing renders it today. Whatever eventually does must parse and sanitise
 -- rather than dangerouslySetInnerHTML it.
 --
+-- members holds group membership for organisations and families:
+--   [{"entityId": 4006898, "role": "Legate"}, {"entityId": 6135829}]
+-- Null for kinds that cannot have members, so an organisation with nobody in
+-- it ([]) stays distinguishable from a character (null). `role` is Kanka's
+-- free-text title and only organisations have one; families are a bare list.
+--
+-- A column rather than a join table, matching clues.faction_slugs and
+-- mcp_tokens.scopes. The decisive reason is not size (~68 memberships) but
+-- staleness: replacing the whole array each sync means a member removed in
+-- Kanka simply vanishes, where join rows would need reconciling deletes —
+-- exactly the logic that does damage when a fetch half-fails.
+--
+-- Reverse lookup ("what does this character belong to") is a containment query
+-- against the GIN index, not a scan:
+--   SELECT * FROM kanka_entities WHERE members @> '[{"entityId": 4006898}]';
+--
+-- The tradeoff is a polymorphic table: members is meaningless on a character
+-- row. Acceptable while this stays a read-only mirror. If membership ever
+-- became editable in the app — per-row updated_by, history — it would want to
+-- be its own table.
+--
 -- Every column here is Kanka-owned and blindly overwritten on each sync. This
 -- table cannot hold locally-authored data: anything this app owns about an
 -- entity belongs in its own table keyed on entity_id.
@@ -323,8 +344,11 @@ CREATE TABLE IF NOT EXISTS kanka_entities (
   image_url  TEXT,
   title      VARCHAR(255),
   entry      TEXT,
+  members    JSONB,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS kanka_entities_members_idx
+  ON kanka_entities USING GIN (members);
 
 -- app_settings — small, admin-controlled values that change how the app looks
 -- or behaves without a deploy.
