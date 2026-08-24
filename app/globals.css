@@ -495,6 +495,26 @@ body {
   to { transform: scaleX(1); }
 }
 
+/* The standing scale scrolls sideways on the layouts it cannot fit. The bar is
+   styled rather than hidden — a scale that runs past the edge has to say so. */
+.ct-band {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 140, 248, 0.35) transparent;
+}
+.ct-band::-webkit-scrollbar {
+  height: 6px;
+}
+.ct-band::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ct-band::-webkit-scrollbar-thumb {
+  background: rgba(129, 140, 248, 0.3);
+  border-radius: 999px;
+}
+.ct-band::-webkit-scrollbar-thumb:hover {
+  background: rgba(129, 140, 248, 0.5);
+}
+
 /* ── Faction standing cards ────────────────────────────────────────────
    Playing-card proportions, dealt into the three standing columns. Tilt and
    highlight both follow the pointer through --fc-px/--fc-py, written straight

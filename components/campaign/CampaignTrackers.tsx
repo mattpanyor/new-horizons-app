@@ -8,7 +8,12 @@ import type {
   Vip,
 } from "@/types/campaign";
 import { countIntact, integrityTier } from "@/lib/campaign/integrity";
-import { standingVerdict } from "@/lib/campaign/standing";
+import {
+  STANDING_SPECTRUM,
+  standingCounterweight,
+  standingVerdict,
+  type StandingStep,
+} from "@/lib/campaign/standing";
 import FactionStandingCard from "./FactionStandingCard";
 import StandingBar from "./StandingBar";
 import VipPanel from "./VipPanel";
@@ -60,59 +65,91 @@ const WITHHELD_TONE: Record<string, string> = {
   neutral: "rgba(255,255,255,0.35)",
 };
 
+/** The palette of one rung. Depth tracks the count, so the row of headings is
+ *  itself the gradient: pale at the middle, saturated at the two ends. */
+function stepTone(step: StandingStep): { mark: string; text: string } {
+  if (step.tone === "neutral") {
+    return { mark: "rgba(226,232,240,0.5)", text: "rgba(255,255,255,0.42)" };
+  }
+  // 1 cell is the faintest rung of its side, 4 the fiercest.
+  const depth = [0.42, 0.58, 0.76, 1][Math.max(0, (step.cells ?? 1) - 1)];
+  return step.tone === "hostile"
+    ? { mark: `rgba(239,68,68,${depth})`, text: `rgba(252,165,165,${0.35 + depth * 0.55})` }
+    : { mark: `rgba(16,185,129,${depth})`, text: `rgba(110,231,183,${0.35 + depth * 0.55})` };
+}
+
+/** The cell pattern that earns a step, drawn small under its name. */
+function StepMarks({ cells, color }: { cells: number; color: string }) {
+  return (
+    <span className="mt-1.5 flex justify-center gap-[2px]" aria-hidden>
+      {Array.from({ length: cells }, (_, i) => (
+        <span
+          key={i}
+          className="h-2 w-1"
+          style={{ transform: "skewX(-12deg)", background: color, boxShadow: `0 0 6px ${color}` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 /**
- * One standing column.
+ * One rung of the spectrum: its name at the head, and every faction that holds
+ * it stacked underneath.
  *
- * The three read as a balance: antagonism on the left, regard on the right,
- * and whatever has not tipped either way held in the middle. A faction's side
- * is the whole point of the layout, so it is decided by the same
- * `standingVerdict` tone that colours the card — the column and the word on
- * the card can never disagree.
+ * Only occupied rungs are drawn. Across is the scarce axis — an empty column
+ * would take room from the cards to say nothing — so the scale is carried by
+ * the order and the colour of the headings rather than by placeholders.
  */
-function StandingColumn({
-  title,
-  accent,
+function SpectrumColumn({
+  step,
   standings,
   editable,
   onChange,
 }: {
-  title: string;
-  accent: string;
+  step: StandingStep;
   standings: FactionStanding[];
   editable: boolean;
   onChange: (slug: string, fields: { red?: number; green?: number; hidden?: boolean }) => void;
 }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3 px-1">
-        <span
-          className="text-[9px] tracking-[0.3em] uppercase whitespace-nowrap"
-          style={{ ...cinzel, color: accent }}
-        >
-          {title}
-        </span>
-        <span
-          className="h-px flex-1"
-          style={{ background: `linear-gradient(to right, ${accent}40, transparent)` }}
-        />
-      </div>
+  const tone = stepTone(step);
 
-      {standings.length === 0 ? (
-        <p className="px-1 text-[11px] italic text-white/40">None.</p>
-      ) : (
-        // Two cards to a row, so a column reads as a dealt hand and the cards
-        // keep their playing-card size instead of stretching to the column.
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-          {standings.map((standing) => (
-            <FactionStandingCard
-              key={standing.slug}
-              standing={standing}
-              editable={editable}
-              onChange={onChange}
-            />
-          ))}
-        </div>
-      )}
+  return (
+    <div className="flex min-w-[9rem] max-w-[12rem] flex-1 shrink-0 flex-col">
+      <header className="px-1 text-center">
+        <span
+          className="block whitespace-nowrap text-[11px] tracking-[0.22em] uppercase"
+          style={{ ...cinzel, color: tone.text }}
+        >
+          {step.label}
+        </span>
+        {step.cells !== null ? (
+          <StepMarks cells={step.cells} color={tone.mark} />
+        ) : (
+          <span
+            className="mx-auto mt-1.5 block h-2 w-2 rotate-45 border"
+            style={{ borderColor: tone.mark }}
+            aria-hidden
+          />
+        )}
+        <span
+          className="mt-2 block h-px w-full"
+          style={{ background: `linear-gradient(to right, transparent, ${tone.mark}, transparent)` }}
+        />
+      </header>
+
+      {/* The overhanging sigil eats most of the space between two stacked
+          cards, so the gap is small on purpose. */}
+      <div className="mt-1 flex flex-col gap-2">
+        {standings.map((standing) => (
+          <FactionStandingCard
+            key={standing.slug}
+            standing={standing}
+            editable={editable}
+            onChange={onChange}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -217,24 +254,26 @@ export default function CampaignTrackers({
     }),
   ];
 
-  // Which side a faction sits on. Strongest first within each column, so the
-  // extremes sit at the top of the page where they are read first.
-  const grouped = {
-    hostile: [] as FactionStanding[],
-    neutral: [] as FactionStanding[],
-    friendly: [] as FactionStanding[],
-  };
-  // Hidden factions are dropped from the columns and listed below instead —
+  // Which rung a faction sits on. The verdict word is the key, so the row a
+  // card lands in and the word printed on it can never disagree.
+  const byStep = new Map<string, FactionStanding[]>(
+    STANDING_SPECTRUM.map((step) => [step.label, []]),
+  );
+  // Hidden factions are dropped from the scale and listed below instead —
   // they are only ever in `standings` at all for someone who can unhide them.
   const withheld: FactionStanding[] = [];
   for (const s of standings) {
     if (s.hidden) withheld.push(s);
-    else grouped[standingVerdict(s.red, s.green).tone].push(s);
+    else byStep.get(standingVerdict(s.red, s.green).label)?.push(s);
+  }
+  for (const rung of byStep.values()) {
+    rung.sort(
+      (a, b) =>
+        standingCounterweight(a.red, a.green) - standingCounterweight(b.red, b.green) ||
+        a.name.localeCompare(b.name),
+    );
   }
   withheld.sort((a, b) => a.name.localeCompare(b.name));
-  grouped.hostile.sort((a, b) => b.red - a.red || a.name.localeCompare(b.name));
-  grouped.friendly.sort((a, b) => b.green - a.green || a.name.localeCompare(b.name));
-  grouped.neutral.sort((a, b) => b.red + b.green - (a.red + a.green) || a.name.localeCompare(b.name));
 
   const activeVipIndex = tab.startsWith(VIP_TAB_PREFIX)
     ? vips.findIndex((v) => v.slug === tab.slice(VIP_TAB_PREFIX.length))
@@ -370,7 +409,10 @@ export default function CampaignTrackers({
   /* -------------------------------------------------------------- render */
 
   return (
-    <main className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-8 pb-24">
+    // Wider than the rest of the app on purpose: the standing scale is a row of
+    // columns and every rung it cannot fit becomes a scrollbar. The panels that
+    // were drawn for the old measure keep it, below.
+    <main className="relative z-10 mx-auto w-full max-w-[84rem] px-5 sm:px-8 pb-24">
       {/* ── Hero ── */}
       <section className="ct-reveal pt-12 sm:pt-16 pb-10 sm:pb-12 text-center">
         <span className="text-[9px] tracking-[0.5em] uppercase text-white/45" style={cinzel}>
@@ -415,7 +457,7 @@ export default function CampaignTrackers({
         style={{ animationDelay: "60ms" }}
       >
         {activeVip ? (
-          <>
+          <div className="mx-auto max-w-6xl">
             <p className="mb-6 text-[11px] tracking-[0.08em] text-white/50">
               Integrity, and the record of who has seen through them.
               {canEditTrackers && " Click a cell to toggle it."}
@@ -447,7 +489,7 @@ export default function CampaignTrackers({
                 onDelete={deleteEntry}
               />
             </div>
-          </>
+          </div>
         ) : (
           <>
             <p className="mb-6 text-[11px] tracking-[0.08em] text-white/50">
@@ -455,28 +497,46 @@ export default function CampaignTrackers({
               {canEditTrackers && " Click a cell to set it."}
             </p>
 
-            <div className="grid gap-8 md:gap-4 lg:gap-6 md:grid-cols-3 items-start">
-              <StandingColumn
-                title="Antagonism"
-                accent="#fca5a5"
-                standings={grouped.hostile}
-                editable={canEditTrackers}
-                onChange={patchStanding}
+            {/* The scale, read across: antagonism at the left, regard at the
+                right, one column per rung anybody holds. The columns are
+                separate — the gradient rule above is what carries the reading
+                from one end to the other. */}
+            <div className="mb-4 flex items-center gap-3">
+              <span className="text-[9px] tracking-[0.3em] uppercase text-red-300/70" style={cinzel}>
+                Antagonism
+              </span>
+              <span
+                className="h-px flex-1"
+                style={{
+                  background:
+                    "linear-gradient(to right, rgba(239,68,68,0.5), rgba(255,255,255,0.1)," +
+                    "rgba(16,185,129,0.5))",
+                }}
               />
-              <StandingColumn
-                title="Unaligned"
-                accent="rgba(255,255,255,0.35)"
-                standings={grouped.neutral}
-                editable={canEditTrackers}
-                onChange={patchStanding}
-              />
-              <StandingColumn
-                title="Regard"
-                accent="#6ee7b7"
-                standings={grouped.friendly}
-                editable={canEditTrackers}
-                onChange={patchStanding}
-              />
+              <span
+                className="text-[9px] tracking-[0.3em] uppercase text-emerald-300/70"
+                style={cinzel}
+              >
+                Regard
+              </span>
+            </div>
+
+            {/* pr-2 is room for the withhold control, which sits half off the top
+                  right corner of a card — without it the last column's button
+                  hangs 8px past the content edge and the band scrolls by that
+                  much, for no visible reason. */}
+              <div className="ct-band flex gap-3 overflow-x-auto pb-2 pr-2 sm:gap-4">
+              {STANDING_SPECTRUM.filter((step) => (byStep.get(step.label)?.length ?? 0) > 0).map(
+                (step) => (
+                  <SpectrumColumn
+                    key={step.label}
+                    step={step}
+                    standings={byStep.get(step.label) ?? []}
+                    editable={canEditTrackers}
+                    onChange={patchStanding}
+                  />
+                ),
+              )}
             </div>
 
             {canEditTrackers && withheld.length > 0 && (

@@ -143,22 +143,24 @@ export default function FactionStandingCard({ standing, editable, onChange }: Pr
 
         <FactionSigil standing={standing} />
 
+        {/* Withhold. Sits half off the corner, the way a card is plucked out of
+            a hand by its edge, and only a superadmin is ever offered it. */}
         {editable && (
-          /* Tucked into the top corner, over the transparent edge of the art,
-             and shown only while the card is under the pointer — the foot of
-             the card belongs to the bar. */
           <button
             type="button"
             onClick={() => onChange(standing.slug, { hidden: true })}
-            className="absolute right-1 top-1 z-[6] rounded bg-slate-950/75 px-1.5 py-0.5 text-[7.5px] tracking-[0.18em] uppercase text-white/50 opacity-0 backdrop-blur-sm transition-opacity duration-300 hover:text-white/95 focus-visible:opacity-100 group-hover:opacity-100"
-            style={cinzel}
-            title="Hide this faction from players"
+            className="absolute -right-2 -top-2 z-[7] grid h-5 w-5 place-items-center rounded-full border border-white/15 bg-slate-950/90 text-[10px] leading-none text-white/45 shadow-[0_2px_8px_rgba(2,6,23,0.8)] transition-colors hover:border-red-400/60 hover:bg-red-950/70 hover:text-red-200 focus-visible:border-red-400/60 focus-visible:text-red-200"
+            title="Withhold this faction — moves it to the list below, out of the players' view"
+            aria-label={`Withhold ${standing.name}`}
           >
-            Hide
+            ×
           </button>
         )}
 
-        <div className="relative z-[3] flex h-full flex-col items-center px-3 pb-3 pt-[68%] text-center">
+        <div
+          className="relative z-[3] flex h-full flex-col items-center px-3 pb-3 pt-[68%] text-center"
+          style={{ containerType: "inline-size" }}
+        >
           <h3
             className="line-clamp-3 text-[11px] leading-[1.35] tracking-[0.09em] uppercase text-white/75 transition-colors duration-500 group-hover:text-white"
             style={cinzel}
@@ -173,7 +175,7 @@ export default function FactionStandingCard({ standing, editable, onChange }: Pr
               style={{ background: `linear-gradient(to right, transparent, ${accent}aa)` }}
             />
             <span
-              className="block text-[15px] leading-none tracking-[0.1em] uppercase transition-colors duration-500"
+              className="block text-[clamp(15px,11cqw,19px)] leading-none tracking-[0.1em] uppercase transition-colors duration-500"
               style={{
                 ...cinzel,
                 color: verdictColor,

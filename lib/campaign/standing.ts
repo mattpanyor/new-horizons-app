@@ -40,6 +40,56 @@ export function standingVerdict(red: number, green: number): StandingVerdict {
     : { label: GREEN_LABELS[g - 1], tone: "friendly" };
 }
 
+/** One rung of the ladder. `cells` is null for the two middle steps, which are
+ * not a count at all — a tie can be struck at any strength, and Unknown is the
+ * absence of cells rather than a number of them. */
+export interface StandingStep {
+  label: string;
+  tone: StandingTone;
+  cells: number | null;
+}
+
+/**
+ * The ladder as a spectrum, hostile end first.
+ *
+ * The tracker groups factions by the word they earn and lays the words out as
+ * a scale, so it needs every step in order — including the ones nobody
+ * occupies, which are what make the scale readable: an empty "Threat" rung
+ * says something the absence of a row would not.
+ *
+ * Divided sits above Unknown because a tie is a standing that has been earned
+ * twice over, and Unknown is no standing at all — the quiet end of the middle
+ * is the one nearer regard.
+ */
+export const STANDING_SPECTRUM: readonly StandingStep[] = [
+  ...RED_LABELS.map((label, i): StandingStep => ({
+    label,
+    tone: "hostile",
+    cells: i + 1,
+  })).reverse(),
+  { label: TIE_LABEL, tone: "neutral", cells: null },
+  { label: NEUTRAL_LABEL, tone: "neutral", cells: null },
+  ...GREEN_LABELS.map((label, i): StandingStep => ({
+    label,
+    tone: "friendly",
+    cells: i + 1,
+  })),
+];
+
+/**
+ * How strongly the other side pulls, for ordering within one step.
+ *
+ * A faction rated 2 green with no red is more purely Aligned than one rated
+ * 2 green against a red, so the counterweight sorts ascending. Ties have no
+ * "other side", so they sort by how hard both sides are pulling.
+ */
+export function standingCounterweight(red: number, green: number): number {
+  const verdict = standingVerdict(red, green);
+  if (verdict.tone === "hostile") return clampCells(green);
+  if (verdict.tone === "friendly") return clampCells(red);
+  return -(clampCells(red) + clampCells(green));
+}
+
 /** Coerces anything into a valid cell count. Used by the display, not by writes. */
 export function clampCells(n: number): number {
   if (!Number.isFinite(n)) return 0;
