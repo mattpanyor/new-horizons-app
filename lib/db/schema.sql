@@ -301,6 +301,20 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
 -- table to any logged-in player, as does the MCP investigation_search_entities
 -- tool — so exclusion at sync time is the only thing keeping GM-only names out
 -- of players' hands. Do not add a private row expecting a reader to filter it.
+-- entry is the GM's description, stored as the raw HTML Kanka returns, NOT the
+-- entry_parsed variant. Parsed bakes in absolute app.kanka.io links; raw keeps
+-- Kanka's own [character:123] / [location:456] markup intact so this app can
+-- resolve those against entity_id and point them wherever it likes. Note that
+-- those bracket ids are entity_ids, while the relation payloads elsewhere in
+-- the API use type-local ids — the two id spaces are easy to confuse.
+--
+-- Being raw HTML from an external system, it is NOT safe to render directly.
+-- Nothing renders it today. Whatever eventually does must parse and sanitise
+-- rather than dangerouslySetInnerHTML it.
+--
+-- Every column here is Kanka-owned and blindly overwritten on each sync. This
+-- table cannot hold locally-authored data: anything this app owns about an
+-- entity belongs in its own table keyed on entity_id.
 CREATE TABLE IF NOT EXISTS kanka_entities (
   id         SERIAL PRIMARY KEY,
   entity_id  INTEGER NOT NULL UNIQUE,
@@ -308,6 +322,7 @@ CREATE TABLE IF NOT EXISTS kanka_entities (
   type       VARCHAR(50) NOT NULL,
   image_url  TEXT,
   title      VARCHAR(255),
+  entry      TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

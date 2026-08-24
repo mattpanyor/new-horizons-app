@@ -10,11 +10,13 @@ export interface KankaEntityRow {
   type: string;
   imageUrl: string | null;
   title: string | null;
+  /** Kanka's description, raw HTML. See the note on rendering below. */
+  entry: string | null;
 }
 
 export async function getAllKankaEntities(): Promise<KankaEntityRow[]> {
   const rows = await sql`
-    SELECT id, entity_id, name, type, image_url, title
+    SELECT id, entity_id, name, type, image_url, title, entry
     FROM kanka_entities
     ORDER BY name
   `;
@@ -26,12 +28,13 @@ export async function getAllKankaEntities(): Promise<KankaEntityRow[]> {
     type: row.type as string,
     imageUrl: (row.image_url as string) ?? null,
     title: (row.title as string) ?? null,
+    entry: (row.entry as string) ?? null,
   }));
 }
 
 export async function getKankaEntityByEntityId(entityId: number): Promise<KankaEntityRow | null> {
   const rows = await sql`
-    SELECT id, entity_id, name, type, image_url, title
+    SELECT id, entity_id, name, type, image_url, title, entry
     FROM kanka_entities
     WHERE entity_id = ${entityId}
   `;
@@ -46,6 +49,7 @@ export async function getKankaEntityByEntityId(entityId: number): Promise<KankaE
     type: row.type as string,
     imageUrl: (row.image_url as string) ?? null,
     title: (row.title as string) ?? null,
+    entry: (row.entry as string) ?? null,
   };
 }
 
@@ -65,21 +69,31 @@ export async function getKankaUrlMap(): Promise<Map<string, string>> {
   return map;
 }
 
+// Every column here is Kanka-owned and blindly overwritten on each sync: the
+// upsert assigns from EXCLUDED unconditionally, it does not diff. A column left
+// out of the DO UPDATE list would be written once on insert and then silently
+// go stale forever, so anything added to the INSERT must be added to both.
+//
+// The corollary is that this table cannot hold locally-authored data. Anything
+// this app owns about an entity belongs in its own table keyed on entity_id.
 export async function upsertKankaEntity(fields: {
   entityId: number;
   name: string;
   type: string;
   imageUrl: string | null;
   title: string | null;
+  entry: string | null;
 }): Promise<void> {
   await sql`
-    INSERT INTO kanka_entities (entity_id, name, type, image_url, title, updated_at)
-    VALUES (${fields.entityId}, ${fields.name}, ${fields.type}, ${fields.imageUrl}, ${fields.title}, NOW())
+    INSERT INTO kanka_entities (entity_id, name, type, image_url, title, entry, updated_at)
+    VALUES (${fields.entityId}, ${fields.name}, ${fields.type}, ${fields.imageUrl}, ${fields.title},
+            ${fields.entry}, NOW())
     ON CONFLICT (entity_id) DO UPDATE SET
       name = EXCLUDED.name,
       type = EXCLUDED.type,
       image_url = EXCLUDED.image_url,
       title = EXCLUDED.title,
+      entry = EXCLUDED.entry,
       updated_at = NOW()
   `;
 }

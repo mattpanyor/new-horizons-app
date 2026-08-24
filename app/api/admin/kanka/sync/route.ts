@@ -88,6 +88,7 @@ export async function POST() {
               image_full?: string | null;
               image_thumb?: string | null;
               title?: string | null;
+              entry?: string | null;
               is_private?: boolean;
             }>;
 
@@ -110,6 +111,7 @@ export async function POST() {
                   type: typeLabels[entityType],
                   imageUrl: e.image_full ?? e.image_thumb ?? null,
                   title: e.title ?? null,
+                  entry: e.entry ?? null,
                 });
                 log(`  ✓ ${e.name}`);
                 typeCount++;
