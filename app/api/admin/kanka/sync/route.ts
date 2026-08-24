@@ -40,10 +40,14 @@ export async function POST() {
         "Content-Type": "application/json",
       };
 
-      const entityTypes = ["characters", "locations", "organisations", "families"] as const;
+      // ORDER MATTERS. Each type is resolved against the local-id maps built by
+      // the types before it: characters reference locations, organisations and
+      // families reference characters. Reordering silently drops references —
+      // the map lookup just misses and the reference is counted as dropped.
+      const entityTypes = ["locations", "characters", "organisations", "families"] as const;
       const typeLabels: Record<string, string> = {
-        characters: "character",
         locations: "location",
+        characters: "character",
         organisations: "organisation",
         families: "family",
       };
@@ -53,10 +57,32 @@ export async function POST() {
       // member list names the former. Everything this app stores keys on
       // entity_id, so the local id is resolved here and never persisted.
       //
-      // The map is filled as characters stream past, which is why the types that
-      // reference characters are fetched after them. Reordering entityTypes so a
-      // referencing type comes first would silently drop every reference.
+      // The maps are filled as each type streams past; see the note on
+      // entityTypes for why the fetch order is load-bearing.
       const characterEntityId = new Map<number, number>();
+      const locationEntityId = new Map<number, number>();
+
+      // A character's immediate location. Kanka types this as an array and we
+      // keep it as one, though no character in this campaign has more than a
+      // single entry. Ancestry is deliberately not followed: the full path
+      // needs a related=1 request per location, and the immediate seat is
+      // what the app actually shows.
+      function buildLocations(
+        kind: (typeof entityTypes)[number],
+        raw: unknown,
+      ): number[] | null {
+        if (kind !== "characters") return null;
+        const out: number[] = [];
+        for (const localId of (raw ?? []) as number[]) {
+          const entityId = locationEntityId.get(localId);
+          if (entityId === undefined) {
+            totalDropped++;
+            continue;
+          }
+          out.push(entityId);
+        }
+        return out;
+      }
 
       function buildMembers(
         kind: (typeof entityTypes)[number],
@@ -95,9 +121,9 @@ export async function POST() {
 
       let totalSynced = 0;
       let totalSkipped = 0;
-      // Members naming a character we did not store — private, or absent from a
+      // References naming an entity we did not store — private, or absent from a
       // failed page. Counted rather than silently swallowed: a sudden jump means
-      // the character fetch is broken, not that the GM emptied an organisation.
+      // an earlier fetch is broken, not that the GM emptied an organisation.
       let totalDropped = 0;
       let totalErrors = 0;
 
@@ -141,6 +167,7 @@ export async function POST() {
               entry?: string | null;
               is_private?: boolean;
               members?: unknown;
+              locations?: unknown;
             }>;
 
             for (const e of entities) {
@@ -155,9 +182,8 @@ export async function POST() {
                 continue;
               }
 
-              if (entityType === "characters") {
-                characterEntityId.set(e.id, e.entity_id);
-              }
+              if (entityType === "characters") characterEntityId.set(e.id, e.entity_id);
+              if (entityType === "locations") locationEntityId.set(e.id, e.entity_id);
 
               try {
                 await upsertKankaEntity({
@@ -168,6 +194,7 @@ export async function POST() {
                   title: e.title ?? null,
                   entry: e.entry ?? null,
                   members: buildMembers(entityType, e.members),
+                  locations: buildLocations(entityType, e.locations),
                 });
                 log(`  ✓ ${e.name}`);
                 typeCount++;
@@ -194,7 +221,7 @@ export async function POST() {
       log("────────────────────");
       log(
         `Sync complete: ${totalSynced} entities synced, ` +
-          `${totalSkipped} private skipped, ${totalDropped} member refs dropped, ` +
+          `${totalSkipped} private skipped, ${totalDropped} refs dropped, ` +
           `${totalErrors} errors`,
       );
 

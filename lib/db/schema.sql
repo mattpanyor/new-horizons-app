@@ -333,6 +333,18 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
 -- became editable in the app — per-row updated_by, history — it would want to
 -- be its own table.
 --
+-- locations holds a character's immediate seat as entity_ids. Characters only;
+-- null for every other kind. An array because Kanka models it as one, though no
+-- character in this campaign has more than a single entry.
+--
+-- Only the immediate location is stored, never the ancestry. Kanka omits the
+-- hierarchy from list payloads entirely — parents/children need a related=1
+-- request per location, which is 98 extra requests against a 30/min limit for
+-- a path the app does not show.
+--
+-- Organisations and families also carry locations in Kanka. They are not synced
+-- because nothing needs them yet; both are one field away if that changes.
+--
 -- Every column here is Kanka-owned and blindly overwritten on each sync. This
 -- table cannot hold locally-authored data: anything this app owns about an
 -- entity belongs in its own table keyed on entity_id.
@@ -345,6 +357,7 @@ CREATE TABLE IF NOT EXISTS kanka_entities (
   title      VARCHAR(255),
   entry      TEXT,
   members    JSONB,
+  locations  INTEGER[],
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS kanka_entities_members_idx

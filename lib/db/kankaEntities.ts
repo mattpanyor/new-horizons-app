@@ -18,6 +18,12 @@ export interface KankaEntityRow {
    * title and only organisations carry one.
    */
   members: KankaMember[] | null;
+  /**
+   * Immediate location(s) as entity_ids. Populated for characters only; null
+   * elsewhere. An array because Kanka models it as one, though in practice a
+   * character has at most one.
+   */
+  locations: number[] | null;
 }
 
 export interface KankaMember {
@@ -27,7 +33,7 @@ export interface KankaMember {
 
 export async function getAllKankaEntities(): Promise<KankaEntityRow[]> {
   const rows = await sql`
-    SELECT id, entity_id, name, type, image_url, title, entry, members
+    SELECT id, entity_id, name, type, image_url, title, entry, members, locations
     FROM kanka_entities
     ORDER BY name
   `;
@@ -41,12 +47,13 @@ export async function getAllKankaEntities(): Promise<KankaEntityRow[]> {
     title: (row.title as string) ?? null,
     entry: (row.entry as string) ?? null,
     members: (row.members as KankaMember[]) ?? null,
+    locations: (row.locations as number[]) ?? null,
   }));
 }
 
 export async function getKankaEntityByEntityId(entityId: number): Promise<KankaEntityRow | null> {
   const rows = await sql`
-    SELECT id, entity_id, name, type, image_url, title, entry, members
+    SELECT id, entity_id, name, type, image_url, title, entry, members, locations
     FROM kanka_entities
     WHERE entity_id = ${entityId}
   `;
@@ -63,6 +70,7 @@ export async function getKankaEntityByEntityId(entityId: number): Promise<KankaE
     title: (row.title as string) ?? null,
     entry: (row.entry as string) ?? null,
     members: (row.members as KankaMember[]) ?? null,
+    locations: (row.locations as number[]) ?? null,
   };
 }
 
@@ -97,12 +105,15 @@ export async function upsertKankaEntity(fields: {
   title: string | null;
   entry: string | null;
   members: KankaMember[] | null;
+  locations: number[] | null;
 }): Promise<void> {
   await sql`
-    INSERT INTO kanka_entities (entity_id, name, type, image_url, title, entry, members, updated_at)
+    INSERT INTO kanka_entities
+      (entity_id, name, type, image_url, title, entry, members, locations, updated_at)
     VALUES (${fields.entityId}, ${fields.name}, ${fields.type}, ${fields.imageUrl}, ${fields.title},
             ${fields.entry},
-            ${fields.members === null ? null : JSON.stringify(fields.members)}::jsonb, NOW())
+            ${fields.members === null ? null : JSON.stringify(fields.members)}::jsonb,
+            ${fields.locations}::int[], NOW())
     ON CONFLICT (entity_id) DO UPDATE SET
       name = EXCLUDED.name,
       type = EXCLUDED.type,
@@ -110,6 +121,7 @@ export async function upsertKankaEntity(fields: {
       title = EXCLUDED.title,
       entry = EXCLUDED.entry,
       members = EXCLUDED.members,
+      locations = EXCLUDED.locations,
       updated_at = NOW()
   `;
 }
