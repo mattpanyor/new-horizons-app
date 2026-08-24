@@ -191,13 +191,12 @@ export default function FactionStandingCard({ standing, editable, onChange }: Pr
   return (
     // The slot reserves the overhang, so the sigil of a card in the second row
     // never lands on the card above it.
-    <div className="relative pt-[31%]">
+    <div className="fc-slot relative pt-[31%]" style={{ "--fc-halo": `${accent}99` } as CSSProperties}>
       <article
         ref={cardRef}
         onPointerMove={track}
         onPointerLeave={release}
-        className="fc-card group relative aspect-[5/7] hover:z-10"
-        style={{ "--fc-halo": `${accent}99` } as CSSProperties}
+        className="fc-card group relative aspect-[5/7]"
       >
         {/* The face — everything that has to stay inside the card's frame.
             Clipped to the deco silhouette rather than a rounded rectangle; the
