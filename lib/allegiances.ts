@@ -50,6 +50,16 @@ export const ALLEGIANCES = {
     color: "#FFD700",
     logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/inquisitorium_logo.png",
   },
+  cathedral: {
+    name: "Cathedral of Solis Invictus",
+    color: "#E8DCC0",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/cathedral_logo.png",
+  },
+  society: {
+    name: "Grand Society of Imperial Grandeur and Excellence",
+    color: "#C7CDD6",
+    logo: "https://mjeinpe7brjt91p8.public.blob.vercel-storage.com/factions/society_logo.png",
+  },
   sanctum_arcanum: {
     name: "Sanctum Arcanum",
     color: "#7C3AED",
