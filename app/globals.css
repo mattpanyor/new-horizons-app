@@ -527,13 +527,21 @@ body {
   --fc-rx: 0deg;
   --fc-ry: 0deg;
   --fc-lift: 0px;
-  --fc-scale: 1;
   /* The deco silhouette: an eighth of a corner taken off each way. Stated in
      percentages so it lands on the same eight sides as the SVG frame drawn
      over it, whatever width the column gives the card. */
   --fc-cut: polygon(7% 0, 93% 0, 100% 5%, 100% 95%, 93% 100%, 7% 100%, 0 95%, 0 5%);
+  /* Deliberately no scale, in either state.
+     The card is a composited layer — the tilt is rewritten on every pointer
+     move, so the transform never settles and the compositor keeps reusing one
+     texture rasterised at the layout size. Sampling that texture at any ratio
+     other than 1:1 resamples it, and the card carries hairline SVG strokes and
+     a crest that show it immediately. Both directions were tried and both were
+     visibly soft: scaling up 1.04 on hover, then laying the card out 4% larger
+     and holding it at 0.9615 at rest. The size the card is laid out at is the
+     only size it is ever drawn at; the lift and the halo carry the hover. */
   transform: perspective(900px) rotateX(var(--fc-rx)) rotateY(var(--fc-ry))
-    translateY(var(--fc-lift)) scale(var(--fc-scale));
+    translateY(var(--fc-lift));
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -564,8 +572,7 @@ body {
    faction's own colour, so a lit card names its house rather than its mood. */
 .fc-card:hover,
 .fc-card:focus-within {
-  --fc-lift: -12px;
-  --fc-scale: 1.04;
+  --fc-lift: -14px;
 }
 
 /* Gloss pooling under the cursor. Above the card's content (z-3) so the light
