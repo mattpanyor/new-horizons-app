@@ -291,8 +291,10 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
 -- Kanka's own relation payloads, which reference the local id, and the sync
 -- resolves those in memory while it holds the full fetch.
 --
--- type is the entity KIND ('character', 'location', 'organisation'), not Kanka's
--- own user-defined type field (NPC, Cult, Nation), which the sync discards.
+-- type is the entity KIND ('character', 'location', 'organisation', 'family'),
+-- not Kanka's own user-defined type field (NPC, Cult, Nation), which the sync
+-- discards. Deliberately left unconstrained: syncing a new Kanka entity type
+-- should be one line in the sync route, not a schema change.
 --
 -- Entities marked private in Kanka are GM-only and are NEVER stored. The read
 -- paths have no access-level gate — /api/investigation/mentions serves the whole

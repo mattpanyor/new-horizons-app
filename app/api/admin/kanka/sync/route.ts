@@ -40,11 +40,12 @@ export async function POST() {
         "Content-Type": "application/json",
       };
 
-      const entityTypes = ["characters", "locations", "organisations"] as const;
+      const entityTypes = ["characters", "locations", "organisations", "families"] as const;
       const typeLabels: Record<string, string> = {
         characters: "character",
         locations: "location",
         organisations: "organisation",
+        families: "family",
       };
 
       let totalSynced = 0;
