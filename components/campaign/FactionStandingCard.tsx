@@ -41,7 +41,7 @@ function FactionSigil({ standing }: { standing: FactionStanding }) {
             alt=""
             className="w-full h-full object-contain transition-all duration-500 group-hover:brightness-115"
             style={{
-              filter: `drop-shadow(0 10px 16px rgba(2,6,23,0.75)) drop-shadow(0 0 22px ${standing.color}55)`,
+              filter: `drop-shadow(0 10px 16px rgba(2,6,23,0.75)) drop-shadow(0 0 12px ${standing.color}4d)`,
             }}
           />
         ) : (
