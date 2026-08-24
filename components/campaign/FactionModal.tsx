@@ -19,6 +19,67 @@ const CUT =
   "polygon(28px 0, 100% 0, 100% calc(100% - 28px), calc(100% - 28px) 100%, 0 100%, 0 28px)";
 
 /**
+ * The dossier itself: the archive's account of a faction.
+ *
+ * Set in Cinzel rather than the body face. These are short passages — a
+ * sentence or three — where the display serif reads as the archive's own hand
+ * and not as a wall of text, and it is the same voice the rest of the panel
+ * speaks in.
+ *
+ * The opening letter is dropped and struck in the faction's colour, the one
+ * place the crest's hue reaches the prose. Skipped when the passage opens with
+ * a bullet or a numeral, where a raised capital would just look like a mistake.
+ *
+ * Kanka's rich text arrives flattened (see kankaEntryToText), which leaves real
+ * newlines: blank lines separate paragraphs and single ones hold list items
+ * together. Both are honoured here — a plain <p> would collapse them into one
+ * run-on line, which is what this replaced.
+ */
+function Dossier({ text, accent }: { text: string; accent: string }) {
+  const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return null;
+
+  const [first, ...rest] = paragraphs;
+  const dropCap = /^\p{L}/u.test(first) ? first.slice(0, 1) : null;
+
+  return (
+    <div className="relative">
+      {/* A hairline down the left edge, fading out: the margin rule of a page
+          in a ledger. Decorative only. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -left-3 top-1 bottom-1 w-px"
+        style={{ background: `linear-gradient(to bottom, ${accent}55, transparent)` }}
+      />
+
+      <div style={cinzel} className="space-y-3">
+        <p className="whitespace-pre-line text-[14px] leading-7 tracking-[0.015em] text-white/80">
+          {dropCap && (
+            <span
+              className="float-left mr-[6px] mt-[6px] text-[42px] font-semibold leading-[0.72]"
+              style={{ color: accent, textShadow: `0 0 24px ${accent}55` }}
+              aria-hidden
+            >
+              {dropCap}
+            </span>
+          )}
+          {dropCap ? first.slice(1) : first}
+        </p>
+
+        {rest.map((para, i) => (
+          <p
+            key={i}
+            className="whitespace-pre-line text-[14px] leading-7 tracking-[0.015em] text-white/80"
+          >
+            {para}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * What the dossier looks like when there isn't one.
  *
  * Written as the archive would put it rather than as an error, but still red:
@@ -270,7 +331,7 @@ export default function FactionModal({
 
                 <div className="flex-1">
                   {description?.trim() ? (
-                    <p className="text-[12px] leading-relaxed text-white/70">{description}</p>
+                    <Dossier text={description} accent={accent} />
                   ) : (
                     <NoDossier />
                   )}
