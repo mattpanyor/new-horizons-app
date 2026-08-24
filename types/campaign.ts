@@ -1,3 +1,5 @@
+import type { FactionCategory } from "@/lib/allegiances";
+
 /** Campaign tracker types — see lib/campaign/service.ts for the rules. */
 
 /**
@@ -12,6 +14,8 @@ export interface FactionStanding {
   name: string;
   color: string;
   logoUrl: string | null;
+  /** Which section of the board it is dealt into. See lib/allegiances.ts. */
+  category: FactionCategory;
   red: number;
   green: number;
   /** Superadmin-only. Hidden factions are dropped from the page for everyone else. */
