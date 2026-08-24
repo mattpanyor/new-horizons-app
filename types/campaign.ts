@@ -16,6 +16,11 @@ export interface FactionStanding {
   logoUrl: string | null;
   /** Which section of the board it is dealt into. See lib/allegiances.ts. */
   category: FactionCategory;
+  /**
+   * The faction's Kanka description, matched by display name. Null when Kanka
+   * has no record under that name or the GM has not written one.
+   */
+  description: string | null;
   red: number;
   green: number;
   /** Superadmin-only. Hidden factions are dropped from the page for everyone else. */

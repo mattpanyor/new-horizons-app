@@ -164,8 +164,9 @@ function DecoRule({ accent }: { accent: string }) {
 interface Props {
   standing: FactionStanding;
   /**
-   * The faction's description, shown in its modal. Nothing supplies one yet —
-   * the modal prints what it is waiting for when this is null.
+   * The faction's description, shown in its modal. Comes from the Kanka mirror,
+   * matched by display name in lib/campaign/service.ts; null when Kanka has no
+   * record under that name or the GM has not written one.
    */
   description?: string | null;
   /** Superadmins set the cells and hide factions; everyone else reads. */

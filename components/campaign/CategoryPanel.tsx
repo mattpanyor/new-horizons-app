@@ -197,6 +197,7 @@ export default function CategoryPanel({
                 <div key={standing.slug} className="w-40 shrink-0">
                   <FactionStandingCard
                     standing={standing}
+                    description={standing.description}
                     editable={editable}
                     onChange={onChange}
                   />

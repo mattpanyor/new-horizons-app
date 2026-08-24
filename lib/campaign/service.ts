@@ -10,7 +10,7 @@
 
 import type { User } from "@/lib/db/users";
 import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
-import { getKankaEntityByEntityId } from "@/lib/db/kankaEntities";
+import { getKankaDescriptionMap, getKankaEntityByEntityId } from "@/lib/db/kankaEntities";
 import { parseClueText } from "@/lib/investigation/clueText";
 import { kankaEntityUrl } from "@/lib/kanka";
 import type {
@@ -127,6 +127,30 @@ export function can(actor: User, action: CampaignAction): boolean {
 /* ----------------------------------------------------------- standings */
 
 /**
+ * A faction's description, matched by display name against the Kanka mirror.
+ *
+ * The noble houses are Kanka *families*, recorded under the bare surname —
+ * "House Ashford" here is the family "Ashford" there — so a leading "House "
+ * is stripped and retried. Everything else is a 1:1 name match. The exact name
+ * always wins, so an organisation literally named "House Ashford" would take
+ * precedence over the family if the GM ever made one.
+ *
+ * Names that match nothing (Inquisitorium, Hessian, the two unknown aliens have
+ * no Kanka record at all) simply have no description. That is not an error: the
+ * standing board is authored in lib/allegiances.ts and does not require Kanka
+ * to know about a faction.
+ */
+function findDescription(name: string, descriptions: Map<string, string>): string | null {
+  const exact = descriptions.get(name.toLowerCase());
+  if (exact) return exact;
+
+  const withoutHouse = name.replace(/^house\s+/i, "");
+  if (withoutHouse !== name) return descriptions.get(withoutHouse.toLowerCase()) ?? null;
+
+  return null;
+}
+
+/**
  * Every faction, with its standing merged in.
  *
  * The allegiance list drives the result, not the standings table: a faction
@@ -138,6 +162,10 @@ export function can(actor: User, action: CampaignAction): boolean {
  * module the map, the clue board and the investigation tools read. The
  * `allegiances` table holds nothing but the slug now: it is the anchor the
  * foreign keys point at, not a second copy of who the factions are.
+ *
+ * The description is the one field Kanka owns, matched by display name. It is
+ * additive only: a faction with no Kanka record keeps everything else and just
+ * has no description, which is why the lookup can never fail the read.
  */
 export async function listStandingsAs(
   actor: User,
@@ -145,7 +173,7 @@ export async function listStandingsAs(
 ): Promise<ServiceResult<FactionStanding[]>> {
   if (!can(actor, "standing:read")) return fail("Forbidden", 403);
 
-  const stored = await getStandings();
+  const [stored, descriptions] = await Promise.all([getStandings(), getKankaDescriptionMap()]);
   const canSeeHidden = can(actor, "standing:update") && !constraints.excludeHidden;
 
   const standings = Object.entries(ALLEGIANCES).map(([slug, a]): FactionStanding => {
@@ -156,6 +184,7 @@ export async function listStandingsAs(
       color: a.color,
       logoUrl: a.logo,
       category: a.category,
+      description: findDescription(a.name, descriptions),
       red: row?.red ?? 0,
       green: row?.green ?? 0,
       hidden: row?.hidden ?? false,
@@ -198,7 +227,7 @@ export async function updateStandingAs(
     return fail("hidden must be a boolean", 400);
   }
 
-  const stored = await getStandings();
+  const [stored, descriptions] = await Promise.all([getStandings(), getKankaDescriptionMap()]);
   const current = stored.get(slug);
 
   const row = await setStanding(
@@ -217,6 +246,7 @@ export async function updateStandingAs(
     color: allegiance.color,
     logoUrl: allegiance.logo,
     category: allegiance.category,
+    description: findDescription(allegiance.name, descriptions),
     red: row.red,
     green: row.green,
     hidden: row.hidden,

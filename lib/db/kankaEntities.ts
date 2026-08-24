@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { kankaEntityUrl } from "@/lib/kanka";
+import { kankaEntityUrl, kankaEntryToText } from "@/lib/kanka";
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -86,6 +86,36 @@ export async function getKankaUrlMap(): Promise<Map<string, string>> {
       (row.name as string).toLowerCase(),
       kankaEntityUrl(row.entity_id as number),
     );
+  }
+  return map;
+}
+
+/**
+ * Lowercase name → description as PLAIN TEXT, for the entities that have one.
+ *
+ * Sibling of getKankaUrlMap: the same name-matched lookup, for callers whose
+ * own identity list is authored in this repo rather than in Kanka. Entities
+ * with an empty entry are left out so a caller can treat "absent" as "no
+ * description" without also testing for blank.
+ *
+ * The stored entry is Kanka's raw HTML and is flattened here rather than at the
+ * call site, so no caller can accidentally put markup into a React text node
+ * and print <p> tags on screen. Reading the whole table rather than only the
+ * rows with an entry is deliberate: inline references name other entities, and
+ * resolving them needs every id, not just the described ones.
+ */
+export async function getKankaDescriptionMap(): Promise<Map<string, string>> {
+  const rows = await sql`SELECT entity_id, name, entry FROM kanka_entities`;
+
+  const names = new Map<number, string>();
+  for (const row of rows) names.set(row.entity_id as number, row.name as string);
+
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    const entry = (row.entry as string | null) ?? "";
+    if (!entry.trim()) continue;
+    const text = kankaEntryToText(entry, names);
+    if (text) map.set((row.name as string).toLowerCase(), text);
   }
   return map;
 }
