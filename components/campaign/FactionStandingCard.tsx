@@ -65,6 +65,16 @@ function FactionSigil({ standing }: { standing: FactionStanding }) {
 }
 
 /**
+ * Rounded to two places, and that is load-bearing rather than tidiness.
+ *
+ * Math.sin and Math.cos are allowed to differ in the last bit between engines,
+ * and the server renders this in Node while the browser re-renders it in
+ * Chrome. An unrounded coordinate serialises as 49.72492184598873 on one side
+ * and ...74 on the other, which React reports as a hydration mismatch.
+ */
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
  * The card's ornament: chamfered frame, corner brackets, a sunburst behind the
  * crest and a stepped base under the standing bar.
  *
@@ -86,10 +96,10 @@ function DecoFrame({ accent }: { accent: string }) {
     const rad = (deg * Math.PI) / 180;
     const [cx, cy] = [50, 34];
     return {
-      x1: cx + Math.sin(rad) * 11,
-      y1: cy - Math.cos(rad) * 11,
-      x2: cx + Math.sin(rad) * 34,
-      y2: cy - Math.cos(rad) * 34,
+      x1: r2(cx + Math.sin(rad) * 11),
+      y1: r2(cy - Math.cos(rad) * 11),
+      x2: r2(cx + Math.sin(rad) * 34),
+      y2: r2(cy - Math.cos(rad) * 34),
     };
   });
 
