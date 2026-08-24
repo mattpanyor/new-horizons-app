@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, type CSSProperties, type PointerEvent } from "react";
+import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { FactionStanding } from "@/types/campaign";
 import { standingVerdict, type StandingTone } from "@/lib/campaign/standing";
 import StandingBar from "./StandingBar";
+import FactionModal from "./FactionModal";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -15,7 +16,7 @@ const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 // Only the verdict word is coloured by the standing. Everything else on the
 // card — frame, edge light, halo, wash — is the faction's own colour, so a
 // column of cards reads as a row of houses rather than a block of red or green.
-const VERDICT_COLOR = {
+export const VERDICT_COLOR = {
   hostile: "#fca5a5",
   friendly: "#6ee7b7",
   neutral: "rgba(255,255,255,0.5)",
@@ -85,9 +86,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  * the face is clipped to, which is stated in percentages for the same reason.
  */
 function DecoFrame({ accent }: { accent: string }) {
-  // The eight-sided silhouette: 7 units of corner taken off a 100x140 field.
-  const outline = "M7 0 H93 L100 7 V133 L93 140 H7 L0 133 V7 Z";
-  const inner = "M11 4 H89 L96 11 V129 L89 136 H11 L4 129 V11 Z";
+  // The eight-sided silhouette: 7 units of corner taken off a 100x175 field.
+  const outline = "M7 0 H93 L100 7 V168 L93 175 H7 L0 168 V7 Z";
+  const inner = "M11 4 H89 L96 11 V164 L89 171 H11 L4 164 V11 Z";
 
   // Rays climbing out from behind the crest. Struck from an inner radius so the
   // sigil is never sitting on their common point.
@@ -106,7 +107,7 @@ function DecoFrame({ accent }: { accent: string }) {
   return (
     <svg
       className="pointer-events-none absolute inset-0 z-[2] h-full w-full"
-      viewBox="0 0 100 140"
+      viewBox="0 0 100 175"
       fill="none"
       aria-hidden
     >
@@ -122,7 +123,7 @@ function DecoFrame({ accent }: { accent: string }) {
             x1={10 + i * 6.7}
             y1="62"
             x2={10 + i * 6.7}
-            y2="116"
+            y2="150"
             strokeWidth="0.5"
             opacity="0.05"
           />
@@ -135,8 +136,8 @@ function DecoFrame({ accent }: { accent: string }) {
         <g strokeWidth="1.1" opacity="0.85" strokeLinecap="square">
           <path d="M11 4 H23 M4 11 V23" />
           <path d="M89 4 H77 M96 11 V23" />
-          <path d="M11 136 H23 M4 129 V117" />
-          <path d="M89 136 H77 M96 129 V117" />
+          <path d="M11 171 H23 M4 164 V152" />
+          <path d="M89 171 H77 M96 164 V152" />
         </g>
       </g>
     </svg>
@@ -162,12 +163,23 @@ function DecoRule({ accent }: { accent: string }) {
 
 interface Props {
   standing: FactionStanding;
+  /**
+   * The faction's description, shown in its modal. Nothing supplies one yet —
+   * the modal prints what it is waiting for when this is null.
+   */
+  description?: string | null;
   /** Superadmins set the cells and hide factions; everyone else reads. */
   editable: boolean;
   onChange: (slug: string, fields: { red?: number; green?: number; hidden?: boolean }) => void;
 }
 
-export default function FactionStandingCard({ standing, editable, onChange }: Props) {
+export default function FactionStandingCard({
+  standing,
+  description = null,
+  editable,
+  onChange,
+}: Props) {
+  const [open, setOpen] = useState(false);
   const verdict = standingVerdict(standing.red, standing.green);
   const verdictColor = VERDICT_COLOR[verdict.tone];
   const accent = standing.color;
@@ -206,7 +218,18 @@ export default function FactionStandingCard({ standing, editable, onChange }: Pr
         ref={cardRef}
         onPointerMove={track}
         onPointerLeave={release}
-        className="fc-card group relative aspect-[5/7]"
+        onClick={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setOpen(true);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-haspopup="dialog"
+        aria-label={`${standing.name} — open dossier`}
+        className="fc-card group relative aspect-[4/7]"
       >
         {/* The face — everything that has to stay inside the card's frame.
             Clipped to the deco silhouette rather than a rounded rectangle; the
@@ -242,7 +265,10 @@ export default function FactionStandingCard({ standing, editable, onChange }: Pr
         {editable && (
           <button
             type="button"
-            onClick={() => onChange(standing.slug, { hidden: true })}
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange(standing.slug, { hidden: true });
+            }}
             className="absolute -right-2 -top-2 z-[7] grid h-[18px] w-[18px] rotate-45 place-items-center border border-white/20 bg-slate-950/90 text-white/45 transition-colors hover:border-red-400/70 hover:bg-red-950/80 hover:text-red-200 focus-visible:border-red-400/70 focus-visible:text-red-200"
             title="Withhold this faction — moves it to the list below, out of the players' view"
             aria-label={`Withhold ${standing.name}`}
@@ -278,13 +304,21 @@ export default function FactionStandingCard({ standing, editable, onChange }: Pr
             <DecoRule accent={accent} />
           </div>
 
-          <StandingBar
-            red={standing.red}
-            green={standing.green}
-            onChange={editable ? (fields) => onChange(standing.slug, fields) : undefined}
-          />
+          {/* Read-only here, for everyone. The cells are set in the modal, so a
+              click anywhere on the card means the same thing: open it. */}
+          <StandingBar red={standing.red} green={standing.green} />
         </div>
       </article>
+
+      {open && (
+        <FactionModal
+          standing={standing}
+          description={description}
+          editable={editable}
+          onChange={onChange}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }

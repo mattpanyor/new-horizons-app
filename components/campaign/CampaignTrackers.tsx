@@ -52,6 +52,31 @@ function SectionHeader({
   );
 }
 
+/**
+ * True on the screens too narrow to hold three sections side by side.
+ *
+ * A hook rather than a media query in globals.css because the sizing it drives
+ * is inline: the component and its layout then travel together, and neither can
+ * arrive without the other. Starts false so the server and the first client
+ * render agree, and corrects on mount.
+ *
+ * 639px is one below Tailwind's `sm`, the same line the rest of the page turns
+ * its layout on.
+ */
+function useStackedSections(): boolean {
+  const [stacked, setStacked] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 639px)");
+    const sync = () => setStacked(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return stacked;
+}
+
 const VIP_TAB_PREFIX = "vip:";
 
 /** Dimmer than the card palette: these lines sit under the columns, not in them. */
@@ -140,6 +165,7 @@ export default function CampaignTrackers({
   const [tab, setTab] = useState<TrackerTab>("standings");
   // Null is the resting board: three covers, no section claiming the row.
   const [openCategory, setOpenCategory] = useState<FactionCategory | null>(null);
+  const stacked = useStackedSections();
 
   // Standings and integrity are GM state; the anonymity log is open to all.
   // Mirrors `can()` in lib/campaign/service.ts, which is what actually enforces
@@ -179,15 +205,20 @@ export default function CampaignTrackers({
   // fullest section needs when it is open. Opening one must not shove the page
   // around, and three covers of different heights would not read as thirds.
   //
-  // A card slot is 10rem wide by 5:7, plus the overhang its crest stands in —
-  // 17.5rem all told — and six of them fit an open panel at the desktop
+  // A card slot is 10rem wide by 4:7, plus the overhang its crest stands in —
+  // 21rem all told — and six of them fit an open panel at the desktop
   // measure. Narrower than that they wrap, and the card area scrolls rather
   // than the row growing.
+  //
+  // The 15rem on top is the section's own chrome, the room a card needs to be
+  // picked up — hovering lifts it and pushes its crest higher still, and the
+  // panel clips what it cannot hold — and the standing the covers want: a
+  // shut section is mostly its cover, and a cramped one reads as a header.
   const fullest = Math.max(
     1,
     ...FACTION_CATEGORIES.map((cat) => shown.filter((s) => s.category === cat.key).length),
   );
-  const bandHeight = `calc(${Math.ceil(fullest / 6)} * 17.5rem + 4.5rem)`;
+  const bandHeight = `calc(${Math.ceil(fullest / 6)} * 21rem + 15rem)`;
 
   // Clicking off the board puts the sections back to thirds — the same gesture
   // as clicking the open one shut. Escape does it from the keyboard. The
@@ -198,10 +229,19 @@ export default function CampaignTrackers({
     if (openCategory === null) return;
 
     const dismiss = (event: PointerEvent) => {
-      if (!bandRef.current?.contains(event.target as Node)) setOpenCategory(null);
+      const target = event.target as HTMLElement | null;
+      // A faction's modal is portalled to the body, so by the DOM it is outside
+      // the board — but clicking inside it is not "clicking off the board", and
+      // the section it was opened from has to still be there behind it.
+      if (target?.closest('[role="dialog"]')) return;
+      if (!bandRef.current?.contains(target)) setOpenCategory(null);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenCategory(null);
+      if (event.key !== "Escape") return;
+      // A faction's modal is on top and takes the key first; the section it was
+      // opened from stays open behind it, and a second Escape closes that.
+      if (document.querySelector('[role="dialog"]')) return;
+      setOpenCategory(null);
     };
 
     document.addEventListener("pointerdown", dismiss);
@@ -346,19 +386,17 @@ export default function CampaignTrackers({
     // were drawn for the old measure keep it, below.
     <main className="relative z-10 mx-auto w-full max-w-[84rem] px-5 sm:px-8 pb-24">
       {/* ── Hero ── */}
-      <section className="ct-reveal pt-12 sm:pt-16 pb-10 sm:pb-12 text-center">
-        <span className="text-[9px] tracking-[0.5em] uppercase text-white/45" style={cinzel}>
-          Campaign Register
-        </span>
-
+      <section className="ct-reveal pt-10 sm:pt-14 pb-7 sm:pb-9 text-center">
+        {/* The eyebrow carries the page on its own now — a size up from the one
+            it was, and the heading proper, since nothing sits above it. */}
         <h1
-          className="mt-4 text-3xl sm:text-5xl tracking-[0.28em] sm:tracking-[0.34em] uppercase text-white/90"
-          style={{ ...cinzel, textShadow: "0 0 40px rgba(129,140,248,0.28)" }}
+          className="text-[13px] sm:text-[15px] tracking-[0.5em] uppercase text-white/65"
+          style={{ ...cinzel, textShadow: "0 0 28px rgba(129,140,248,0.25)" }}
         >
-          Trackers
+          Campaign Data
         </h1>
 
-        <div className="mt-5 flex items-center justify-center gap-3" aria-hidden>
+        <div className="mt-4 flex items-center justify-center gap-3" aria-hidden>
           <span className="ct-rule h-px w-16 sm:w-28 bg-gradient-to-r from-transparent to-indigo-400/40 origin-right" />
           <span className="w-1.5 h-1.5 rotate-45 border border-indigo-400/50" />
           <span className="ct-rule h-px w-16 sm:w-28 bg-gradient-to-l from-transparent to-indigo-400/40 origin-left" />
@@ -431,7 +469,9 @@ export default function CampaignTrackers({
             <div
               ref={bandRef}
               className="flex items-stretch gap-3 sm:gap-4"
-              style={{ height: bandHeight }}
+              // Stacked, each band takes the height it needs and the page grows;
+              // in a row they share one height, sized for the fullest section.
+              style={stacked ? { flexDirection: "column" } : { height: bandHeight }}
             >
               {FACTION_CATEGORIES.map((cat) => (
                 <CategoryPanel
@@ -441,6 +481,7 @@ export default function CampaignTrackers({
                   standings={shown.filter((s) => s.category === cat.key)}
                   open={openCategory === cat.key}
                   collapsed={openCategory !== null && openCategory !== cat.key}
+                  stacked={stacked}
                   onToggle={() => setOpenCategory(openCategory === cat.key ? null : cat.key)}
                   editable={canEditTrackers}
                   onChange={patchStanding}

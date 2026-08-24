@@ -545,10 +545,11 @@ body {
   --fc-rx: 0deg;
   --fc-ry: 0deg;
   --fc-lift: 0px;
-  /* The deco silhouette: an eighth of a corner taken off each way. Stated in
-     percentages so it lands on the same eight sides as the SVG frame drawn
-     over it, whatever width the column gives the card. */
-  --fc-cut: polygon(7% 0, 93% 0, 100% 5%, 100% 95%, 93% 100%, 7% 100%, 0 95%, 0 5%);
+  /* The deco silhouette: the same 11px bite out of every corner. Stated in
+     percentages so it lands on the same eight sides as the SVG frame drawn over
+     it, whatever width the column gives the card — 7% of the width and 4% of
+     the height are equal at the card's 4:7. */
+  --fc-cut: polygon(7% 0, 93% 0, 100% 4%, 100% 96%, 93% 100%, 7% 100%, 0 96%, 0 4%);
   /* Deliberately no scale, in either state.
      The card is a composited layer — the tilt is rewritten on every pointer
      move, so the transform never settles and the compositor keeps reusing one
