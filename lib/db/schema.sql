@@ -276,6 +276,39 @@ CREATE TABLE IF NOT EXISTS mcp_tokens (
 CREATE INDEX IF NOT EXISTS mcp_tokens_hash_idx ON mcp_tokens (token_hash);
 CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
 
+-- kanka_entities — a local read-only mirror of the campaign's Kanka entities,
+-- pulled by the sync at /admin/kanka (dev only). Nothing here is authored in
+-- this app; the GM's Kanka campaign is the source of truth and every column is
+-- overwritten on the next sync.
+--
+-- entity_id is Kanka's cross-type global id and the real key — `id` is only a
+-- surrogate. Everything that references an entity does so by entity_id:
+-- messages.kanka_entity_id, vips.kanka_entity_id, and the @[Name](kanka:ID)
+-- mention markup stored in clue and story text.
+--
+-- Note that Kanka ALSO has a type-local id (a character is both character 1043764
+-- and entity 4006898). We deliberately do not store it. Its only use is resolving
+-- Kanka's own relation payloads, which reference the local id, and the sync
+-- resolves those in memory while it holds the full fetch.
+--
+-- type is the entity KIND ('character', 'location', 'organisation'), not Kanka's
+-- own user-defined type field (NPC, Cult, Nation), which the sync discards.
+--
+-- Entities marked private in Kanka are GM-only and are NEVER stored. The read
+-- paths have no access-level gate — /api/investigation/mentions serves the whole
+-- table to any logged-in player, as does the MCP investigation_search_entities
+-- tool — so exclusion at sync time is the only thing keeping GM-only names out
+-- of players' hands. Do not add a private row expecting a reader to filter it.
+CREATE TABLE IF NOT EXISTS kanka_entities (
+  id         SERIAL PRIMARY KEY,
+  entity_id  INTEGER NOT NULL UNIQUE,
+  name       VARCHAR(255) NOT NULL,
+  type       VARCHAR(50) NOT NULL,
+  image_url  TEXT,
+  title      VARCHAR(255),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- app_settings — small, admin-controlled values that change how the app looks
 -- or behaves without a deploy.
 --

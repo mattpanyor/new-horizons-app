@@ -48,6 +48,7 @@ export async function POST() {
       };
 
       let totalSynced = 0;
+      let totalSkipped = 0;
       let totalErrors = 0;
 
       log("Starting Kanka sync...");
@@ -59,6 +60,7 @@ export async function POST() {
         let page = 1;
         let hasMore = true;
         let typeCount = 0;
+        let typeSkipped = 0;
 
         while (hasMore) {
           try {
@@ -85,9 +87,21 @@ export async function POST() {
               image_full?: string | null;
               image_thumb?: string | null;
               title?: string | null;
+              is_private?: boolean;
             }>;
 
             for (const e of entities) {
+              // Private in Kanka means GM-only. The app has no equivalent gate on
+              // the read paths — the mention picker and investigation_search_entities
+              // serve every synced row to any logged-in player — so a private entity
+              // is never stored in the first place.
+              if (e.is_private) {
+                log(`  · ${e.name} (private, skipped)`);
+                typeSkipped++;
+                totalSkipped++;
+                continue;
+              }
+
               try {
                 await upsertKankaEntity({
                   entityId: e.entity_id,
@@ -114,12 +128,15 @@ export async function POST() {
           }
         }
 
-        log(`  ${typeCount} ${entityType} synced`);
+        log(`  ${typeCount} ${entityType} synced${typeSkipped > 0 ? `, ${typeSkipped} private skipped` : ""}`);
         log("");
       }
 
       log("────────────────────");
-      log(`Sync complete: ${totalSynced} entities synced, ${totalErrors} errors`);
+      log(
+        `Sync complete: ${totalSynced} entities synced, ` +
+          `${totalSkipped} private skipped, ${totalErrors} errors`,
+      );
 
       controller.close();
     },
