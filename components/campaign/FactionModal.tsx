@@ -392,12 +392,21 @@ export default function FactionModal({
                   />
                 </div>
 
-                <div className="flex-1">
-                  {description?.trim() ? (
-                    <Dossier text={description} accent={accent} />
-                  ) : (
-                    <NoDossier />
-                  )}
+                <div className="flex flex-1 flex-col">
+                  {/* The account grows to fill the panel only when it is the
+                      whole of it. NoDossier is h-full by design — alone it
+                      should hold the space rather than leave a gap under the
+                      rule — but with a roll beneath it that same rule pushed
+                      the names out of the panel. Given a roll, this wrapper
+                      stays auto-height, so h-full resolves to nothing and
+                      NoDossier falls back to its own min-height. */}
+                  <div className={standing.members.length > 0 ? undefined : "flex-1"}>
+                    {description?.trim() ? (
+                      <Dossier text={description} accent={accent} />
+                    ) : (
+                      <NoDossier />
+                    )}
+                  </div>
                   {standing.members.length > 0 && (
                     <MemberRoll members={standing.members} accent={accent} />
                   )}
