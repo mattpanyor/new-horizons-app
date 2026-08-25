@@ -90,32 +90,71 @@ export async function getKankaUrlMap(): Promise<Map<string, string>> {
   return map;
 }
 
+/** A group member, resolved from the ids stored in `members`. */
+export interface KankaMemberDetail {
+  entityId: number;
+  name: string;
+  /** Membership role. Organisations only — families have no equivalent. */
+  role: string | null;
+  /** The member's own title, independent of any group. Often a noble rank. */
+  title: string | null;
+}
+
+/** What the archive holds about one entity, for callers that match by name. */
+export interface KankaDossier {
+  description: string | null;
+  members: KankaMemberDetail[];
+}
+
 /**
- * Lowercase name → description as PLAIN TEXT, for the entities that have one.
+ * Lowercase name → the entity's description and membership.
  *
  * Sibling of getKankaUrlMap: the same name-matched lookup, for callers whose
- * own identity list is authored in this repo rather than in Kanka. Entities
- * with an empty entry are left out so a caller can treat "absent" as "no
- * description" without also testing for blank.
+ * own identity list is authored in this repo rather than in Kanka.
  *
- * The stored entry is Kanka's raw HTML and is flattened here rather than at the
+ * The description is Kanka's raw HTML flattened to text here rather than at the
  * call site, so no caller can accidentally put markup into a React text node
- * and print <p> tags on screen. Reading the whole table rather than only the
- * rows with an entry is deliberate: inline references name other entities, and
- * resolving them needs every id, not just the described ones.
+ * and print <p> tags on screen. Inline references resolve against the whole
+ * table, which is why every row is read and not only the described ones.
+ *
+ * Member order is Kanka's own and deliberately not sorted: the GM lists them by
+ * standing, so an organisation reads Legate, Tribune, Captain rather than
+ * alphabetically. Members naming a row that is not here — a private character
+ * the sync skipped — are dropped, since there is nothing to name or link to.
  */
-export async function getKankaDescriptionMap(): Promise<Map<string, string>> {
-  const rows = await sql`SELECT entity_id, name, entry FROM kanka_entities`;
+export async function getKankaDossierMap(): Promise<Map<string, KankaDossier>> {
+  const rows = await sql`SELECT entity_id, name, title, entry, members FROM kanka_entities`;
+
+  const byId = new Map<number, { name: string; title: string | null }>();
+  for (const row of rows) {
+    byId.set(row.entity_id as number, {
+      name: row.name as string,
+      title: (row.title as string) ?? null,
+    });
+  }
 
   const names = new Map<number, string>();
-  for (const row of rows) names.set(row.entity_id as number, row.name as string);
+  for (const [id, v] of byId) names.set(id, v.name);
 
-  const map = new Map<string, string>();
+  const map = new Map<string, KankaDossier>();
   for (const row of rows) {
     const entry = (row.entry as string | null) ?? "";
-    if (!entry.trim()) continue;
-    const text = kankaEntryToText(entry, names);
-    if (text) map.set((row.name as string).toLowerCase(), text);
+    const description = entry.trim() ? kankaEntryToText(entry, names) || null : null;
+
+    const members: KankaMemberDetail[] = [];
+    for (const m of ((row.members as KankaMember[] | null) ?? [])) {
+      const found = byId.get(m.entityId);
+      if (!found) continue;
+      members.push({
+        entityId: m.entityId,
+        name: found.name,
+        role: m.role ?? null,
+        title: found.title,
+      });
+    }
+
+    if (description === null && members.length === 0) continue;
+    map.set((row.name as string).toLowerCase(), { description, members });
   }
   return map;
 }

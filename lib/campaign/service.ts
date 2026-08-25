@@ -10,12 +10,18 @@
 
 import type { User } from "@/lib/db/users";
 import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
-import { getKankaDescriptionMap, getKankaEntityByEntityId } from "@/lib/db/kankaEntities";
+import {
+  getKankaDossierMap,
+  getKankaEntityByEntityId,
+  type KankaDossier,
+  type KankaMemberDetail,
+} from "@/lib/db/kankaEntities";
 import { parseClueText } from "@/lib/investigation/clueText";
 import { kankaEntityUrl } from "@/lib/kanka";
 import type {
   AnonymityEntry,
   AnonymityKind,
+  FactionMember,
   FactionStanding,
   Vip,
   VipDossier,
@@ -127,7 +133,7 @@ export function can(actor: User, action: CampaignAction): boolean {
 /* ----------------------------------------------------------- standings */
 
 /**
- * A faction's description, matched by display name against the Kanka mirror.
+ * A faction's dossier, matched by display name against the Kanka mirror.
  *
  * The noble houses are Kanka *families*, recorded under the bare surname —
  * "House Ashford" here is the family "Ashford" there — so a leading "House "
@@ -135,19 +141,36 @@ export function can(actor: User, action: CampaignAction): boolean {
  * always wins, so an organisation literally named "House Ashford" would take
  * precedence over the family if the GM ever made one.
  *
- * Names that match nothing (Inquisitorium, Hessian, the two unknown aliens have
- * no Kanka record at all) simply have no description. That is not an error: the
+ * Names that match nothing simply have no dossier. That is not an error: the
  * standing board is authored in lib/allegiances.ts and does not require Kanka
- * to know about a faction.
+ * to know a faction exists.
  */
-function findDescription(name: string, descriptions: Map<string, string>): string | null {
-  const exact = descriptions.get(name.toLowerCase());
+function findDossier(name: string, dossiers: Map<string, KankaDossier>): KankaDossier | null {
+  const exact = dossiers.get(name.toLowerCase());
   if (exact) return exact;
 
   const withoutHouse = name.replace(/^house\s+/i, "");
-  if (withoutHouse !== name) return descriptions.get(withoutHouse.toLowerCase()) ?? null;
+  if (withoutHouse !== name) return dossiers.get(withoutHouse.toLowerCase()) ?? null;
 
   return null;
+}
+
+/**
+ * A member as the dossier lists them.
+ *
+ * Role first, own title second. In an organisation the role is what the
+ * faction calls them ("Pontifex"), which is the relevant fact in that panel; a
+ * family has no roles, so the noble rank stands in. Collapsing to one label
+ * also avoids the common case where the two are the same string — Mirian is
+ * "High Justice" twice over.
+ */
+function toMember(m: KankaMemberDetail): FactionMember {
+  return {
+    entityId: m.entityId,
+    name: m.name,
+    title: m.role ?? m.title,
+    kankaUrl: kankaEntityUrl(m.entityId),
+  };
 }
 
 /**
@@ -173,18 +196,20 @@ export async function listStandingsAs(
 ): Promise<ServiceResult<FactionStanding[]>> {
   if (!can(actor, "standing:read")) return fail("Forbidden", 403);
 
-  const [stored, descriptions] = await Promise.all([getStandings(), getKankaDescriptionMap()]);
+  const [stored, dossiers] = await Promise.all([getStandings(), getKankaDossierMap()]);
   const canSeeHidden = can(actor, "standing:update") && !constraints.excludeHidden;
 
   const standings = Object.entries(ALLEGIANCES).map(([slug, a]): FactionStanding => {
     const row = stored.get(slug);
+    const dossier = findDossier(a.name, dossiers);
     return {
       slug,
       name: a.name,
       color: a.color,
       logoUrl: a.logo,
       category: a.category,
-      description: findDescription(a.name, descriptions),
+      description: dossier?.description ?? null,
+      members: (dossier?.members ?? []).map(toMember),
       red: row?.red ?? 0,
       green: row?.green ?? 0,
       hidden: row?.hidden ?? false,
@@ -227,7 +252,7 @@ export async function updateStandingAs(
     return fail("hidden must be a boolean", 400);
   }
 
-  const [stored, descriptions] = await Promise.all([getStandings(), getKankaDescriptionMap()]);
+  const [stored, dossiers] = await Promise.all([getStandings(), getKankaDossierMap()]);
   const current = stored.get(slug);
 
   const row = await setStanding(
@@ -246,7 +271,8 @@ export async function updateStandingAs(
     color: allegiance.color,
     logoUrl: allegiance.logo,
     category: allegiance.category,
-    description: findDescription(allegiance.name, descriptions),
+    description: findDossier(allegiance.name, dossiers)?.description ?? null,
+    members: (findDossier(allegiance.name, dossiers)?.members ?? []).map(toMember),
     red: row.red,
     green: row.green,
     hidden: row.hidden,

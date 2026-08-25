@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { FactionStanding } from "@/types/campaign";
+import type { FactionMember, FactionStanding } from "@/types/campaign";
 import { standingVerdict } from "@/lib/campaign/standing";
 import { VERDICT_COLOR } from "./FactionStandingCard";
 import StandingBar from "./StandingBar";
@@ -75,6 +75,69 @@ function Dossier({ text, accent }: { text: string; accent: string }) {
           </p>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The faction's roll: who Kanka records as belonging to it.
+ *
+ * Shown whether or not there is a description — a house with no written account
+ * still tells you something by who stands in it. Each name links out to the
+ * entity in Kanka, which is where the detail lives; this panel is an index, not
+ * a copy of the archive.
+ *
+ * The label under a name is the member's role in this faction, or their own
+ * title where the faction gives no role. See toMember in lib/campaign/service.
+ */
+function MemberRoll({ members, accent }: { members: FactionMember[]; accent: string }) {
+  return (
+    <div className="mt-6">
+      <div className="mb-3 flex items-center gap-3">
+        <span
+          className="text-[9px] tracking-[0.3em] uppercase"
+          style={{ ...cinzel, color: `${accent}cc` }}
+        >
+          {members.length === 1 ? "Known Member" : "Known Members"}
+        </span>
+        <span
+          className="h-px flex-1"
+          style={{ background: `linear-gradient(to right, ${accent}55, transparent)` }}
+        />
+      </div>
+
+      <ul className="flex flex-col gap-2">
+        {members.map((m) => (
+          <li key={m.entityId} className="flex items-baseline gap-2.5">
+            <span
+              aria-hidden
+              className="mt-[1px] h-[5px] w-[5px] shrink-0 rotate-45 border"
+              style={{ borderColor: `${accent}aa`, background: `${accent}22` }}
+            />
+            <a
+              href={m.kankaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+            >
+              <span
+                className="text-[13px] tracking-[0.02em] text-white/85 underline decoration-transparent underline-offset-[3px] transition-all group-hover:text-white group-hover:decoration-current"
+                style={cinzel}
+              >
+                {m.name}
+              </span>
+              {m.title && (
+                <span
+                  className="text-[10px] tracking-[0.18em] uppercase text-white/40 transition-colors group-hover:text-white/60"
+                  style={cinzel}
+                >
+                  {m.title}
+                </span>
+              )}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -334,6 +397,9 @@ export default function FactionModal({
                     <Dossier text={description} accent={accent} />
                   ) : (
                     <NoDossier />
+                  )}
+                  {standing.members.length > 0 && (
+                    <MemberRoll members={standing.members} accent={accent} />
                   )}
                 </div>
               </div>

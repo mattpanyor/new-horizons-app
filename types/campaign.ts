@@ -9,6 +9,19 @@ import type { FactionCategory } from "@/lib/allegiances";
  * The displayed label comes from whichever side has more cells; see
  * lib/campaign/standing.ts.
  */
+/** One name on a faction's roll, as the dossier lists it. */
+export interface FactionMember {
+  entityId: number;
+  name: string;
+  /**
+   * What to call them under this faction: their role in it, falling back to
+   * their own title. Organisations give a role ("Pontifex"); families have
+   * none, so a noble rank ("Viscount") stands in. Null when neither exists.
+   */
+  title: string | null;
+  kankaUrl: string;
+}
+
 export interface FactionStanding {
   slug: string;
   name: string;
@@ -21,6 +34,8 @@ export interface FactionStanding {
    * has no record under that name or the GM has not written one.
    */
   description: string | null;
+  /** Who Kanka records as belonging to it. Empty when nobody, or no record. */
+  members: FactionMember[];
   red: number;
   green: number;
   /** Superadmin-only. Hidden factions are dropped from the page for everyone else. */
