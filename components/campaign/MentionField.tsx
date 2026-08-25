@@ -94,6 +94,15 @@ export default function MentionField({
 
     const markup = buildMentionMarkup(entity.name, entity.entityId);
     const next = value.slice(0, mention.atIndex) + markup + " " + value.slice(mention.endIndex);
+
+    // maxLength only constrains typing — this writes the value programmatically
+    // and would sail past it, leaving the server to reject the whole line for
+    // length. Refuse the insert instead: truncating is not an option here,
+    // since a clipped @[Name](kanka:123) is broken markup rather than short
+    // text. The menu stays open, so the field is visibly unchanged and the
+    // picked name is still there to choose once there is room.
+    if (maxLength !== undefined && next.length > maxLength) return;
+
     onChange(next);
     setMention(null);
 

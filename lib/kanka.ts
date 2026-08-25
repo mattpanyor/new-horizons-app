@@ -19,15 +19,57 @@ export function kankaEntityUrl(entityId: number | string): string {
  */
 const KANKA_REF_RE = /\[[a-z_]+:(\d+)\]/gi;
 
+// Kanka's rich-text editor emits typographic entities freely — a straight
+// apostrophe becomes &rsquo; the moment the GM types one. Numerics are decoded
+// generically below; this table covers the named ones that editor produces.
 const HTML_ENTITIES: Record<string, string> = {
   "&nbsp;": " ",
   "&amp;": "&",
   "&lt;": "<",
   "&gt;": ">",
   "&quot;": '"',
-  "&#39;": "'",
   "&apos;": "'",
+  "&rsquo;": "\u2019",
+  "&lsquo;": "\u2018",
+  "&rdquo;": "\u201d",
+  "&ldquo;": "\u201c",
+  "&mdash;": "\u2014",
+  "&ndash;": "\u2013",
+  "&hellip;": "\u2026",
+  "&middot;": "\u00b7",
+  "&bull;": "\u2022",
+  "&deg;": "\u00b0",
+  "&times;": "\u00d7",
+  "&laquo;": "\u00ab",
+  "&raquo;": "\u00bb",
 };
+
+/**
+ * One HTML entity as its character.
+ *
+ * Numeric forms are decoded arithmetically so the table does not have to list
+ * them, and an out-of-range or malformed code point falls back to the literal
+ * text rather than throwing. Anything unrecognised is left as written: a stray
+ * "&foo;" on screen is odd but honest, where silently dropping it would eat a
+ * word the GM did write.
+ */
+function decodeEntity(raw: string): string {
+  const named = HTML_ENTITIES[raw.toLowerCase()];
+  if (named !== undefined) return named;
+
+  const numeric = /^&#(x)?([0-9a-f]+);$/i.exec(raw);
+  if (numeric) {
+    const code = Number.parseInt(numeric[2], numeric[1] ? 16 : 10);
+    if (Number.isFinite(code) && code > 0 && code <= 0x10ffff) {
+      try {
+        return String.fromCodePoint(code);
+      } catch {
+        return raw;
+      }
+    }
+  }
+  return raw;
+}
 
 /**
  * Kanka's `entry` HTML as plain text.
@@ -53,7 +95,7 @@ export function kankaEntryToText(entry: string, names?: Map<number, string>): st
     .replace(/<li[^>]*>/gi, "• ")
     .replace(/<\/(p|div|ul|ol|h[1-6])>/gi, "\n\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&[a-z#0-9]+;/gi, (m) => HTML_ENTITIES[m.toLowerCase()] ?? m)
+    .replace(/&#?[a-z0-9]+;/gi, decodeEntity)
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")

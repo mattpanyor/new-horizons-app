@@ -317,9 +317,10 @@ export default function CampaignTrackers({
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       setError(data?.error ?? "Could not save the description");
-      return;
+      return false;
     }
     setVips((prev) => prev.map((v) => (v.slug === slug ? data.vip : v)));
+    return true;
   }, []);
 
   const setTagline = useCallback(async (slug: string, tagline: string) => {
@@ -332,9 +333,10 @@ export default function CampaignTrackers({
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       setError(data?.error ?? "Could not save the tagline");
-      return;
+      return false;
     }
     setVips((prev) => prev.map((v) => (v.slug === slug ? data.vip : v)));
+    return true;
   }, []);
 
   const addEntry = useCallback(async (vipSlug: string, kind: AnonymityKind, text: string) => {
@@ -347,9 +349,10 @@ export default function CampaignTrackers({
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       setError(data?.error ?? "Could not add that line");
-      return;
+      return false;
     }
     setEntries((prev) => [...prev, data.entry]);
+    return true;
   }, []);
 
   const saveEntry = useCallback(async (id: number, text: string) => {
@@ -362,9 +365,10 @@ export default function CampaignTrackers({
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       setError(data?.error ?? "Could not save that line");
-      return;
+      return false;
     }
     setEntries((prev) => prev.map((e) => (e.id === id ? data.entry : e)));
+    return true;
   }, []);
 
   const deleteEntry = useCallback(async (id: number) => {

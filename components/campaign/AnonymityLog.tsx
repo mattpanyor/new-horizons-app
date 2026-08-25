@@ -68,7 +68,8 @@ function EntryRow({
   entry: AnonymityEntry;
   index: number;
   dot: string;
-  onSave: (id: number, text: string) => Promise<void>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onSave: (id: number, text: string) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -84,8 +85,10 @@ function EntryRow({
     }
     setBusy(true);
     try {
-      await onSave(entry.id, text);
-      setEditing(false);
+      // Stay in the editor when the write is refused. The reason is already on
+      // screen as a banner; dropping out of edit mode would also drop the text
+      // the reason is about, leaving nothing to correct.
+      if (await onSave(entry.id, text)) setEditing(false);
     } finally {
       setBusy(false);
     }
@@ -214,7 +217,8 @@ function Composer({
 }: {
   vipSlug: string;
   kind: AnonymityKind;
-  onAdd: (vipSlug: string, kind: AnonymityKind, text: string) => Promise<void>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onAdd: (vipSlug: string, kind: AnonymityKind, text: string) => Promise<boolean>;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -224,8 +228,10 @@ function Composer({
     if (!trimmed || busy) return;
     setBusy(true);
     try {
-      await onAdd(vipSlug, kind, trimmed);
-      setText("");
+      // Only clear the composer once the line is actually filed. A rejected
+      // write — an over-long line, a mention with a bad id — used to wipe what
+      // the player typed while the explanation appeared at the top of the page.
+      if (await onAdd(vipSlug, kind, trimmed)) setText("");
     } finally {
       setBusy(false);
     }
@@ -281,8 +287,10 @@ function LogTable({
   vipSlug: string;
   kind: AnonymityKind;
   entries: AnonymityEntry[];
-  onAdd: (vipSlug: string, kind: AnonymityKind, text: string) => Promise<void>;
-  onSave: (id: number, text: string) => Promise<void>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onAdd: (vipSlug: string, kind: AnonymityKind, text: string) => Promise<boolean>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onSave: (id: number, text: string) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
 }) {
   const style = KIND_STYLE[kind];
@@ -338,8 +346,10 @@ function LogTable({
 interface Props {
   vipSlug: string;
   entries: AnonymityEntry[];
-  onAdd: (vipSlug: string, kind: AnonymityKind, text: string) => Promise<void>;
-  onSave: (id: number, text: string) => Promise<void>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onAdd: (vipSlug: string, kind: AnonymityKind, text: string) => Promise<boolean>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onSave: (id: number, text: string) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
 }
 

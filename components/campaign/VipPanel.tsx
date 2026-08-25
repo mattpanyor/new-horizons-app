@@ -168,7 +168,8 @@ function BlurbEditor({
 }: {
   blurb: string;
   editable: boolean;
-  onSave: (blurb: string) => Promise<void>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onSave: (blurb: string) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(blurb);
@@ -188,7 +189,9 @@ function BlurbEditor({
       if (busy) return;
       setBusy(true);
       try {
-        await onSave(draft);
+        // Keep the editor open when the write is refused, so the text the
+        // error refers to is still there to fix.
+        if (!(await onSave(draft))) return;
         setEditing(false);
       } finally {
         setBusy(false);
@@ -279,7 +282,8 @@ function Eyebrow({
 }: {
   tagline: string;
   editable: boolean;
-  onSave: (tagline: string) => Promise<void>;
+  /** Resolves true when the write landed. False leaves the draft alone. */
+  onSave: (tagline: string) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(tagline);
@@ -301,7 +305,9 @@ function Eyebrow({
       if (busy) return;
       setBusy(true);
       try {
-        await onSave(draft);
+        // Keep the editor open when the write is refused, so the text the
+        // error refers to is still there to fix.
+        if (!(await onSave(draft))) return;
         setEditing(false);
       } finally {
         setBusy(false);
@@ -359,8 +365,9 @@ interface Props {
   editable: boolean;
   onToggleCell: (index: number, intact: boolean) => void;
   onSetLocked: (locked: boolean) => Promise<void>;
-  onSetBlurb: (blurb: string) => Promise<void>;
-  onSetTagline: (tagline: string) => Promise<void>;
+  /** Resolve true when the write landed; false keeps the editor open. */
+  onSetBlurb: (blurb: string) => Promise<boolean>;
+  onSetTagline: (tagline: string) => Promise<boolean>;
 }
 
 export default function VipPanel({

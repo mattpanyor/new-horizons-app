@@ -174,7 +174,15 @@ export async function POST() {
               // Private in Kanka means GM-only. The app has no equivalent gate on
               // the read paths — the mention picker and investigation_search_entities
               // serve every synced row to any logged-in player — so a private entity
-              // is never stored in the first place.
+              // is never written.
+              //
+              // Note the limit of that: this blocks an entity from ENTERING the
+              // mirror, it does not remove one already there. The sync has no
+              // delete pass, so an entity that was public at one run and private
+              // at the next keeps its stale row and stays readable. That is
+              // survivable only because this campaign turns private off and never
+              // on. If that stops being true, exclusion here is not enough — the
+              // run needs to delete rows it did not see.
               if (e.is_private) {
                 log(`  · ${e.name} (private, skipped)`);
                 typeSkipped++;

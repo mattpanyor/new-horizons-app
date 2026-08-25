@@ -255,15 +255,34 @@ export async function updateStandingAs(
   const [stored, dossiers] = await Promise.all([getStandings(), getKankaDossierMap()]);
   const current = stored.get(slug);
 
-  const row = await setStanding(
-    slug,
-    {
-      red: (input.red as number | undefined) ?? current?.red ?? 0,
-      green: (input.green as number | undefined) ?? current?.green ?? 0,
-      hidden: (input.hidden as boolean | undefined) ?? current?.hidden ?? false,
-    },
-    actor.username,
-  );
+  let row;
+  try {
+    row = await setStanding(
+      slug,
+      {
+        red: (input.red as number | undefined) ?? current?.red ?? 0,
+        green: (input.green as number | undefined) ?? current?.green ?? 0,
+        hidden: (input.hidden as boolean | undefined) ?? current?.hidden ?? false,
+      },
+      actor.username,
+    );
+  } catch (err) {
+    // faction_standings.allegiance_slug has an FK onto `allegiances`, and
+    // nothing in the app writes that table — adding a faction to
+    // lib/allegiances.ts is two steps, the entry and a hand-written row (see
+    // schema.sql). Miss the second and the faction reads fine everywhere but
+    // the first attempt to rate it fails here. Left as a generic 500 that
+    // reads "Could not save that standing", which sends the reader looking at
+    // the standings code rather than at the missing row.
+    if (err instanceof Error && /foreign key|violates/i.test(err.message)) {
+      return fail(
+        `No allegiances row for "${slug}". Adding a faction needs both the entry in ` +
+          `lib/allegiances.ts and a row in the allegiances table.`,
+        409,
+      );
+    }
+    throw err;
+  }
 
   return ok({
     slug,

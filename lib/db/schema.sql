@@ -296,11 +296,17 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
 -- discards. Deliberately left unconstrained: syncing a new Kanka entity type
 -- should be one line in the sync route, not a schema change.
 --
--- Entities marked private in Kanka are GM-only and are NEVER stored. The read
+-- Entities marked private in Kanka are GM-only and are never written. The read
 -- paths have no access-level gate — /api/investigation/mentions serves the whole
 -- table to any logged-in player, as does the MCP investigation_search_entities
 -- tool — so exclusion at sync time is the only thing keeping GM-only names out
 -- of players' hands. Do not add a private row expecting a reader to filter it.
+--
+-- That guarantee covers entry, not removal. The sync never deletes, so an entity
+-- that was public at one run and private at the next keeps its stale row and
+-- stays readable. It holds only because this campaign turns private off and
+-- never on; if that changes, the sync needs a pass that deletes what it did not
+-- see this run.
 -- entry is the GM's description, stored as the raw HTML Kanka returns, NOT the
 -- entry_parsed variant. Parsed bakes in absolute app.kanka.io links; raw keeps
 -- Kanka's own [character:123] / [location:456] markup intact so this app can
