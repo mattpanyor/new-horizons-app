@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactCompiler: true,
 
+  // Lets the dev server accept requests from the LAN address, so the map can be
+  // opened on a phone or tablet at the table while `npm run dev` runs here.
+  allowedDevOrigins: ["192.168.1.10"],
+
   async headers() {
     return [
       {

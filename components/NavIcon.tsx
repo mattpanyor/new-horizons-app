@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-type Position = "top-right" | "bottom-right";
+type Position = "top-right" | "bottom-right" | "bottom-left";
 
 interface NavIconProps {
   href: string;
@@ -14,6 +14,9 @@ interface NavIconProps {
 const POSITION_CLASS: Record<Position, string> = {
   "top-right": "top-20 right-3 sm:right-6 md:right-10",
   "bottom-right": "bottom-6 right-3 sm:right-6 md:right-10",
+  // Clear of IdentityPanel, which is vertically centred on the left and only
+  // renders at lg and above.
+  "bottom-left": "bottom-6 left-3 sm:left-6 md:left-10",
 };
 
 export default function NavIcon({ href, label, position = "top-right", children }: NavIconProps) {

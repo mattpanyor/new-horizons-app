@@ -124,6 +124,34 @@ export default async function SectorsPage() {
           <GalacticMapBackground coreSector={coreSector} outerSectors={outerSectors} />
         </GalacticMap>
       </div>
+      <NavIcon href="/campaign" label="Trackers" position="bottom-left">
+        <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+          {/* Hex cluster backdrop — Libra's integrity cells */}
+          <g strokeWidth="0.5" strokeOpacity="0.2">
+            <path d="M30 62 L36 58 L42 62 L42 70 L36 74 L30 70 Z" />
+            <path d="M42 54 L48 50 L54 54 L54 62 L48 66 L42 62 Z" />
+            <path d="M54 62 L60 58 L66 62 L66 70 L60 74 L54 70 Z" />
+          </g>
+          {/* Balance beam */}
+          <line x1="20" y1="30" x2="76" y2="30" strokeWidth="2" />
+          <circle cx="48" cy="30" r="3.2" strokeWidth="1.6" />
+          {/* Central post down to the fulcrum */}
+          <line x1="48" y1="33" x2="48" y2="60" strokeWidth="1.6" />
+          <path d="M38 74 L48 60 L58 74 Z" strokeWidth="1.4" fill="currentColor" fillOpacity="0.06" />
+          <line x1="34" y1="74" x2="62" y2="74" strokeWidth="1.8" />
+          {/* Left pan — antagonism */}
+          <line x1="22" y1="31" x2="22" y2="44" strokeWidth="0.8" strokeOpacity="0.55" />
+          <path d="M12 44 Q22 56, 32 44 Z" strokeWidth="1.5" fill="currentColor" fillOpacity="0.1" />
+          <line x1="15" y1="40" x2="29" y2="40" strokeWidth="2.2" strokeOpacity="0.75" />
+          {/* Right pan — regard */}
+          <line x1="74" y1="31" x2="74" y2="44" strokeWidth="0.8" strokeOpacity="0.55" />
+          <path d="M64 44 Q74 56, 84 44 Z" strokeWidth="1.5" fill="currentColor" fillOpacity="0.1" />
+          <line x1="67" y1="40" x2="81" y2="40" strokeWidth="2.2" strokeOpacity="0.75" />
+          {/* Crown hex above the beam — the unique asset being weighed */}
+          <path d="M42 14 L48 10 L54 14 L54 22 L48 26 L42 22 Z" strokeWidth="1.3" fill="currentColor" fillOpacity="0.12" />
+          <circle cx="48" cy="18" r="1.6" fill="currentColor" fillOpacity="0.6" stroke="none" />
+        </svg>
+      </NavIcon>
       <NavIcon href="/investigation" label="Investigation" position="bottom-right">
         <svg width="64" height="64" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
           {/* Hex grid backdrop */}

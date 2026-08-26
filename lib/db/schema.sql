@@ -1,3 +1,13 @@
+-- Schema for the New Horizons Neon database.
+--
+-- This file DESCRIBES the live database; it does not migrate it. There is no
+-- migrations directory and no runner — DDL is applied by hand, and this file is
+-- updated in the same change so the two never drift. Applied migrations are not
+-- kept here as comments: `git log -p lib/db/schema.sql` is the history, and it
+-- cannot go stale.
+--
+-- The database this points at is PRODUCTION. See CLAUDE.md before writing to it.
+
 CREATE TABLE IF NOT EXISTS users (
   id         SERIAL PRIMARY KEY,
   username   VARCHAR(50)  UNIQUE NOT NULL,
@@ -79,24 +89,23 @@ CREATE TABLE IF NOT EXISTS game_sessions (
   finished_at       TIMESTAMPTZ
 );
 
--- Migration for existing tables:
--- ALTER TABLE ship_items ADD COLUMN item_type VARCHAR(30);
--- UPDATE ship_items SET item_type = 'general' WHERE category = 'cargo' AND item_type IS NULL;
--- UPDATE ship_items SET item_type = 'live-specimen' WHERE category = 'isolation' AND item_type IS NULL;
--- ALTER TABLE ship_items ALTER COLUMN item_type SET NOT NULL;
--- ALTER TABLE ship_items ADD CONSTRAINT ship_items_item_type_check CHECK (item_type IN (
---   'general', 'ordnance', 'precious', 'contraband', 'mission',
---   'biogenic-seed', 'live-specimen', 'cadaver', 'excised-tissue', 'phytosample'
--- ));
-
 -- ── Map content (sectors, systems, stars, bodies, vortexes, connections, markers) ──
 -- See map-migration.md for the full design rationale.
 
+-- Faction slugs, and nothing else.
+--
+-- This is the anchor the allegiance_slug foreign keys point at — systems,
+-- celestial_bodies, markers, faction_standings — not a description of the
+-- factions. Who a faction is, its name, colour and crest, lives in
+-- lib/allegiances.ts, which the map layers, the clue board, the investigation
+-- tools and the campaign trackers all read.
+--
+-- It carried name/color/logo_url once. Only the trackers ever read them, and
+-- the two copies drifted the first time a crest was replaced in one and not the
+-- other. Adding a faction is two steps: the entry in lib/allegiances.ts, and a
+-- row here so it can be referenced.
 CREATE TABLE IF NOT EXISTS allegiances (
-  slug      VARCHAR(40) PRIMARY KEY,
-  name      VARCHAR(120) NOT NULL,
-  color     VARCHAR(7)   NOT NULL,
-  logo_url  TEXT
+  slug VARCHAR(40) PRIMARY KEY
 );
 
 CREATE TABLE IF NOT EXISTS biomes (
@@ -227,9 +236,7 @@ CREATE INDEX IF NOT EXISTS markers_sector_idx ON markers (sector_id);
 -- and the loader (markersByConnection) are singular, so a second marker on the
 -- same connection would be silently dropped on read. Enforce it at the DB so
 -- writes fail loudly instead. Partial index since free markers have NULL
--- connection_id. Migration for an existing DB (dedupe first if needed):
---   CREATE UNIQUE INDEX markers_connection_uniq ON markers (connection_id)
---     WHERE connection_id IS NOT NULL;
+-- connection_id.
 CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
   ON markers (connection_id) WHERE connection_id IS NOT NULL;
 
@@ -254,9 +261,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS markers_connection_uniq
 --
 -- Revocation is a timestamp rather than a DELETE so a revoked token's
 -- last_used_at survives for auditing.
---
--- Migration for an existing DB:
---   ALTER TABLE mcp_tokens ADD COLUMN IF NOT EXISTS token_encrypted TEXT;
 CREATE TABLE IF NOT EXISTS mcp_tokens (
   id              SERIAL PRIMARY KEY,
   username        VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
@@ -271,6 +275,99 @@ CREATE TABLE IF NOT EXISTS mcp_tokens (
 );
 CREATE INDEX IF NOT EXISTS mcp_tokens_hash_idx ON mcp_tokens (token_hash);
 CREATE INDEX IF NOT EXISTS mcp_tokens_username_idx ON mcp_tokens (username);
+
+-- kanka_entities — a local read-only mirror of the campaign's Kanka entities,
+-- pulled by the sync at /admin/kanka (dev only). Nothing here is authored in
+-- this app; the GM's Kanka campaign is the source of truth and every column is
+-- overwritten on the next sync.
+--
+-- entity_id is Kanka's cross-type global id and the real key — `id` is only a
+-- surrogate. Everything that references an entity does so by entity_id:
+-- messages.kanka_entity_id, vips.kanka_entity_id, and the @[Name](kanka:ID)
+-- mention markup stored in clue and story text.
+--
+-- Note that Kanka ALSO has a type-local id (a character is both character 1043764
+-- and entity 4006898). We deliberately do not store it. Its only use is resolving
+-- Kanka's own relation payloads, which reference the local id, and the sync
+-- resolves those in memory while it holds the full fetch.
+--
+-- type is the entity KIND ('character', 'location', 'organisation', 'family'),
+-- not Kanka's own user-defined type field (NPC, Cult, Nation), which the sync
+-- discards. Deliberately left unconstrained: syncing a new Kanka entity type
+-- should be one line in the sync route, not a schema change.
+--
+-- Entities marked private in Kanka are GM-only and are never written. The read
+-- paths have no access-level gate — /api/investigation/mentions serves the whole
+-- table to any logged-in player, as does the MCP investigation_search_entities
+-- tool — so exclusion at sync time is the only thing keeping GM-only names out
+-- of players' hands. Do not add a private row expecting a reader to filter it.
+--
+-- That guarantee covers entry, not removal. The sync never deletes, so an entity
+-- that was public at one run and private at the next keeps its stale row and
+-- stays readable. It holds only because this campaign turns private off and
+-- never on; if that changes, the sync needs a pass that deletes what it did not
+-- see this run.
+-- entry is the GM's description, stored as the raw HTML Kanka returns, NOT the
+-- entry_parsed variant. Parsed bakes in absolute app.kanka.io links; raw keeps
+-- Kanka's own [character:123] / [location:456] markup intact so this app can
+-- resolve those against entity_id and point them wherever it likes. Note that
+-- those bracket ids are entity_ids, while the relation payloads elsewhere in
+-- the API use type-local ids — the two id spaces are easy to confuse.
+--
+-- Being raw HTML from an external system, it is NOT safe to render directly.
+-- Nothing renders it today. Whatever eventually does must parse and sanitise
+-- rather than dangerouslySetInnerHTML it.
+--
+-- members holds group membership for organisations and families:
+--   [{"entityId": 4006898, "role": "Legate"}, {"entityId": 6135829}]
+-- Null for kinds that cannot have members, so an organisation with nobody in
+-- it ([]) stays distinguishable from a character (null). `role` is Kanka's
+-- free-text title and only organisations have one; families are a bare list.
+--
+-- A column rather than a join table, matching clues.faction_slugs and
+-- mcp_tokens.scopes. The decisive reason is not size (~68 memberships) but
+-- staleness: replacing the whole array each sync means a member removed in
+-- Kanka simply vanishes, where join rows would need reconciling deletes —
+-- exactly the logic that does damage when a fetch half-fails.
+--
+-- Reverse lookup ("what does this character belong to") is a containment query
+-- against the GIN index, not a scan:
+--   SELECT * FROM kanka_entities WHERE members @> '[{"entityId": 4006898}]';
+--
+-- The tradeoff is a polymorphic table: members is meaningless on a character
+-- row. Acceptable while this stays a read-only mirror. If membership ever
+-- became editable in the app — per-row updated_by, history — it would want to
+-- be its own table.
+--
+-- locations holds a character's immediate seat as entity_ids. Characters only;
+-- null for every other kind. An array because Kanka models it as one, though no
+-- character in this campaign has more than a single entry.
+--
+-- Only the immediate location is stored, never the ancestry. Kanka omits the
+-- hierarchy from list payloads entirely — parents/children need a related=1
+-- request per location, which is 98 extra requests against a 30/min limit for
+-- a path the app does not show.
+--
+-- Organisations and families also carry locations in Kanka. They are not synced
+-- because nothing needs them yet; both are one field away if that changes.
+--
+-- Every column here is Kanka-owned and blindly overwritten on each sync. This
+-- table cannot hold locally-authored data: anything this app owns about an
+-- entity belongs in its own table keyed on entity_id.
+CREATE TABLE IF NOT EXISTS kanka_entities (
+  id         SERIAL PRIMARY KEY,
+  entity_id  INTEGER NOT NULL UNIQUE,
+  name       VARCHAR(255) NOT NULL,
+  type       VARCHAR(50) NOT NULL,
+  image_url  TEXT,
+  title      VARCHAR(255),
+  entry      TEXT,
+  members    JSONB,
+  locations  INTEGER[],
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS kanka_entities_members_idx
+  ON kanka_entities USING GIN (members);
 
 -- app_settings — small, admin-controlled values that change how the app looks
 -- or behaves without a deploy.
@@ -290,3 +387,92 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_by VARCHAR(50)
 );
+
+-- ── Campaign trackers (/campaign) ────────────────────────────────────────────
+-- Bespoke state for this campaign: where the party stands with each faction,
+-- and the condition of the VIPs whose deaths would end the campaign.
+
+-- One row per faction the party has a standing with. Every allegiance is shown
+-- on the tracker whether or not it has a row here, so a missing row means
+-- 0/0 ("Unknown") rather than "not tracked" — the row appears on first edit.
+--
+-- red and green are independent counts, not two ends of one score: the party
+-- can be simultaneously resented and useful to a faction, and 1 red / 2 green
+-- is a real state the display must be able to show. The label comes from
+-- whichever side has more cells (see lib/campaign/standing.ts), which is why
+-- neither can be derived from the other.
+--
+-- hidden lets a superadmin drop an irrelevant faction off the page without
+-- deleting its standing — un-hiding restores the cells as they were.
+CREATE TABLE IF NOT EXISTS faction_standings (
+  allegiance_slug VARCHAR(40) PRIMARY KEY REFERENCES allegiances(slug) ON DELETE CASCADE,
+  red             SMALLINT NOT NULL DEFAULT 0 CHECK (red   BETWEEN 0 AND 4),
+  green           SMALLINT NOT NULL DEFAULT 0 CHECK (green BETWEEN 0 AND 4),
+  hidden          BOOLEAN  NOT NULL DEFAULT false,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by      VARCHAR(50)
+);
+
+-- VIPs: campaign-critical NPCs whose survival the campaign depends on. Libra is
+-- the one this page was built for, but nothing here is specific to her — a
+-- replacement or a second subject is a row, not a code change.
+--
+-- cells is a 10-bit mask of the integrity honeycomb: bit i set means cell i is
+-- intact. A mask rather than a count because the cluster is toggled cell by
+-- cell — the GM clicks the one that failed — so which cells are gone is real
+-- information a count cannot carry. Integrity is the popcount; see
+-- lib/campaign/integrity.ts, which owns every operation on the mask.
+--
+-- Ten bits is fixed rather than per-VIP: the cluster's 3-4-3 honeycomb is drawn
+-- for exactly ten cells, and a different count needs a generated layout, not a
+-- column.
+--
+-- min_access_level gates who sees the VIP at all, using the app's usual scale
+-- (0 player, 66 admin, 127 superadmin). A restricted VIP is absent from the
+-- tab strip for everyone below the bar, and its anonymity log is unreachable
+-- for them too — checked in lib/campaign/service.ts, not just hidden in the UI.
+--
+-- kanka_entity_id links the portrait and dossier. Nullable: a VIP with no Kanka
+-- record still tracks, it just renders from `name` alone.
+--
+-- tagline is the second half of the panel's eyebrow, after the constant
+-- "Unique Asset —". It lives here rather than in the component because what a
+-- subject *is* to the campaign differs per subject, while the prefix does not.
+-- Empty is valid: the separator is dropped and the eyebrow reads "Unique Asset".
+CREATE TABLE IF NOT EXISTS vips (
+  slug             VARCHAR(40) PRIMARY KEY,
+  name             VARCHAR(120) NOT NULL,
+  kanka_entity_id  INTEGER,
+  blurb            TEXT NOT NULL DEFAULT '',
+  tagline          VARCHAR(80) NOT NULL DEFAULT 'Continuity Critical',
+  cells            INTEGER NOT NULL DEFAULT 1023 CHECK (cells BETWEEN 0 AND 1023),
+  min_access_level INTEGER NOT NULL DEFAULT 0,
+  sort_order       INTEGER NOT NULL DEFAULT 0,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by       VARCHAR(50)
+);
+
+-- The anonymity log: who knows a VIP is what they are. One log per VIP.
+--   'confirmed' — established in play, someone knows
+--   'suspicion' — a guess about who or what might be aware
+--
+-- Any logged-in player who can see the VIP may add, edit, or delete a line;
+-- created_by records who opened it and updated_by who last touched it, so a
+-- rewritten line still shows both hands.
+--
+-- vip_slug cascades: a VIP's log dies with the VIP. It also carries the read
+-- gate — a line on a locked VIP is unreachable for anyone below that VIP's
+-- min_access_level, enforced in lib/campaign/service.ts rather than by
+-- filtering in the UI, so ids cannot be guessed.
+CREATE TABLE IF NOT EXISTS anonymity_entries (
+  id         SERIAL PRIMARY KEY,
+  vip_slug   VARCHAR(40) NOT NULL REFERENCES vips(slug) ON DELETE CASCADE,
+  kind       TEXT NOT NULL CHECK (kind IN ('confirmed', 'suspicion')),
+  text       TEXT NOT NULL,
+  created_by VARCHAR(50) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by VARCHAR(50),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS anonymity_entries_vip_idx
+  ON anonymity_entries (vip_slug, kind, created_at);

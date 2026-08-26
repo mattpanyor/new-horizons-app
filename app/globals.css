@@ -402,3 +402,292 @@ body {
     transform: none;
   }
 }
+
+/* ── Campaign trackers (/campaign) ─────────────────────────────────────
+   The page is a showcase board rather than a form, so the motion here is
+   ambient: nothing animates in response to input, everything runs slowly and
+   loops, and all of it is switched off under prefers-reduced-motion at the
+   bottom of this block. */
+
+/* Faint hex weave behind the panels. Two 60°-offset line gradients read as a
+   honeycomb at low opacity without costing an image. */
+.ct-weave {
+  background-image:
+    repeating-linear-gradient(60deg, rgba(129, 140, 248, 0.05) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(-60deg, rgba(129, 140, 248, 0.05) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(0deg, rgba(129, 140, 248, 0.035) 0 1px, transparent 1px 34px);
+  background-position: center;
+}
+
+/* A single slow light sweeping the width of a panel. */
+.ct-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Above the panel content (z-2), so the light crosses the glass rather than
+     hiding behind it. */
+  z-index: 4;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgba(165, 180, 252, 0.07) 48%,
+    rgba(224, 231, 255, 0.13) 50%,
+    rgba(165, 180, 252, 0.07) 52%,
+    transparent 65%
+  );
+  transform: translateX(-100%);
+  animation: ct-sweep 9s ease-in-out infinite;
+}
+@keyframes ct-sweep {
+  0%, 55% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Diagnostic scan line drifting down the Libra panel. */
+.ct-scan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 22%;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(129, 140, 248, 0.13),
+    transparent
+  );
+  animation: ct-scan 6.5s linear infinite;
+}
+@keyframes ct-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(560%); }
+}
+
+/* Counter-rotating rings framing Libra's portrait. */
+.ct-ring-cw { animation: ct-spin 34s linear infinite; transform-origin: 50% 50%; }
+.ct-ring-ccw { animation: ct-spin 26s linear infinite reverse; transform-origin: 50% 50%; }
+@keyframes ct-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Failing integrity cells breathe; the surviving ones sit still. */
+.ct-hex-critical { animation: ct-hex-critical 1.9s ease-in-out infinite; }
+@keyframes ct-hex-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Sections rise into place once on load, staggered by an inline delay. */
+.ct-reveal { animation: ct-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes ct-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Title underline that draws itself outward from the centre. */
+.ct-rule { animation: ct-rule 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+@keyframes ct-rule {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* The standing scale scrolls sideways on the layouts it cannot fit. The bar is
+   styled rather than hidden — a scale that runs past the edge has to say so. */
+.ct-band {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 140, 248, 0.35) transparent;
+}
+.ct-band::-webkit-scrollbar {
+  height: 6px;
+}
+.ct-band::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ct-band::-webkit-scrollbar-thumb {
+  background: rgba(129, 140, 248, 0.3);
+  border-radius: 999px;
+}
+.ct-band::-webkit-scrollbar-thumb:hover {
+  background: rgba(129, 140, 248, 0.5);
+}
+
+/* A section's cards, fading in behind the width transition.
+   The panel takes 500ms to reach its full width and the cards rewrap as it
+   goes — two to a line at a third of the row, six at full width. The fade
+   starts late enough that the rewrapping happens out of sight; the row's
+   height never moves, because the band is sized once for the fullest section
+   and a panel that cannot fit its cards scrolls them. */
+.ct-panel-body {
+  animation: ct-panel-body 260ms ease 260ms both;
+}
+@keyframes ct-panel-body {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-panel-body { animation: none; }
+}
+
+/* ── Faction standing cards ────────────────────────────────────────────
+   Playing-card proportions, dealt into the three standing columns. Tilt and
+   highlight both follow the pointer through --fc-px/--fc-py, written straight
+   onto the element by the component rather than held in React state — a card
+   under the cursor would otherwise re-render on every mouse move.
+   --fc-edge and --fc-halo are set per card, from the faction's colour. */
+.fc-card {
+  --fc-px: 50%;
+  --fc-py: 50%;
+  --fc-rx: 0deg;
+  --fc-ry: 0deg;
+  --fc-lift: 0px;
+  /* The deco silhouette: the same 11px bite out of every corner. Stated in
+     percentages so it lands on the same eight sides as the SVG frame drawn over
+     it, whatever width the column gives the card — 7% of the width and 4% of
+     the height are equal at the card's 4:7. */
+  --fc-cut: polygon(7% 0, 93% 0, 100% 4%, 100% 96%, 93% 100%, 7% 100%, 0 96%, 0 4%);
+  /* Deliberately no scale, in either state.
+     The card is a composited layer — the tilt is rewritten on every pointer
+     move, so the transform never settles and the compositor keeps reusing one
+     texture rasterised at the layout size. Sampling that texture at any ratio
+     other than 1:1 resamples it, and the card carries hairline SVG strokes and
+     a crest that show it immediately. Both directions were tried and both were
+     visibly soft: scaling up 1.04 on hover, then laying the card out 4% larger
+     and holding it at 0.9615 at rest. The size the card is laid out at is the
+     only size it is ever drawn at; the lift and the halo carry the hover. */
+  transform: perspective(900px) rotateX(var(--fc-rx)) rotateY(var(--fc-ry))
+    translateY(var(--fc-lift));
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The shadow is drawn by the slot, not by the card.
+   drop-shadow rather than box-shadow, because the card is an octagon with a
+   crest standing out of the top and a box shadow would draw the rectangle none
+   of that is — but a filter gives its element a render surface, and a surface
+   that is then scaled by the card's own transform gets rasterised once and
+   resampled, which reads as the card going soft and the crest going cheap the
+   moment you hover it. On the slot, which never moves, the surface holds the
+   transformed card as content and is rasterised at device resolution. */
+.fc-slot {
+  --fc-halo: rgba(148, 163, 184, 0.35);
+  filter: drop-shadow(0 10px 14px rgba(2, 6, 23, 0.85));
+  transition: filter 280ms ease;
+}
+
+/* Hover belongs to the card, so the slot asks whether its card has it. Setting
+   it on the slot itself would light the card from the empty strip above it,
+   which is where the previous row's card ends. */
+.fc-slot:has(.fc-card:hover),
+.fc-slot:has(.fc-card:focus-within) {
+  z-index: 10;
+  filter: drop-shadow(0 18px 20px rgba(2, 6, 23, 0.9)) drop-shadow(0 0 8px var(--fc-halo));
+}
+
+/* The dealt card, picked out of the hand: it rises, and the halo is the
+   faction's own colour, so a lit card names its house rather than its mood. */
+.fc-card:hover,
+.fc-card:focus-within {
+  --fc-lift: -14px;
+}
+
+/* Gloss pooling under the cursor. Above the card's content (z-3) so the light
+   crosses the face, and pointer-transparent so it never eats a click on a
+   standing cell underneath it. */
+.fc-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  clip-path: var(--fc-cut);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms ease;
+  background:
+    radial-gradient(40% 32% at var(--fc-px) var(--fc-py), rgba(255, 255, 255, 0.17), transparent 72%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, transparent 38%);
+}
+.fc-card:hover::after,
+.fc-card:focus-within::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The lift and the gloss stay — they are the affordance; only the tilt,
+     which tracks the pointer continuously, goes. */
+  .fc-card {
+    --fc-rx: 0deg !important;
+    --fc-ry: 0deg !important;
+    transition: box-shadow 280ms ease, border-color 280ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-sweep::after,
+  .ct-scan::before { animation: none; opacity: 0; }
+  .ct-ring-cw,
+  .ct-ring-ccw,
+  .ct-hex-critical { animation: none; }
+  /* End state, not start state — otherwise the sections never appear. */
+  .ct-reveal { animation: none; }
+  .ct-rule { animation: none; }
+}
+
+/* ── Campaign background ───────────────────────────────────────────────
+   A live network rather than a starfield: nodes wired together with light
+   running along the links. Every path carries pathLength="100", so one set of
+   keyframes drives every line regardless of its real length — duration and
+   delay are the only per-line variables.
+
+   All of it is CSS on the compositor. Nothing here re-renders React, and the
+   whole block is switched off under prefers-reduced-motion at the bottom. */
+
+/* A short bright dash chasing along a link. */
+.cbg-flow {
+  stroke-dasharray: 3 97;
+  animation: cbg-flow 8s linear infinite;
+}
+@keyframes cbg-flow {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Nodes breathing out of phase with each other. */
+.cbg-node { animation: cbg-node 5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes cbg-node {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 0.85; }
+}
+
+/* The whole mesh drifting, so the composition never sits still. */
+.cbg-drift { animation: cbg-drift 46s ease-in-out infinite alternate; }
+@keyframes cbg-drift {
+  from { transform: translate3d(-1.2%, -0.8%, 0) scale(1.03); }
+  to   { transform: translate3d(1.2%, 0.8%, 0) scale(1.06); }
+}
+
+/* Slow counter-rotating survey rings behind everything. */
+.cbg-spin-cw  { animation: cbg-spin 150s linear infinite; transform-origin: 50% 50%; }
+.cbg-spin-ccw { animation: cbg-spin 110s linear infinite reverse; transform-origin: 50% 50%; }
+@keyframes cbg-spin { to { transform: rotate(360deg); } }
+
+/* Nebula wash breathing under the mesh. */
+.cbg-bloom { animation: cbg-bloom 24s ease-in-out infinite alternate; }
+@keyframes cbg-bloom {
+  from { opacity: 0.55; transform: scale(1); }
+  to   { opacity: 0.9;  transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cbg-flow,
+  .cbg-node,
+  .cbg-drift,
+  .cbg-spin-cw,
+  .cbg-spin-ccw,
+  .cbg-bloom { animation: none; }
+  /* The flow dash would otherwise freeze mid-link as a stray tick mark. */
+  .cbg-flow { stroke-dasharray: none; opacity: 0.25; }
+}
