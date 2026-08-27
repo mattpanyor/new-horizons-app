@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NODE_OPTIONS=--network-family-autoselection-attempt-timeout=5000 next build",
     "start": "next start",
     "lint": "eslint"
   },

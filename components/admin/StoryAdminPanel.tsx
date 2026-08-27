@@ -227,11 +227,24 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
 
     const url = editor.mode === "edit" ? `/api/admin/story/${editor.id}` : "/api/admin/story";
     const method = editor.mode === "edit" ? "PATCH" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+
+    // A request that never reaches the server (dropped connection, dev server
+    // restarting) rejects rather than resolving. Left unhandled it escapes the
+    // click handler as an unhandled rejection and takes over the screen, losing
+    // the editor's unsaved contents; the panel already has somewhere to say so.
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      setSaving(false);
+      setError("Could not reach the server — your changes are still here, try again");
+      return;
+    }
+
     const data = await res.json().catch(() => null);
     setSaving(false);
     if (!res.ok) {

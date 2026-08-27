@@ -387,15 +387,27 @@ export default function StoryBook({
   // Preload images to learn their natural dimensions. Each URL is requested at
   // most once (tracked in a ref) so recording one size doesn't re-run this and
   // recreate Image objects for the others.
+  //
+  // Deliberately no `cancelled` flag. The ref outlives a remount but a flag
+  // captured per effect run does not, so the two together lost every size in
+  // StrictMode: the first run requested the images and the cleanup cancelled
+  // it, then the remount skipped every URL as already-requested, so when the
+  // loads finally landed there was nothing left willing to record them.
+  // `natSizes` stayed empty, `imagesReady` never went true, and the pagination
+  // effect below fell back to one physical page per section — the whole
+  // chapter overflowing off page one. It only bit when a load outlived the
+  // cleanup, so a warm cache hid it, and StrictMode only double-invokes in
+  // development, which is why production always looked right.
+  //
+  // Recording late is harmless: sizes are keyed by URL, and a setState on an
+  // unmounted component is a no-op.
   const requestedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    let cancelled = false;
     for (const url of imageUrls) {
       if (requestedRef.current.has(url)) continue;
       requestedRef.current.add(url);
       const img = new Image();
       const record = (w: number, h: number) => {
-        if (cancelled) return;
         setNatSizes((prev) => {
           if (prev.has(url)) return prev;
           const next = new Map(prev);
@@ -407,9 +419,6 @@ export default function StoryBook({
       img.onerror = () => record(16, 9);
       img.src = url;
     }
-    return () => {
-      cancelled = true;
-    };
   }, [imageUrls]);
 
   const leafW = perView === 2 ? (bookW - 1) / 2 : bookW;
