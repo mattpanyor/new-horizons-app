@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* The app is dark everywhere — there is no light theme to switch to. This
+     used to default to white and only go dark under prefers-color-scheme, so a
+     light-mode browser painted white underneath every page. Most routes hide
+     that behind their own opaque backdrop, but /sectors deliberately has none
+     (see GalacticMapBackground) and waits on a WebGL bake, so the white showed
+     through until the planet appeared. Unconditional black, plus color-scheme
+     so the browser's own canvas matches before any CSS applies. */
+  color-scheme: dark;
+  --background: #000000;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -10,13 +18,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

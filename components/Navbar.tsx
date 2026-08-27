@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { InboxDropdown } from "@/components/inbox/InboxDropdown";
 import { HexAvatar } from "@/components/HexAvatar";
 import { DossierModal } from "@/components/profile/DossierModal";
@@ -83,6 +84,32 @@ export default function Navbar({ username, character, role, group, accessLevel =
       {/* Right — inbox + admin */}
       <div className="flex items-center justify-end gap-4">
         <InboxDropdown />
+
+        {/* Players don't get the admin dropdown, and its first entry is the only
+            way back to the map from a full-page view like the ship or the book.
+            Give them that one entry on its own, in the same slot and the same
+            weight, so the bar reads the same either way. */}
+        {!showAdmin && (
+          <Link
+            href="/sectors"
+            aria-label="Home"
+            className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded border border-white/[0.08] bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07] transition-all duration-300 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60"
+          >
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+              className="text-white/30 group-hover:text-white/60 transition-colors duration-300"
+            >
+              <path d="M3 9.5 12 3l9 6.5V20a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 20z" />
+              <polyline points="9.5 21.5 9.5 13.5 14.5 13.5 14.5 21.5" />
+            </svg>
+            <span
+              className="text-[10px] tracking-[0.25em] uppercase text-white/30 group-hover:text-white/60 transition-colors duration-300 hidden sm:inline"
+              style={cinzel}
+            >
+              Home
+            </span>
+          </Link>
+        )}
 
         {showAdmin && (
           <div className="relative" ref={dropdownRef}>
