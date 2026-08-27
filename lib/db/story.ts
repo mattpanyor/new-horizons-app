@@ -4,6 +4,16 @@ import type { StoryEntry, StoryVisibility } from "@/types/story";
 
 const sql = neon(process.env.DATABASE_URL!);
 
+// `timestamptz` comes back from the driver as a Date, not a string. Casting it
+// `as string` compiled but shipped two different shapes of the same entry to the
+// client: the admin page passes rows straight through as props (a Date survives
+// RSC serialization) while the API route sends them through JSON (an ISO
+// string), so `createdAt.localeCompare` crashed on whichever half came from
+// props. Normalise here, at the one boundary both paths cross.
+function toIso(value: unknown): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
 function rowToEntry(row: Record<string, unknown>): StoryEntry {
   return {
     id: row.id as number,
@@ -16,8 +26,8 @@ function rowToEntry(row: Record<string, unknown>): StoryEntry {
     visibility: row.visibility as StoryVisibility,
     assignedUsernames: (row.assigned_usernames as string[]) ?? [],
     createdBy: row.created_by as string,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
   };
 }
 
