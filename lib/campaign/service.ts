@@ -4,9 +4,10 @@
 // Same contract as lib/investigation/service.ts: every caller goes through
 // here, functions return a ServiceResult rather than throwing or returning a
 // Response, and each transport maps the outcome onto its own errors. The web
-// routes under app/api/campaign are thin adapters over this. Nothing is
-// exposed over MCP yet; when it is, the module's handlers call these same
-// functions and inherit every rule below unchanged.
+// routes under app/api/campaign are thin adapters over this, as is
+// lib/mcp/modules/campaign.ts, which exposes the standings read and nothing
+// else. Both surfaces inherit every rule below unchanged; a rule added here
+// applies to the browser and to every AI client at once.
 
 import type { User } from "@/lib/db/users";
 import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
