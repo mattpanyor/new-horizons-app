@@ -4,7 +4,7 @@
 // lib/campaign/service.ts, the same module the web routes call. A rule changed
 // there applies here on the next request, with no edit to this file.
 //
-// Read-only for now. Standings and VIP integrity are superadmin-only writes on
+// Read-only, by design. Standings and VIP integrity are superadmin-only writes on
 // the web, and the anonymity log is a shared board where an AI acting on a
 // loose instruction could rewrite many players' lines in one turn — the same
 // reasoning that put `ownRecordsOnly` on investigation clues. Neither is
@@ -39,11 +39,15 @@ const tools: ToolDef[] = [
   {
     name: "campaign_list_faction_standings",
     description:
-      "How the party stands with each faction. Each standing is two independent counts — red " +
-      "(antagonism) and green (regard), 0-4 each — because a faction can resent the party and owe " +
-      "them at the same time. The label comes from whichever side has more cells. " +
+      "How the party stands with each faction, with the faction's dossier. Each standing is two " +
+      "independent counts — red (antagonism) and green (regard), 0-4 each — because a faction can " +
+      "resent the party and owe them at the same time. The label comes from whichever side has " +
+      "more cells. " +
       LADDER +
-      " Factions the GM has hidden are never returned, at any access level.",
+      " `description` and `members` come from the campaign's Kanka record and are absent for a " +
+      "faction with no record under that name; `members` gives each name the title that faction " +
+      "knows them by, and an entityId usable as @[Name](kanka:ID) mention markup. " +
+      "Factions the GM has hidden are never returned, at any access level.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     available: (user) => can(user, "standing:read"),
     handler: async (_args, ctx) => {
@@ -54,17 +58,32 @@ const tools: ToolDef[] = [
 
       return {
         ok: true,
+        // color, logoUrl and hidden are deliberately left off the projection
+        // below: the first two are presentation a text client cannot use, and
+        // hidden is always false here — excludeHidden filtered those rows out.
+        // updatedAt/updatedBy are omitted as noise; add them if a client ever
+        // needs to ask what the GM moved recently.
         data: result.data.map((s) => {
           const verdict = standingVerdict(s.red, s.green);
           return {
             slug: s.slug,
             name: s.name,
+            // Which of the board's three sections it is dealt into.
+            category: s.category,
             red: s.red,
             green: s.green,
             standing: verdict.label,
             // "hostile" | "friendly" | "neutral" — saves the model re-deriving
             // it from the two counts and getting a tie wrong.
             tone: verdict.tone,
+            // The dossier the web card opens. Already flattened from Kanka's
+            // HTML to plain text by getKankaDossierMap, so it can go straight
+            // to a model. Null when Kanka has no record under this name.
+            description: s.description,
+            // Passed through as the service shapes it: entityId, name, title,
+            // kankaUrl. Rolls are a handful of names, so there is nothing to
+            // paginate. Empty when the faction has no members or no record.
+            members: s.members,
           };
         }),
       };
@@ -80,10 +99,13 @@ const tools: ToolDef[] = [
   //
   // Anything to do with VIPs. Their integrity is what the campaign's survival is
   // measured in, a locked VIP's very existence is a secret, and the anonymity
-  // log is an open board any player can rewrite. Reading them over MCP is
-  // defensible and worth adding when asked for; it needs its own decision about
-  // whether locked subjects are addressable at all, which is not a decision to
-  // make in passing while adding a standings reader.
+  // log is an open board any player can rewrite. Kept off deliberately, and
+  // reaffirmed when the standings reader was widened to carry dossiers.
+  //
+  // A reader would not be free: listVipsAs scopes by canSeeVip, which is right
+  // for a player but hands a superadmin token the locked subjects — the same
+  // trap hidden factions had. It would need the mirror of excludeHidden on
+  // CampaignConstraints before it is safe, which is its own decision.
 ];
 
 export const campaignModule: ToolModule = {
