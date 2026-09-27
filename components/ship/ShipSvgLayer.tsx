@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { ShipLayer, ShipBay } from "@/types/ship";
 
 interface ShipSvgLayerProps {
@@ -7,6 +8,8 @@ interface ShipSvgLayerProps {
   layerIndex: number;
   totalLayers: number;
   onBayClick: (bay: ShipBay, layer: ShipLayer) => void;
+  /** Hovered bay id, but only when it belongs to THIS layer (else null), so a
+   *  hover re-renders just the layer it touches rather than all four. */
   hoveredBay: string | null;
   onBayHover: (bayId: string | null) => void;
 }
@@ -131,7 +134,11 @@ function getHullGeometry(layerIndex: number, W: number, H: number) {
   }
 }
 
-export default function ShipSvgLayer({
+// Memoised because ShipViewer re-renders every animation frame while the decks
+// spread/collapse. None of this component's props change during that tween (the
+// per-layer z/scale live on wrapper divs in ShipViewer), so memo skips the whole
+// subtree — hull/bay geometry rebuild and SVG reconciliation — on every frame.
+function ShipSvgLayer({
   layer,
   layerIndex,
   onBayClick,
@@ -235,3 +242,5 @@ export default function ShipSvgLayer({
     </svg>
   );
 }
+
+export default memo(ShipSvgLayer);

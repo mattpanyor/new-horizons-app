@@ -27,8 +27,12 @@ export default function ShipBayModal({
       ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
-      {/* Backdrop — click to close */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop — click to close. Plain scrim, no backdrop-blur: the planet
+          shader and hex canvas keep animating underneath, so a blur would be
+          recomputed over the whole viewport every frame the modal is open.
+          Slightly more opaque than the other ship modals' /60 to make up for
+          the lost blur. */}
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
 
       {/* Modal */}
       <div

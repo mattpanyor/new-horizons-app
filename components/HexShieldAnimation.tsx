@@ -39,6 +39,9 @@ interface Flicker {
 // ─── Hex grid generation ───
 
 const HEX_R = 18;
+// Full-screen canvas; past 1.5x the extra pixels cost fill and upload time
+// without visibly sharpening half-pixel hex edges.
+const MAX_DPR = 1.5;
 
 function generateHexGrid(w: number, h: number): Hex[] {
   const hexes: Hex[] = [];
@@ -80,15 +83,28 @@ export default function HexShieldAnimation({ colors = DEFAULT_COLORS }: HexShiel
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [hidden, setHidden] = useState(false);
   const hiddenRef = useRef(false);
+  // Set by the animation effect; restarts the loop after it stopped while hidden.
+  const resumeRef = useRef<(() => void) | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
       const spread = !!(e as CustomEvent).detail?.spread;
       hiddenRef.current = spread;
       setHidden(spread);
+      if (!spread) resumeRef.current?.();
     };
     window.addEventListener("ship-spread", handler);
     return () => window.removeEventListener("ship-spread", handler);
+  }, []);
+
+  // Purely decorative motion: honour the OS reduced-motion setting.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -111,16 +127,23 @@ export default function HexShieldAnimation({ colors = DEFAULT_COLORS }: HexShiel
     const W = dims.w;
     const H = dims.h;
     const SIZE = Math.min(W, H);
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
     ctx.scale(dpr, dpr);
+
+    if (reducedMotion) {
+      // Resizing the backing store already cleared it; draw nothing.
+      return;
+    }
 
     const hexArr = generateHexGrid(W, H);
     const glow = new Float32Array(hexArr.length);
     const rippleList: Ripple[] = [];
     const flickerList: Flicker[] = [];
     let animFrame = 0;
+    // True once a cleared canvas is showing and nothing glows: most frames.
+    let idle = true;
 
     const [fr, fg, fb] = colors.fill;
     const [er, eg, eb] = colors.edge;
@@ -136,8 +159,10 @@ export default function HexShieldAnimation({ colors = DEFAULT_COLORS }: HexShiel
     function draw() {
       if (!ctx) return;
 
+      // Stop the loop while hidden; the spread handler resumes it. The last
+      // frame stays on the canvas while the container fades out.
       if (hiddenRef.current) {
-        animFrame = requestAnimationFrame(draw);
+        animFrame = 0;
         return;
       }
 
@@ -179,6 +204,7 @@ export default function HexShieldAnimation({ colors = DEFAULT_COLORS }: HexShiel
       }
 
       // Compute glow per hex
+      let anyVisible = false;
       for (let i = 0; i < hexArr.length; i++) {
         const hex = hexArr[i];
         let target = 0;
@@ -204,7 +230,21 @@ export default function HexShieldAnimation({ colors = DEFAULT_COLORS }: HexShiel
         } else {
           glow[i] += (target - glow[i]) * 0.06;
         }
+        if (glow[i] * 0.7 >= 0.01) anyVisible = true;
       }
+
+      // Nothing above the draw threshold: the frame would be a bare clear.
+      // Clear once on entering idle, then leave the canvas untouched so the
+      // compositor has nothing to re-upload. Spawning above still ran.
+      if (!anyVisible) {
+        if (!idle) {
+          ctx.clearRect(0, 0, W, H);
+          idle = true;
+        }
+        animFrame = requestAnimationFrame(draw);
+        return;
+      }
+      idle = false;
 
       ctx.clearRect(0, 0, W, H);
 
@@ -233,9 +273,15 @@ export default function HexShieldAnimation({ colors = DEFAULT_COLORS }: HexShiel
       animFrame = requestAnimationFrame(draw);
     }
 
-    animFrame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animFrame);
-  }, [dims, colors]);
+    resumeRef.current = () => {
+      if (!animFrame) animFrame = requestAnimationFrame(draw);
+    };
+    if (!hiddenRef.current) animFrame = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(animFrame);
+      resumeRef.current = null;
+    };
+  }, [dims, colors, reducedMotion]);
 
   return (
     <div
