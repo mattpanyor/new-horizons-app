@@ -30,6 +30,116 @@ const REDUCED = "(prefers-reduced-motion: reduce)";
 const MAX_DPR = 2;
 const MAX_PIXELS = 5_000_000;
 
+// Refused outright, whatever the page asks for. Measured at 1920x1080, DPR 1,
+// the main pass costs 0.12–0.39 ms a frame on an Apple M4 and 193–234 ms on
+// SwiftShader, Chrome's software WebGL fallback (61–76 ms even at 960x540, and
+// ~360 ms for the six-face bake) — and that was on ten fast cores. A machine
+// that falls back to software is by definition not one of those, and because
+// GPU-process work stalls every frame of the browser, that alone was the whole
+// of the "mouse lag" reports. `failIfMajorPerformanceCaveat` makes Chrome and
+// Firefox refuse the context; this catches what it misses (Safari ignores the
+// flag, some Linux builds hand out llvmpipe without calling it a caveat, and
+// "Microsoft Basic Render Driver" is Windows' software rasteriser).
+const SOFTWARE_RENDERER = /SwiftShader|llvmpipe|Software|Mesa OffScreen|Basic Render Driver/i;
+
+// ── Adaptive quality ──
+// Integrated GPUs are unmeasured. Extrapolating from the M4 by raw throughput
+// puts them at roughly 4–10 ms a frame at 1080p DPR 1 and 10–25 ms at DPR
+// 1.5–2 — enough to saturate the GPU and drop compositor frames, which the
+// player feels as input lag everywhere on the page, not as a slow planet. So
+// quality steps down until the page keeps pace, one level at a time:
+//   0  native, up to MAX_DPR and MAX_PIXELS
+//   1  DPR capped at 1
+//   2  0.75 of CSS pixels
+//   3  0.5 of CSS pixels, drawn every other frame — the planet turns slowly
+//      enough that ~30 fps is invisible
+//   4  give up; the star field is the background
+// Never back up within a session: a level that failed once would fail again,
+// and stepping up to find out is exactly the jank this exists to remove.
+const RENDER_SCALE = [MAX_DPR, 1, 0.75, 0.5] as const;
+const HALF_RATE_LEVEL = 3;
+const GIVE_UP_LEVEL = RENDER_SCALE.length;
+
+// Pacing is judged over this much drawn time, so one verdict costs the player
+// at most a second and a half of a struggling page.
+const MEASURE_MS = 1500;
+// Slow is an average frame interval above this — under ~42 fps. Absolute, not
+// relative to the display, so a 120/144 Hz panel holding a steady 60 is not
+// read as struggling…
+const SLOW_MS = 24;
+// …but never tighter than this many refresh intervals, so a 30 Hz display is
+// not read as struggling either. The refresh estimate is capped: it is the
+// smallest interval seen, and on a GPU that was saturated from the start that
+// could itself be a slow frame, which must not raise the bar indefinitely.
+const SLOW_VS_REFRESH = 1.4;
+const MAX_REFRESH_MS = 34;
+// One long task (a route render, a GC) is clamped so it cannot condemn a
+// window on its own. A GPU that is genuinely behind is behind on every frame.
+const MAX_SAMPLE_MS = 100;
+
+// Only a canvas that covers most of the viewport is governed. The admin panel
+// mounts a small preview through this same component; it is cheap at any
+// quality, and a verdict formed there must never be persisted for the login
+// page to inherit.
+const GOVERN_COVERAGE = 0.5;
+const QUALITY_KEY = "nh.planetQuality";
+
+/** Whether a window of frames averaging `avgMs` apart is too slow, given the
+ *  shortest interval seen so far as an estimate of the display's refresh. */
+function isSlowPacing(avgMs: number, minMs: number): boolean {
+  const refresh = Number.isFinite(minMs) ? Math.min(minMs, MAX_REFRESH_MS) : 0;
+  return avgMs > Math.max(SLOW_MS, refresh * SLOW_VS_REFRESH);
+}
+
+/** Device pixels per CSS pixel at a quality level, before the MAX_PIXELS cap. */
+function pixelScale(level: number): number {
+  return Math.min(window.devicePixelRatio || 1, RENDER_SCALE[level]);
+}
+
+// A hard refresh starts at the level this machine settled on last time instead
+// of re-ramping through seconds of jank. Keyed by renderer so a laptop that
+// moves between its integrated and discrete GPU keeps a verdict for each.
+// Storage can throw (private mode, blocked site data); the governor then just
+// works from scratch.
+// A verdict expires. The governor measures page pacing, not the GPU alone, so
+// a stretch of unrelated main-thread work — a huge download in another tab, a
+// runaway extension — can push a capable machine down a level or two, and a
+// permanent record would hide the planet from it for good. Re-measuring once a
+// day costs a genuinely slow machine at most a few seconds of ramp a day.
+const QUALITY_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readLevel(key: string): number | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    const [levelPart, atPart] = raw.split("|");
+    const n = Number(levelPart);
+    const at = Number(atPart);
+    if (!Number.isInteger(n) || n < 0 || n > GIVE_UP_LEVEL) return null;
+    if (!Number.isFinite(at) || Date.now() - at > QUALITY_TTL_MS) return null;
+    return n;
+  } catch {
+    return null;
+  }
+}
+
+function writeLevel(key: string, level: number) {
+  try {
+    localStorage.setItem(key, `${level}|${Date.now()}`);
+  } catch {
+    // Not remembered; the next load measures again.
+  }
+}
+
+/** A first guess for a machine with no verdict yet. Only ever a guess: the
+ *  governor still measures, and can only step further down from it. */
+function hintedLevel(): number {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const fewCores = !!nav.hardwareConcurrency && nav.hardwareConcurrency <= 4;
+  const lowMemory = !!nav.deviceMemory && nav.deviceMemory <= 4;
+  return fewCores || lowMemory ? 1 : 0;
+}
+
 // Per cube face. Six of these is 25MB of GPU memory at RGBA8 — the next step up
 // would be 100MB, which is not a reasonable thing to spend on a login page. The
 // main pass adds fine grain on top, which covers the gap under magnification.
@@ -294,6 +404,11 @@ export default function PlanetBackground({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [enabled, setEnabled] = useState(false);
   const [painted, setPainted] = useState(false);
+  // The canvas is opaque (`alpha: false`), so once its fade-in has finished the
+  // star field beneath it is invisible but still animating. Set when the fade
+  // ends, and cleared with `painted` so the field is back the moment the canvas
+  // goes.
+  const [covered, setCovered] = useState(false);
   // Once WebGL has failed on this machine, stop offering it — a later media
   // query change shouldn't retry a context that isn't coming back.
   const failed = useRef(false);
@@ -312,6 +427,7 @@ export default function PlanetBackground({
     failed.current = true;
     setEnabled(false);
     setPainted(false);
+    setCovered(false);
   }, []);
 
   useEffect(() => {
@@ -340,8 +456,32 @@ export default function PlanetBackground({
       depth: false,
       stencil: false,
       powerPreference: "low-power",
+      failIfMajorPerformanceCaveat: true,
     });
     if (!gl) {
+      giveUp();
+      return;
+    }
+
+    const releaseContext = () => gl.getExtension("WEBGL_lose_context")?.loseContext();
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = String(
+      gl.getParameter(debugInfo ? debugInfo.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? "",
+    );
+    if (SOFTWARE_RENDERER.test(renderer)) {
+      releaseContext();
+      giveUp();
+      return;
+    }
+
+    const qualityKey = `${QUALITY_KEY}:${debugInfo && renderer ? renderer : "default"}`;
+    const coversViewport = (cw: number, ch: number) =>
+      cw * ch >= GOVERN_COVERAGE * window.innerWidth * window.innerHeight;
+    // A machine that already gave up once is not made to compile and bake again
+    // just to reach the same verdict.
+    if (coversViewport(canvas.clientWidth, canvas.clientHeight) &&
+        (readLevel(qualityKey) ?? 0) >= GIVE_UP_LEVEL) {
+      releaseContext();
       giveUp();
       return;
     }
@@ -385,7 +525,7 @@ export default function PlanetBackground({
         gl.deleteShader(p.frag);
         gl.deleteProgram(p.program);
       }
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      releaseContext();
       giveUp();
       return;
     }
@@ -515,12 +655,30 @@ export default function PlanetBackground({
       return true;
     };
 
+    // Loaded on first need, and only for a canvas that is governed — a preview
+    // never reads or writes the persisted verdict.
+    let level: number | null = null;
+    const governedLevel = () => {
+      if (level === null) {
+        // A stored give-up is handled before any compile; reaching here with one
+        // means the canvas only grew to full size later, so try the lowest level.
+        level = Math.min(readLevel(qualityKey) ?? hintedLevel(), GIVE_UP_LEVEL - 1);
+      }
+      return level;
+    };
+    // What resize() last applied: whether this canvas is governed, and the level
+    // it actually renders at (always 0 for one that isn't).
+    let governed = false;
+    let applied = 0;
+
     let w = 0;
     let h = 0;
     const resize = () => {
       const cw = Math.max(1, canvas.clientWidth);
       const ch = Math.max(1, canvas.clientHeight);
-      let dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+      governed = coversViewport(cw, ch);
+      applied = governed ? governedLevel() : 0;
+      let dpr = pixelScale(applied);
       if (cw * ch * dpr * dpr > MAX_PIXELS) dpr = Math.sqrt(MAX_PIXELS / (cw * ch));
       const nw = Math.max(1, Math.round(cw * dpr));
       const nh = Math.max(1, Math.round(ch * dpr));
@@ -552,16 +710,54 @@ export default function PlanetBackground({
     let running = true;
     let linked = false;
 
+    // ── Pacing measurement ──
+    // The shortest interval seen estimates the display's refresh. It is taken
+    // from every frame, including the compile and bake ones, which are cheap —
+    // so it is learned before the main pass has had a chance to saturate
+    // anything.
+    let minDt = Infinity;
+    let windowMs = 0;
+    let windowFrames = 0;
+    // The next interval spans something that isn't rendering (a hidden tab, a
+    // pause, a resize, a level change) and must not be counted.
+    let fresh = true;
+    let skipNext = false;
+    const restartWindow = () => {
+      windowMs = 0;
+      windowFrames = 0;
+      fresh = true;
+    };
+
+    /** One level down, skipping levels that would render identically — on a
+     *  DPR 1 display, "cap DPR at 1" changes nothing and would only cost the
+     *  player another measurement window. Returns false once there is nothing
+     *  left to step down to. */
+    const stepDown = () => {
+      let next = (level ?? 0) + 1;
+      while (next < HALF_RATE_LEVEL && pixelScale(next) === pixelScale(next - 1)) next++;
+      level = next;
+      writeLevel(qualityKey, next);
+      if (next >= GIVE_UP_LEVEL) return false;
+      needsResize = true;
+      restartWindow();
+      return true;
+    };
+
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = now - last;
       last = now;
+      // Below ~3 ms is a callback that landed off the vsync grid, not a refresh.
+      if (dt >= 3 && dt < minDt) minDt = dt;
       // The bake still runs while paused — better to have it finished before the
       // layer is ever shown than to stall on first sight of it. Once it is done
       // the loop stops entirely rather than spinning on an early return: the
       // layer stays mounted for the whole session, so on /admin and /game that
       // was sixty no-op callbacks a second, forever, beside three.js.
-      if (document.hidden) return;
+      if (document.hidden) {
+        restartWindow();
+        return;
+      }
 
       // Wait for the driver rather than demanding it finish. Nothing below may
       // touch a program before this passes — not even a uniform lookup — so the
@@ -649,6 +845,34 @@ export default function PlanetBackground({
       }
       setUniform(gl, mainAt, "u_time", elapsed / 1000);
 
+      // Judged only once the planet is on screen: compile, bake and first paint
+      // are one-off costs, not the steady state the player lives with.
+      if (governed && !first) {
+        if (fresh) {
+          fresh = false;
+        } else {
+          windowMs += Math.min(dt, MAX_SAMPLE_MS);
+          windowFrames++;
+          if (windowMs >= MEASURE_MS) {
+            const slow = isSlowPacing(windowMs / windowFrames, minDt);
+            windowMs = 0;
+            windowFrames = 0;
+            if (slow && !stepDown()) {
+              cancelAnimationFrame(raf);
+              giveUp();
+              return;
+            }
+          }
+        }
+      }
+
+      // The clock above still advanced, so skipping a draw costs no motion —
+      // the next one lands where the planet would have been anyway.
+      if (applied >= HALF_RATE_LEVEL) {
+        skipNext = !skipNext;
+        if (skipNext && !first) return;
+      }
+
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       if (first) {
@@ -665,6 +889,7 @@ export default function PlanetBackground({
       running = true;
       last = performance.now();
       needsResize = true;
+      restartWindow();
       raf = requestAnimationFrame(frame);
     };
     resumeRef.current = resume;
@@ -676,6 +901,7 @@ export default function PlanetBackground({
     // the window listener alone misses.
     const onResize = () => {
       needsResize = true;
+      restartWindow();
     };
     window.addEventListener("resize", onResize);
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
@@ -705,7 +931,12 @@ export default function PlanetBackground({
       gl.deleteProgram(healProgram);
       gl.deleteProgram(bakeProgram);
       gl.deleteProgram(mainProgram);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      releaseContext();
+      // The canvas goes with this context — a new preset mounts a fresh one —
+      // so the star field has to be back before it does, and the next canvas
+      // has to fade in over it rather than appear already opaque and black.
+      setPainted(false);
+      setCovered(false);
     };
   }, [enabled, preset, giveUp]);
 
@@ -713,7 +944,7 @@ export default function PlanetBackground({
   // paint, the fallback, and what the canvas fades up over once the bake lands.
   return (
     <div className={inline ? "absolute inset-0 overflow-hidden" : "fixed inset-0 -z-10"}>
-      <StarSystemBackground />
+      <StarSystemBackground covered={enabled && painted && covered} />
       {enabled && (
         <canvas
           // Keyed so switching worlds mounts a fresh canvas. The old context is
@@ -722,6 +953,9 @@ export default function PlanetBackground({
           key={preset}
           ref={canvasRef}
           aria-hidden="true"
+          onTransitionEnd={(e) => {
+            if (e.propertyName === "opacity" && painted) setCovered(true);
+          }}
           className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${
             painted ? "opacity-100" : "opacity-0"
           }`}

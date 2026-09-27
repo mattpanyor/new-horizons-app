@@ -58,6 +58,19 @@ interface TravelerState {
 const DOT_SPACING = 16;
 const DOT_RADIUS = 1;
 const SHOW_LABEL = true;
+// Grid dots are filled in batches by quantised intensity: one fill per bin
+// instead of one per dot. 24 steps is below what the eye can tell apart here.
+const DOT_BINS = 24;
+const DOT_BIN_RADIUS: number[] = [];
+const DOT_BIN_STYLE: string[] = [];
+for (let b = 0; b < DOT_BINS; b++) {
+  const eased = (b + 0.5) / DOT_BINS;
+  DOT_BIN_RADIUS.push(DOT_RADIUS + eased * 0.6);
+  DOT_BIN_STYLE.push(`rgba(140, 140, 140, ${eased * 0.8})`);
+}
+// Full-screen canvas; past 1.5x the extra pixels cost fill and upload time
+// without visibly sharpening 1-2px dots.
+const MAX_DPR = 1.5;
 
 function getIntensity(x: number, y: number, s: SpotState): number {
   const dx = x - s.x;
@@ -87,6 +100,9 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [hidden, setHidden] = useState(false);
   const hiddenRef = useRef(false);
+  // Set by the animation effect; restarts the loop after it stopped while hidden.
+  const resumeRef = useRef<(() => void) | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const zonesKey = JSON.stringify(exclusionZones);
 
   // Listen for ship spread events
@@ -95,9 +111,19 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
       const spread = !!(e as CustomEvent).detail?.spread;
       hiddenRef.current = spread;
       setHidden(spread);
+      if (!spread) resumeRef.current?.();
     };
     window.addEventListener("ship-spread", handler);
     return () => window.removeEventListener("ship-spread", handler);
+  }, []);
+
+  // Purely decorative motion: honour the OS reduced-motion setting.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
   }, []);
 
   // Observe container size
@@ -122,10 +148,15 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
     const W = dims.w;
     const H = dims.h;
     const SIZE = Math.min(W, H); // for proportional calculations
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
     ctx.scale(dpr, dpr);
+
+    if (reducedMotion) {
+      // Resizing the backing store already cleared it; draw nothing.
+      return;
+    }
 
     const SPEED = 0.7;
     const TRAIL_MAX = Math.ceil((DOT_SPACING * 1.5) / SPEED);
@@ -253,9 +284,10 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
     function draw() {
       if (!ctx) return;
 
-      // Skip all computation when hidden
+      // Stop the loop while hidden; the spread handler resumes it. The last
+      // frame stays on the canvas while the container fades out.
       if (hiddenRef.current) {
-        animFrame = requestAnimationFrame(draw);
+        animFrame = 0;
         return;
       }
 
@@ -323,8 +355,17 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
       const rippleRadius = fx ? fx.frame * fx.rippleSpeed : 0;
       const rippleWidth = SIZE * 0.08;
 
-      for (let x = DOT_SPACING; x < W; x += DOT_SPACING) {
-        for (let y = DOT_SPACING; y < H; y += DOT_SPACING) {
+      // Only dots inside the spotlight's bounding box can be lit: intensity is
+      // zero outside the ellipse, and it is evaluated at the grid position, so
+      // ripple displacement moves a dot but never lights an unlit one.
+      const xStart = Math.max(DOT_SPACING, Math.ceil((s.x - s.rx) / DOT_SPACING) * DOT_SPACING);
+      const xEnd = Math.min(W - 1, s.x + s.rx);
+      const yStart = Math.max(DOT_SPACING, Math.ceil((s.y - s.ry) / DOT_SPACING) * DOT_SPACING);
+      const yEnd = Math.min(H - 1, s.y + s.ry);
+      const binPaths: (Path2D | undefined)[] = new Array(DOT_BINS);
+
+      for (let x = xStart; x <= xEnd; x += DOT_SPACING) {
+        for (let y = yStart; y <= yEnd; y += DOT_SPACING) {
           let drawX = x;
           let drawY = y;
 
@@ -350,11 +391,19 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
           const alpha = eased * 0.8;
           if (alpha < 0.01) continue;
 
-          ctx.beginPath();
-          ctx.arc(drawX, drawY, DOT_RADIUS + eased * 0.6, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(140, 140, 140, ${alpha})`;
-          ctx.fill();
+          const bin = Math.min(DOT_BINS - 1, Math.floor(eased * DOT_BINS));
+          const r = DOT_BIN_RADIUS[bin];
+          const path = binPaths[bin] ?? (binPaths[bin] = new Path2D());
+          // moveTo starts a fresh subpath so arcs aren't joined by lines.
+          path.moveTo(drawX + r, drawY);
+          path.arc(drawX, drawY, r, 0, Math.PI * 2);
         }
+      }
+      for (let b = 0; b < DOT_BINS; b++) {
+        const path = binPaths[b];
+        if (!path) continue;
+        ctx.fillStyle = DOT_BIN_STYLE[b];
+        ctx.fill(path);
       }
 
       // Corner dots
@@ -461,10 +510,16 @@ export default function DotGridAnimation({ exclusionZones = [] }: DotGridAnimati
       animFrame = requestAnimationFrame(draw);
     }
 
-    animFrame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animFrame);
+    resumeRef.current = () => {
+      if (!animFrame) animFrame = requestAnimationFrame(draw);
+    };
+    if (!hiddenRef.current) animFrame = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(animFrame);
+      resumeRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dims, zonesKey]);
+  }, [dims, zonesKey, reducedMotion]);
 
   return (
     <div

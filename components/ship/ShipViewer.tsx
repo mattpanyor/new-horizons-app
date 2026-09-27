@@ -261,7 +261,13 @@ export default function ShipViewer({ ship }: ShipViewerProps) {
                     layerIndex={i}
                     totalLayers={totalLayers}
                     onBayClick={handleBayClick}
-                    hoveredBay={hoveredBay}
+                    // Scope the hover to the owning layer so ShipSvgLayer's
+                    // memo only lets that layer re-render, not all of them.
+                    hoveredBay={
+                      hoveredBay !== null && layer.bays.some((b) => b.id === hoveredBay)
+                        ? hoveredBay
+                        : null
+                    }
                     onBayHover={setHoveredBay}
                   />
                   </div>
