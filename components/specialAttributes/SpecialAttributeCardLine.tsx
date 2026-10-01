@@ -20,8 +20,13 @@ export function SpecialAttributeCardLine({ type }: { type: string | undefined })
 function SpecialAttributeCardIcon({ type }: { type: string }) {
   switch (type) {
     case "lathanium":
+      // SVG, not a CSS-rotated span: Safari drops transformed HTML inside the tooltip's foreignObject.
       return (
-        <span style={{ display: "inline-block", width: "7px", height: "7px", background: "#1D4ED8", transform: "rotate(45deg)", boxShadow: "0 0 4px #3B82F6", flexShrink: 0 }} />
+        <svg width="10" height="10" viewBox="-5 -5 10 10" style={{ flexShrink: 0 }}>
+          <polygon points="0,-5 5,0 0,5 -5,0"
+            fill="#1D4ED8"
+            style={{ filter: "drop-shadow(0 0 1px #3B82F6)" }} />
+        </svg>
       );
     case "nobility":
       return (
