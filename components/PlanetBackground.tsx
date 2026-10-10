@@ -84,6 +84,15 @@ const MAX_SAMPLE_MS = 100;
 const GOVERN_COVERAGE = 0.5;
 const QUALITY_KEY = "nh.planetQuality";
 
+// Nor is anything inside an OBS browser source, which OBS marks with
+// `window.obsstudio`. It renders off-screen at the stream's frame rate — 30 fps
+// by default — so pacing there measures OBS, not the GPU, and the governor read
+// a capped M4 as struggling and gave up on the planet. There is no player input
+// to lag, and the planet is the whole reason the source exists.
+function inObs(): boolean {
+  return "obsstudio" in window;
+}
+
 /** Whether a window of frames averaging `avgMs` apart is too slow, given the
  *  shortest interval seen so far as an estimate of the display's refresh. */
 function isSlowPacing(avgMs: number, minMs: number): boolean {
@@ -475,11 +484,11 @@ export default function PlanetBackground({
     }
 
     const qualityKey = `${QUALITY_KEY}:${debugInfo && renderer ? renderer : "default"}`;
-    const coversViewport = (cw: number, ch: number) =>
-      cw * ch >= GOVERN_COVERAGE * window.innerWidth * window.innerHeight;
+    const isGoverned = (cw: number, ch: number) =>
+      !inObs() && cw * ch >= GOVERN_COVERAGE * window.innerWidth * window.innerHeight;
     // A machine that already gave up once is not made to compile and bake again
     // just to reach the same verdict.
-    if (coversViewport(canvas.clientWidth, canvas.clientHeight) &&
+    if (isGoverned(canvas.clientWidth, canvas.clientHeight) &&
         (readLevel(qualityKey) ?? 0) >= GIVE_UP_LEVEL) {
       releaseContext();
       giveUp();
@@ -676,7 +685,7 @@ export default function PlanetBackground({
     const resize = () => {
       const cw = Math.max(1, canvas.clientWidth);
       const ch = Math.max(1, canvas.clientHeight);
-      governed = coversViewport(cw, ch);
+      governed = isGoverned(cw, ch);
       applied = governed ? governedLevel() : 0;
       let dpr = pixelScale(applied);
       if (cw * ch * dpr * dpr > MAX_PIXELS) dpr = Math.sqrt(MAX_PIXELS / (cw * ch));
