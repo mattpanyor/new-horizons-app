@@ -9,8 +9,10 @@ import HomeArtChrome from "./HomeArtChrome";
 // holds. That keeps one WebGL context for the whole app — arriving here from
 // /sectors rebuilds nothing, it just stops drawing the map over it.
 //
-// Deliberately not behind a session. It shows no user data, and the settings
-// read is cached, so this prerenders and is served from the CDN.
+// Deliberately not behind a session. It shows no user data. Rendered per
+// request for the same reason as /login: as a prerender it kept the theme from
+// the last deploy. The settings read is cached, so this is not a database hit.
+export const dynamic = "force-dynamic";
 
 export default async function HomeArtPage() {
   return <HomeArtChrome preset={await getHomeScreenArt()} />;

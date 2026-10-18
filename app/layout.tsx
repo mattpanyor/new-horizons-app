@@ -29,9 +29,8 @@ export const viewport: Viewport = {
 };
 
 // Async because the home screen art is read here rather than per page — that is
-// what lets one canvas serve every route. It costs nothing in render mode: the
-// cookies() call in app/sectors/layout.tsx already makes /sectors, /sectors/
-// [slug], /login and /ship dynamic, so there is no static generation to lose.
+// what lets one canvas serve every route. Every route that shows the planet
+// renders per request, so this always reflects the admin's current choice.
 export default async function RootLayout({
   children,
 }: Readonly<{
