@@ -80,7 +80,7 @@ Before completing any code modification task, verify:
 # New Horizons App
 
 Interactive galactic map companion for tabletop RPG campaigns.
-Next.js 16.2.1 + React 19 + TypeScript 5 + Tailwind CSS 4.
+Next.js 16.4.5 + React 19 + TypeScript 5 + Tailwind CSS 4.
 Neon Postgres database. Cookie-based auth with bcrypt. Vercel Blob for image storage.
 
 ## Key Paths
