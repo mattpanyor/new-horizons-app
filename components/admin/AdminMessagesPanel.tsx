@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import CdnImagePicker from "@/components/admin/CdnImagePicker";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -64,6 +65,8 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
   const [entityDropdownOpen, setEntityDropdownOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const entityDropdownRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
   const refreshMessages = useCallback(() => {
     fetch("/api/admin/messages")
@@ -174,6 +177,21 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
     });
 
     if (res.ok) refreshMessages();
+  }
+
+  // Insert an embed token at the caret, on its own line.
+  function insertAtCursor(token: string) {
+    const ta = bodyRef.current;
+    if (!ta || !editing) return;
+    const before = ta.value.slice(0, ta.selectionStart);
+    const after = ta.value.slice(ta.selectionEnd);
+    const snippet = `${before && !before.endsWith("\n") ? "\n" : ""}${token}\n`;
+    setEditing({ ...editing, body: before + snippet + after });
+    const pos = (before + snippet).length;
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    });
   }
 
   function toggleRecipient(userId: number) {
@@ -502,8 +520,28 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
 
               {/* Body */}
               <div>
-                <label className="text-[10px] tracking-[0.2em] uppercase text-white/40 mb-1 block" style={cinzel}>Message</label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="text-[10px] tracking-[0.2em] uppercase text-white/40 block" style={cinzel}>Message</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowImagePicker(true)}
+                    className="px-2 py-0.5 text-[10px] rounded border border-indigo-500/30 text-indigo-300/80 hover:bg-indigo-500/15 hover:text-indigo-200 transition-colors"
+                  >
+                    + Image
+                  </button>
+                </div>
+                {/* Keep in sync with renderMessageBody in components/inbox/MessageModal.tsx */}
+                <ul className="text-[10px] text-white/35 mb-1.5 flex flex-col gap-0.5">
+                  <li>
+                    <code className="text-indigo-300/70 font-mono">[yt=VIDEO_ID]</code> embeds a YouTube video (the id after{" "}
+                    <code className="font-mono">watch?v=</code>)
+                  </li>
+                  <li>
+                    <code className="text-indigo-300/70 font-mono">[img=URL]</code> embeds an image; players can click it to enlarge
+                  </li>
+                </ul>
                 <textarea
+                  ref={bodyRef}
                   className="w-full bg-white/10 border border-white/20 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-white/40 min-h-[120px] resize-y"
                   value={editing.body}
                   onChange={(e) => setEditing({ ...editing, body: e.target.value })}
@@ -528,6 +566,18 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
             </div>
           </div>
         </div>
+      )}
+
+      {showImagePicker && editing && (
+        <CdnImagePicker
+          folder="messages"
+          title="Message Images"
+          onSelect={(url) => {
+            insertAtCursor(`[img=${url}]`);
+            setShowImagePicker(false);
+          }}
+          onClose={() => setShowImagePicker(false)}
+        />
       )}
     </div>
   );

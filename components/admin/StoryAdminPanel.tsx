@@ -6,7 +6,7 @@ import type { StoryEntry, StoryVisibility } from "@/types/story";
 import ChapterDropdown, { toRoman } from "@/components/investigation/ChapterDropdown";
 import { PAGE_BREAK, imageToken, parseStoryBody } from "@/lib/story";
 import StoryBook from "@/components/storybook/StoryBook";
-import StoryImagePicker from "@/components/admin/StoryImagePicker";
+import CdnImagePicker from "@/components/admin/CdnImagePicker";
 import MentionPicker, { type MentionEntity } from "@/components/investigation/MentionPicker";
 import {
   detectMention,
@@ -740,8 +740,9 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
       )}
 
       {showPicker && editor && editor.form.chapter !== null && (
-        <StoryImagePicker
-          chapter={editor.form.chapter}
+        <CdnImagePicker
+          folder={`storybook/${editor.form.chapter}`}
+          title={`Chapter ${editor.form.chapter} Images`}
           onSelect={(url) => {
             insertAtCursor(imageToken(url));
             setShowPicker(false);
