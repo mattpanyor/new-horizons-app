@@ -36,10 +36,11 @@ function chunkToPage(lines: string[]): StoryPage {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    // A `# Heading` line becomes a heading block wherever it appears.
-    if (/^#\s+/.test(trimmed)) {
+    // `# Heading` / `## Subheading` lines become heading blocks wherever they appear.
+    const h = trimmed.match(/^(#{1,2})\s+(.*)$/);
+    if (h) {
       flush();
-      blocks.push({ type: "heading", text: trimmed.replace(/^#\s+/, "").trim() });
+      blocks.push({ type: "heading", text: h[2].trim(), level: h[1].length as 1 | 2 });
       continue;
     }
     const m = line.match(IMAGE_RE);

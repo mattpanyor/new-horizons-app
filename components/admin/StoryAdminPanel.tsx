@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import type { Chapter } from "@/types/investigation";
 import type { StoryEntry, StoryVisibility } from "@/types/story";
 import ChapterDropdown, { toRoman } from "@/components/investigation/ChapterDropdown";
-import { PAGE_BREAK, imageToken } from "@/lib/story";
+import { PAGE_BREAK, imageToken, parseStoryBody } from "@/lib/story";
+import StoryBook from "@/components/storybook/StoryBook";
 import StoryImagePicker from "@/components/admin/StoryImagePicker";
 import MentionPicker, { type MentionEntity } from "@/components/investigation/MentionPicker";
 import {
@@ -67,6 +68,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
   const [mention, setMention] = useState<MentionState | null>(null);
   const [entities, setEntities] = useState<MentionEntity[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [preview, setPreview] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   // Close the editor, guarding unsaved work.
@@ -74,6 +76,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
     if (dirty && !confirm("Discard unsaved changes to this entry?")) return;
     setEditor(null);
     setMention(null);
+    setPreview(false);
     setDirty(false);
     setError(null);
   }
@@ -84,7 +87,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
   useEffect(() => {
     if (!editor) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !mention && !showPicker) {
+      if (e.key === "Escape" && !mention && !showPicker && !preview) {
         e.preventDefault();
         requestClose();
       }
@@ -92,7 +95,28 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, mention, showPicker, dirty]);
+  }, [editor, mention, showPicker, preview, dirty]);
+
+  // Esc closes the preview (capture phase, so the editor behind it stays open).
+  useEffect(() => {
+    if (!preview) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPreview(false);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [preview]);
+
+  function openPreview() {
+    // Drop textarea focus so the book's arrow-key paging doesn't also move the caret.
+    (document.activeElement as HTMLElement | null)?.blur();
+    setMention(null);
+    setPreview(true);
+  }
 
   // Kanka entities for @mentions (same source as the investigation board).
   useEffect(() => {
@@ -415,6 +439,13 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
+                onClick={openPreview}
+                className="px-3 py-1.5 rounded border border-white/15 hover:border-white/35 text-[10px] tracking-[0.2em] uppercase text-white/60 hover:text-white/90 cursor-pointer"
+                style={cinzel}
+              >
+                Preview
+              </button>
+              <button
                 onClick={requestClose}
                 className="px-3 py-1.5 text-[10px] tracking-[0.2em] uppercase text-white/45 hover:text-white/85 cursor-pointer"
                 style={cinzel}
@@ -468,6 +499,14 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                   style={cinzel}
                 >
                   + Heading
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor("## Subheading")}
+                  className="text-[9px] tracking-[0.15em] uppercase text-white/50 hover:text-white/85 border border-white/15 hover:border-white/35 rounded px-2.5 py-1.5 cursor-pointer"
+                  style={cinzel}
+                >
+                  + Subheading
                 </button>
                 <button
                   type="button"
@@ -633,6 +672,7 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                 <ul className="flex flex-col gap-1.5 text-[11px] text-white/45 leading-relaxed">
                   <li><span className="text-white/60">blank line</span> — new paragraph</li>
                   <li><code className="text-amber-200/70 font-mono"># Heading</code> — centred title (anywhere)</li>
+                  <li><code className="text-amber-200/70 font-mono">## Subheading</code> — red rubric between gilt rules</li>
                   <li><code className="text-amber-200/70 font-mono">---PAGE---</code> — start a new section</li>
                   <li><code className="text-amber-200/70 font-mono">@</code> — mention a Kanka entity</li>
                   <li><span className="italic text-white/60">&quot;spoken&quot;</span> — dialogue is italicised</li>
@@ -663,6 +703,38 @@ export default function StoryAdminPanel({ chapters, users, initialEntries }: Pro
                 );
               })()}
             </aside>
+          </div>
+        </div>
+      )}
+
+      {preview && editor && (
+        <div
+          className="fixed inset-0 z-[60] overflow-y-auto"
+          style={{ background: "radial-gradient(120% 100% at 50% 0%, #1a140c 0%, #0d0a06 55%, #050403 100%)" }}
+        >
+          <div className="fixed top-0 inset-x-0 z-10 flex items-center justify-between gap-3 h-11 px-4 sm:px-6 border-b border-amber-400/15 bg-black/50 backdrop-blur-sm">
+            <span className="text-[9px] tracking-[0.3em] uppercase text-amber-200/60" style={cinzel}>
+              Preview{dirty ? " · unsaved draft" : ""}
+            </span>
+            <button
+              onClick={() => setPreview(false)}
+              className="px-3 py-1 rounded border border-amber-400/40 text-[10px] tracking-[0.2em] uppercase text-amber-200 hover:bg-amber-400/10 cursor-pointer"
+              style={cinzel}
+            >
+              Back to editor
+            </button>
+          </div>
+          <div className="pt-11">
+            <StoryBook
+              title={editor.form.title.trim() || "Untitled"}
+              chapter={editor.form.chapter ?? 0}
+              chapterTitle={chapters.find((c) => c.number === editor.form.chapter)?.title ?? null}
+              sessionNumber={
+                editor.form.sessionNumber.trim() === "" ? null : Number(editor.form.sessionNumber)
+              }
+              pages={parseStoryBody(editor.form.body)}
+              syncUrl={false}
+            />
           </div>
         </div>
       )}
