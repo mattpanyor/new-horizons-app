@@ -53,6 +53,7 @@ interface ImageItem {
 interface HeadingItem {
   type: "heading";
   text: string;
+  level: 1 | 2;
 }
 type Item = TextItem | ImageItem | HeadingItem;
 
@@ -73,7 +74,7 @@ function toSections(pages: StoryPage[]): Section[] {
       if (block.type === "image") {
         items.push({ type: "image", url: block.url, alt: block.alt });
       } else if (block.type === "heading") {
-        items.push({ type: "heading", text: block.text });
+        items.push({ type: "heading", text: block.text, level: block.level });
       } else {
         for (const para of block.paragraphs) {
           items.push({ type: "text", text: para, dropCap: firstPara });
@@ -201,7 +202,34 @@ const Paragraph = forwardRef<HTMLParagraphElement, { text: string; dropCap: bool
   }
 );
 
-const HeadingBlock = forwardRef<HTMLDivElement, { text: string }>(function HeadingBlock({ text }, ref) {
+// Oxblood, like the red-ink rubrics scribes used to mark divisions within a chapter.
+const RUBRIC = "#7a2a1a";
+
+// Gilt hairline ending in a small lozenge, pointing toward the subheading text.
+function RubricRule({ flip }: { flip?: boolean }) {
+  return (
+    <span className="flex-1 flex items-center" style={{ minWidth: "1.5em", flexDirection: flip ? "row-reverse" : "row" }}>
+      <span style={{ flex: 1, height: 1, background: `linear-gradient(${flip ? 270 : 90}deg, transparent, ${GOLD})` }} />
+      <span style={{ width: "0.38em", height: "0.38em", margin: "0 0.45em", transform: "rotate(45deg)", background: GOLD, flexShrink: 0 }} />
+    </span>
+  );
+}
+
+const HeadingBlock = forwardRef<HTMLDivElement, { text: string; level: 1 | 2 }>(function HeadingBlock({ text, level }, ref) {
+  if (level === 2) {
+    return (
+      <div ref={ref} className="flex items-center" style={{ margin: "0.5em 0 0.85em" }}>
+        <RubricRule />
+        <h3
+          className="text-center uppercase"
+          style={{ ...cinzel, color: RUBRIC, letterSpacing: "0.18em", lineHeight: 1.25, fontSize: "clamp(10px, 2.1cqw, 16px)", maxWidth: "78%" }}
+        >
+          {buildParagraphNodes(text, false)}
+        </h3>
+        <RubricRule flip />
+      </div>
+    );
+  }
   return (
     <div ref={ref} className="text-center" style={{ marginBottom: "1.15em" }}>
       <h2
@@ -303,7 +331,7 @@ function Leaf({
         <div className="absolute overflow-hidden" style={{ left, right, top: BODY_TOP, bottom: BODY_BOTTOM }}>
           {page?.items.map((it, i) =>
             it.type === "heading" ? (
-              <HeadingBlock key={i} text={it.text} />
+              <HeadingBlock key={i} text={it.text} level={it.level} />
             ) : it.type === "text" ? (
               <Paragraph key={i} text={it.text} dropCap={it.dropCap} />
             ) : (
@@ -327,6 +355,8 @@ interface Props {
   sessionNumber: number | null;
   pages: StoryPage[];
   initialSpread?: number;
+  // Off for the editor preview, which must not write ?p= into the admin URL.
+  syncUrl?: boolean;
 }
 
 export default function StoryBook({
@@ -336,6 +366,7 @@ export default function StoryBook({
   sessionNumber,
   pages,
   initialSpread = 0,
+  syncUrl = true,
 }: Props) {
   const sections = useMemo(() => toSections(pages), [pages]);
   const imageUrls = useMemo(
@@ -475,11 +506,12 @@ export default function StoryBook({
   // Keep the current spread in the URL (?p=) so a refresh resumes where the
   // reader left off. replaceState avoids a navigation / server refetch.
   useEffect(() => {
+    if (!syncUrl) return;
     const url = new URL(window.location.href);
     if (safeSpread > 0) url.searchParams.set("p", String(safeSpread + 1));
     else url.searchParams.delete("p");
     window.history.replaceState(null, "", url.toString());
-  }, [safeSpread]);
+  }, [safeSpread, syncUrl]);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -613,7 +645,7 @@ export default function StoryBook({
             <div key={si} ref={bind(`flow-${si}`)} style={{ position: "relative", width: bodyW }}>
               {sec.items.map((it, j) =>
                 it.type === "heading" ? (
-                  <HeadingBlock key={j} ref={bind(`it-${si}-${j}`)} text={it.text} />
+                  <HeadingBlock key={j} ref={bind(`it-${si}-${j}`)} text={it.text} level={it.level} />
                 ) : it.type === "text" ? (
                   <Paragraph key={j} ref={bind(`it-${si}-${j}`)} text={it.text} dropCap={it.dropCap} />
                 ) : (
