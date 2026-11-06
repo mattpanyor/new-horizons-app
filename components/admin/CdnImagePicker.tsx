@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const cinzel = { fontFamily: "var(--font-cinzel), serif" };
 
@@ -23,60 +23,85 @@ function fileName(pathname: string): string {
 }
 
 interface Props {
-  chapter: number;
+  // Folder to open on, without a trailing slash, e.g. "storybook/3" or "messages".
+  // Created on open if missing. The breadcrumb lets the user browse the whole CDN from there.
+  folder: string;
+  title: string;
   onSelect: (url: string) => void;
   onClose: () => void;
 }
 
-export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) {
-  const prefix = `storybook/${chapter}/`;
+// Pick (or upload) an image from Vercel Blob, opening on `folder`.
+export default function CdnImagePicker({ folder, title, onSelect, onClose }: Props) {
+  const [current, setCurrent] = useState(folder); // "" = CDN root
   const [images, setImages] = useState<BlobItem[]>([]);
-  const [status, setStatus] = useState<"init" | "ready">("init");
+  const [subfolders, setSubfolders] = useState<string[]>([]);
+  const [ensured, setEnsured] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const loadImages = useCallback(async () => {
-    const res = await fetch(`/api/admin/cdn?prefix=${encodeURIComponent(prefix)}`);
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      setError(data?.error ?? "Failed to load images");
-      return;
-    }
-    const blobs: BlobItem[] = (data.blobs ?? []).filter(
-      (b: BlobItem) => b.pathname !== prefix && !b.pathname.endsWith("/") && isImage(b.pathname)
-    );
-    setImages(blobs);
-  }, [prefix]);
-
-  // On open: ensure storybook/<chapter>/ exists, creating it if missing.
+  // On open: ensure the home folder exists, creating it if missing.
   useEffect(() => {
     let cancelled = false;
+    const parent = folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/") + 1) : "";
     (async () => {
-      setStatus("init");
-      setError(null);
       try {
-        const res = await fetch(`/api/admin/cdn?prefix=${encodeURIComponent("storybook/")}`);
+        const res = await fetch(`/api/admin/cdn?prefix=${encodeURIComponent(parent)}`);
         const data = await res.json().catch(() => null);
-        const folders: string[] = data?.folders ?? [];
-        if (!folders.includes(prefix)) {
+        if (!(data?.folders ?? []).includes(`${folder}/`)) {
           await fetch("/api/admin/cdn/folders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: `storybook/${chapter}` }),
+            body: JSON.stringify({ path: folder }),
           });
         }
-        await loadImages();
       } catch {
         if (!cancelled) setError("Could not reach the CDN");
       } finally {
-        if (!cancelled) setStatus("ready");
+        if (!cancelled) setEnsured(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [chapter, prefix, loadImages]);
+  }, [folder]);
+
+  // List the current folder. `cancelled` drops a slow response for a folder the user already left.
+  useEffect(() => {
+    if (!ensured) return;
+    let cancelled = false;
+    const prefix = current ? `${current}/` : "";
+    (async () => {
+      setLoading(true);
+      try {
+        // shortcut: first 200 entries only (API page size), add "load more" if a folder outgrows it.
+        const res = await fetch(`/api/admin/cdn?prefix=${encodeURIComponent(prefix)}`);
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(data?.error ?? "Failed to load images");
+          return;
+        }
+        setError(null);
+        setSubfolders(((data.folders ?? []) as string[]).filter((f) => f !== prefix));
+        setImages(
+          ((data.blobs ?? []) as BlobItem[]).filter(
+            (b) => b.pathname !== prefix && !b.pathname.endsWith("/") && isImage(b.pathname)
+          )
+        );
+      } catch {
+        if (!cancelled) setError("Could not reach the CDN");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [current, ensured, reloadKey]);
 
   // Esc closes the picker (capture phase, so it wins over the editor's Esc).
   useEffect(() => {
@@ -102,7 +127,7 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
     // Uploads use the raw filename with no random suffix, so a same-named file
     // silently overwrites the existing one (and hijacks any embedded token).
     if (images.some((b) => fileName(b.pathname) === file.name)) {
-      if (!confirm(`An image named "${file.name}" already exists in this chapter. Replace it?`)) {
+      if (!confirm(`An image named "${file.name}" already exists in this folder. Replace it?`)) {
         return;
       }
     }
@@ -110,7 +135,7 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
     setError(null);
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("folder", `storybook/${chapter}`);
+    formData.append("folder", current);
     const res = await fetch("/api/admin/cdn", { method: "POST", body: formData });
     const data = await res.json().catch(() => null);
     setUploading(false);
@@ -118,7 +143,7 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
       setError(data?.error ?? "Upload failed");
       return;
     }
-    await loadImages();
+    setReloadKey((k) => k + 1);
   }
 
   async function handleDelete(blob: BlobItem) {
@@ -136,6 +161,8 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
     setImages((prev) => prev.filter((b) => b.url !== blob.url));
   }
 
+  const segments = current ? current.split("/") : [];
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
@@ -151,7 +178,7 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
       >
         <div className="flex items-center justify-between gap-3 mb-1">
           <h3 className="text-[10px] tracking-[0.3em] uppercase text-white/65" style={cinzel}>
-            Chapter {chapter} Images
+            {title}
           </h3>
           <button
             onClick={onClose}
@@ -161,17 +188,47 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
             Close
           </button>
         </div>
-        <p className="text-[9px] text-white/30 font-mono mb-3">{prefix}</p>
+        <nav aria-label="CDN folder" className="flex items-center flex-wrap gap-1 text-[10px] font-mono mb-3">
+          <button
+            onClick={() => setCurrent("")}
+            className={`cursor-pointer ${current === "" ? "text-amber-200/90" : "text-white/40 hover:text-amber-200/80"}`}
+          >
+            CDN
+          </button>
+          {segments.map((seg, i) => {
+            const path = segments.slice(0, i + 1).join("/");
+            return (
+              <span key={path} className="flex items-center gap-1">
+                <span className="text-white/20">/</span>
+                <button
+                  onClick={() => setCurrent(path)}
+                  className={`cursor-pointer ${path === current ? "text-amber-200/90" : "text-white/40 hover:text-amber-200/80"}`}
+                >
+                  {seg}
+                </button>
+              </span>
+            );
+          })}
+          {current !== folder && (
+            <button
+              onClick={() => setCurrent(folder)}
+              className="ml-auto text-[9px] tracking-[0.15em] uppercase text-white/35 hover:text-amber-200/80 cursor-pointer"
+              style={cinzel}
+            >
+              ↺ Back to {folder}
+            </button>
+          )}
+        </nav>
 
         <div className="flex items-center gap-2 mb-3">
           <button
             onClick={() => fileRef.current?.click()}
-            disabled={uploading || status === "init"}
+            disabled={uploading || !ensured || loading}
             className="px-4 py-2 rounded border border-amber-400/30 text-amber-200/85 hover:text-amber-200 hover:border-amber-400/60 hover:bg-amber-400/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             style={cinzel}
           >
             <span className="text-[10px] tracking-[0.25em] uppercase">
-              {uploading ? "Uploading…" : "Upload image"}
+              {uploading ? "Uploading…" : `Upload to ${current || "CDN root"}`}
             </span>
           </button>
           <input
@@ -190,16 +247,32 @@ export default function StoryImagePicker({ chapter, onSelect, onClose }: Props) 
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {status === "init" ? (
+          {!ensured || loading ? (
             <p className="py-10 text-center text-[10px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
-              Preparing folder…
+              Loading…
             </p>
-          ) : images.length === 0 ? (
+          ) : subfolders.length === 0 && images.length === 0 ? (
             <p className="py-10 text-center text-[10px] tracking-[0.2em] uppercase text-white/30" style={cinzel}>
-              No images yet — upload one above
+              Empty folder — upload an image above
             </p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {subfolders.map((f) => {
+                const name = f.slice(0, -1).split("/").pop();
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setCurrent(f.slice(0, -1))}
+                    title={`Open ${f}`}
+                    className="flex flex-col items-center justify-center gap-1.5 aspect-video rounded border border-white/12 hover:border-amber-400/60 bg-white/[0.03] hover:bg-amber-400/[0.06] cursor-pointer transition-colors"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" className="text-amber-200/50">
+                      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    </svg>
+                    <span className="text-[10px] text-white/60 truncate max-w-[90%]">{name}</span>
+                  </button>
+                );
+              })}
               {images.map((blob) => (
                 <div key={blob.url} className="group relative">
                   <button

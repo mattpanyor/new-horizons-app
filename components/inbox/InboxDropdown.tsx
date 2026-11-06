@@ -188,7 +188,10 @@ export function InboxDropdown() {
                         {msg.subject}
                       </div>
                       <div className="text-[10px] text-white/25 truncate mt-0.5">
-                        {msg.body.slice(0, 80)}{msg.body.length > 80 ? "..." : ""}
+                        {(() => {
+                          const preview = msg.body.replace(/\[img=[^\]]+\]/g, "[image]").replace(/\[yt=[^\]]+\]/g, "[video]");
+                          return preview.length > 80 ? `${preview.slice(0, 80)}...` : preview;
+                        })()}
                       </div>
                     </div>
                     {/* Unread dot */}

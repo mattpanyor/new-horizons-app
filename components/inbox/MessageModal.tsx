@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import type { InboxMessage } from "./InboxDropdown";
@@ -12,9 +13,32 @@ interface MessageModalProps {
   onAcknowledge?: () => void;
 }
 
-function renderMessageBody(body: string): React.ReactNode[] {
-  const parts = body.split(/(\[yt=[^\]]+\])/g);
+// Embed tokens: [yt=VIDEO_ID] and [img=URL]. The compose hint in AdminMessagesPanel lists these.
+const EMBED_RE = /(\[(?:yt|img)=[^\]]+\])/g;
+
+function renderMessageBody(body: string, onImageClick: (url: string) => void): React.ReactNode[] {
+  const parts = body.split(EMBED_RE);
   return parts.map((part, i) => {
+    const img = part.match(/^\[img=(https?:\/\/[^\]\s]+)\]$/);
+    if (img) {
+      return (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onImageClick(img[1])}
+          aria-label="Enlarge image"
+          className="block my-3 mx-auto max-w-full cursor-zoom-in p-0 border-0 bg-transparent"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={img[1]}
+            alt=""
+            className="block max-w-full max-h-[32vh] w-auto h-auto rounded"
+            style={{ border: "1px solid rgba(99,102,241,0.3)", boxShadow: "0 0 12px rgba(99,102,241,0.12)" }}
+          />
+        </button>
+      );
+    }
     const match = part.match(/^\[yt=([^\]]+)\]$/);
     if (match) {
       return (
@@ -34,6 +58,21 @@ function renderMessageBody(body: string): React.ReactNode[] {
 
 export function MessageModal({ message, onClose, onAcknowledge }: MessageModalProps) {
   const panelRef = useModalA11y(onClose);
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  // Esc closes the enlarged image only. Capture phase runs before useModalA11y's
+  // listener, so stopping it here keeps the message open.
+  useEffect(() => {
+    if (!lightbox) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setLightbox(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [lightbox]);
 
   return createPortal(
     <div
@@ -154,7 +193,7 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
         {/* Body */}
         <div className="px-6 pt-2 max-h-[40vh] overflow-y-auto scifi-scroll">
           <div className="text-sm text-white/55 leading-relaxed whitespace-pre-wrap">
-            {renderMessageBody(message.body)}
+            {renderMessageBody(message.body, setLightbox)}
           </div>
         </div>
 
@@ -196,6 +235,45 @@ export function MessageModal({ message, onClose, onAcknowledge }: MessageModalPr
           )}
         </div>
       </div>
+      {/* Enlarged image. Its own portal: the panel's backdrop-filter would trap a fixed
+          child inside it. stopPropagation because React bubbles portal clicks to the backdrop's onClose. */}
+      {lightbox &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center p-6 sm:p-12 bg-black/70 backdrop-blur-sm cursor-zoom-out"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightbox(null);
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightbox(null);
+              }}
+              aria-label="Close image"
+              className="absolute top-4 right-5 w-10 h-10 flex items-center justify-center rounded-full text-indigo-200/80 hover:text-white transition-colors"
+              style={{ border: "1px solid rgba(99,102,241,0.45)", background: "rgba(10,10,30,0.8)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightbox}
+              alt=""
+              onClick={(e) => e.stopPropagation()}
+              className="block max-w-[90vw] max-h-[85vh] object-contain rounded cursor-default"
+              style={{
+                border: "1px solid rgba(99,102,241,0.5)",
+                boxShadow: "0 0 0 4px rgba(10,10,30,0.9), 0 0 0 5px rgba(129,140,248,0.35), 0 0 40px rgba(99,102,241,0.25), 0 24px 55px rgba(0,0,0,0.8)",
+              }}
+            />
+          </div>,
+          document.body,
+        )}
     </div>,
     document.body,
   );
