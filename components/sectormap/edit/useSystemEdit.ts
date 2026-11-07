@@ -331,14 +331,16 @@ export function useSystemEdit(): SystemEditApi {
           const u: Record<string, unknown> = { id: dbId };
           if (fields.name !== undefined) u.name = fields.name;
           if (fields.type !== undefined) u.type = fields.type;
-          if (fields.biome !== undefined) u.biomeSlug = fields.biome ?? null;
-          if (fields.lore !== undefined) u.lore = fields.lore ?? null;
+          // Clearable fields: the form clears them by setting undefined, so key
+          // presence (not value) means "touched" — send null to clear in the DB.
+          if ("biome" in fields) u.biomeSlug = fields.biome ?? null;
+          if ("lore" in fields) u.lore = fields.lore ?? null;
           if (fields.orbitPosition !== undefined) u.orbitPosition = fields.orbitPosition;
           if (fields.orbitDistance !== undefined) u.orbitDistance = fields.orbitDistance;
-          if (fields.labelPosition !== undefined) u.labelPosition = fields.labelPosition ?? null;
-          if (fields.special_attribute !== undefined) u.specialAttribute = fields.special_attribute ?? null;
-          if (fields.allegiance !== undefined) u.allegianceSlug = fields.allegiance ?? null;
-          if (fields.externalUrl !== undefined) u.externalUrl = fields.externalUrl ?? null;
+          if ("labelPosition" in fields) u.labelPosition = fields.labelPosition ?? null;
+          if ("special_attribute" in fields) u.specialAttribute = fields.special_attribute ?? null;
+          if ("allegiance" in fields) u.allegianceSlug = fields.allegiance ?? null;
+          if ("externalUrl" in fields) u.externalUrl = fields.externalUrl ?? null;
           if (fields.published !== undefined) u.published = fields.published;
           arr.push(u);
         }

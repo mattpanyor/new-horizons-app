@@ -9,7 +9,7 @@
 
 import { useMemo, useState } from "react";
 import type { SystemEditApi, StarFields } from "./useSystemEdit";
-import { CENTER_KINDS, type CenterKind } from "@/lib/mapEnums";
+import { CENTER_KINDS, isMovableType, type CenterKind } from "@/lib/mapEnums";
 import { useEditMode } from "./EditModeProvider";
 import { MoveShipDialog, type MoveShipSource } from "./MoveShipDialog";
 
@@ -82,7 +82,7 @@ export function SystemEditSidebar({ api }: Props) {
 
     // (1) Body ships/fleets in this system
     for (const b of api.baseSystem.bodies) {
-      if (b.type !== "ship" && b.type !== "fleet") continue;
+      if (!isMovableType(b.type)) continue;
       if (b.dbId === undefined) continue; // can't move JSON-loaded body
       rows.push({
         source: { bodyId: b.dbId },
@@ -94,7 +94,7 @@ export function SystemEditSidebar({ api }: Props) {
 
     // (2) Free markers near the system (legacy parked markers)
     for (const m of effectiveSector.markers ?? []) {
-      if (m.type !== "ship" && m.type !== "fleet") continue;
+      if (!isMovableType(m.type)) continue;
       if (m.x === undefined || m.y === undefined || m.id === undefined) continue;
       const dx = m.x - pin.x;
       const dy = m.y - pin.y;
@@ -111,7 +111,7 @@ export function SystemEditSidebar({ api }: Props) {
     for (const c of effectiveSector.connections ?? []) {
       const mk = c.marker;
       if (!mk || mk.id === undefined) continue;
-      if (mk.type !== "ship" && mk.type !== "fleet") continue;
+      if (!isMovableType(mk.type)) continue;
       if (c.from !== slug && c.to !== slug) continue;
       rows.push({
         source: { markerId: mk.id },

@@ -9,6 +9,7 @@ export const BODY_TYPES = [
   "moon",
   "ship",
   "fleet",
+  "lightbringer",
   "asteroid-field",
   "black-hole",
 ] as const;
@@ -17,11 +18,17 @@ export type BodyType = (typeof BODY_TYPES)[number];
 export const MARKER_TYPES = [
   "ship",
   "fleet",
+  "lightbringer",
   "anomaly",
   "poi",
   "black-hole",
 ] as const;
 export type MarkerType = (typeof MARKER_TYPES)[number];
+
+// Ship-like types: can be moved between systems and connections via move-ship.
+export const MOVABLE_TYPES = ["ship", "fleet", "lightbringer"] as const;
+export const isMovableType = (t: string | undefined): boolean =>
+  (MOVABLE_TYPES as readonly string[]).includes(t ?? "");
 
 export const LAYERS = ["movement", "story", "conflict", "invasion"] as const;
 export type Layer = (typeof LAYERS)[number];

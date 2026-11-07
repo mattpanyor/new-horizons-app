@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** Viewport bounds in SVG coordinate space */
 export interface SvgViewBox {
@@ -14,7 +14,7 @@ export interface SvgTooltipProps {
   /** Anchor point in local (parent group) coordinate space */
   anchorX: number;
   anchorY: number;
-  /** Card dimensions in local coordinate space */
+  /** Minimum card width, and a first-frame height estimate; real size is measured from content */
   cardW: number;
   cardH: number;
   /** Accent color for connector, caret, and border */
@@ -57,6 +57,26 @@ export function SvgTooltip({
   onMouseLeave,
   children,
 }: SvgTooltipProps) {
+  const minCardW = cardW;
+  // Content decides the size: text never wraps, so a long title widens the card
+  // (min cardW) and height only changes with optional rows like the Kanka link.
+  // A fixed cardH used to clip the bottom border. Offsets are in local units
+  // because 1 CSS px inside the foreignObject = 1 local unit.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const read = () => setMeasured((m) =>
+      m && m.w === el.offsetWidth && m.h === el.offsetHeight ? m : { w: el.offsetWidth, h: el.offsetHeight });
+    read();
+    const ro = new ResizeObserver(read); // web fonts loading can re-wrap the title
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  cardW = measured?.w ?? cardW;
+  cardH = measured?.h ?? cardH;
+
   // --- Vertical flip detection ---
   // Convert anchor to SVG space to compare with viewBox top edge
   const svgAnchorY = parentOffsetY + anchorY * scale;
@@ -113,6 +133,7 @@ export function SvgTooltip({
         width={cardW} height={cardH}
       >
         <div
+          ref={contentRef}
           onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
           style={{
             background: "rgba(10,10,30,0.92)",
@@ -123,7 +144,8 @@ export function SvgTooltip({
             borderRadius: "6px",
             padding: "8px 10px",
             fontFamily: "var(--font-cinzel), serif",
-            width: `${cardW}px`,
+            width: "max-content",
+            minWidth: `${minCardW}px`,
             boxSizing: "border-box",
             boxShadow: `0 0 20px ${color}30`,
           }}>

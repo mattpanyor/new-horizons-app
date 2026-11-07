@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS celestial_bodies (
   body_id           VARCHAR(40) NOT NULL,
   name              VARCHAR(120) NOT NULL,
   type              VARCHAR(20) NOT NULL CHECK (type IN
-    ('planet','station','moon','ship','fleet','asteroid-field','black-hole')),
+    ('planet','station','moon','ship','fleet','lightbringer','asteroid-field','black-hole')),
   biome_slug        VARCHAR(30) REFERENCES biomes(slug) ON DELETE SET NULL,
   lore              TEXT,
   orbit_position    DOUBLE PRECISION NOT NULL,
@@ -214,7 +214,7 @@ CREATE TABLE IF NOT EXISTS markers (
   slug             VARCHAR(60) NOT NULL,
   name             VARCHAR(120) NOT NULL,
   type             VARCHAR(20) NOT NULL CHECK (type IN
-    ('ship','fleet','anomaly','poi','black-hole')),
+    ('ship','fleet','lightbringer','anomaly','poi','black-hole')),
   allegiance_slug  VARCHAR(40) REFERENCES allegiances(slug) ON DELETE SET NULL,
   external_url        TEXT,
   territory_radius DOUBLE PRECISION,
