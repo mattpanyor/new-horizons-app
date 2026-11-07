@@ -69,9 +69,16 @@ export const BLACK_HOLE_COLORS: BodyColors = {
   secondaryColor: "#2E1065",
 };
 
+// Matches SPECIAL_ATTRIBUTES.lightbringer so the object and the planet attribute read as one faction.
+export const LIGHTBRINGER_COLORS: BodyColors = {
+  color: "#FFE87A",
+  secondaryColor: "#FFE87A",
+};
+
 export const MARKER_COLORS: Record<string, BodyColors> = {
   ship: SHIP_COLORS,
   fleet: SHIP_COLORS,
+  lightbringer: LIGHTBRINGER_COLORS,
   anomaly: ANOMALY_COLORS,
   poi: POI_COLORS,
   "black-hole": BLACK_HOLE_COLORS,
@@ -84,6 +91,7 @@ export function getBodyColors(body: { type: string; biome?: string }): BodyColor
 
     case "ship": return SHIP_COLORS;
     case "fleet": return SHIP_COLORS;
+    case "lightbringer": return LIGHTBRINGER_COLORS;
     case "asteroid-field": return ASTEROID_FIELD_COLORS;
     case "black-hole": return { color: "#A78BFA", secondaryColor: "#2E1065" };
     default:

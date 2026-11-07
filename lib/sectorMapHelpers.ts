@@ -119,7 +119,8 @@ export function getBodyPos(orbitPos: number, orbitDist: number) {
 /** Hit radius per body type for proximity-based hover detection */
 export function bodyHitRadius(bodyType: string): number {
   switch (bodyType) {
-    case "fleet": return 40;
+    case "fleet":
+    case "lightbringer": return 40;
     case "asteroid-field": return 50;
     case "station": return 30;
     default: return 30;

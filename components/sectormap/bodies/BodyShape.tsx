@@ -1,6 +1,7 @@
 // SVG shape per body type: circle (planet/moon), diamond (station),
 // triangle (ship), fleet formation, asteroid dot cluster + highlight ring.
 
+import { LightbringerStar } from "@/components/specialAttributes/SpecialAttributeIcon";
 import { tri, triLeft, asteroidDots } from "@/lib/sectorMapHelpers";
 import { FLEET_SHIPS } from "@/lib/sectorMapHelpers";
 
@@ -74,6 +75,8 @@ export function BodyShape({
           fill={fillId} stroke={activeStroke}
           strokeWidth={isBodyActive ? "2" : "0.8"} style={glowStyle} />
       )}
+
+      {bodyType === "lightbringer" && <LightbringerStar cx={posX} cy={posY} r={16} glow />}
 
       {bodyType === "fleet" && (
         <g style={glowStyle}>
@@ -162,7 +165,7 @@ export function BodyShape({
         </g>
       )}
 
-      {bodyType !== "station" && bodyType !== "ship" && bodyType !== "fleet" && bodyType !== "asteroid-field" && bodyType !== "black-hole" && (
+      {bodyType !== "station" && bodyType !== "ship" && bodyType !== "fleet" && bodyType !== "lightbringer" && bodyType !== "asteroid-field" && bodyType !== "black-hole" && (
         <circle cx={posX} cy={posY} r={12}
           fill={fillId} stroke={activeStroke}
           strokeWidth={isBodyActive ? "2" : "0.5"} style={glowStyle} />
@@ -173,7 +176,7 @@ export function BodyShape({
 
 /** Get the label offset radius for a body type */
 export function bodyLabelR(bodyType: string): number {
-  return bodyType === "fleet" ? 22 :
+  return bodyType === "fleet" || bodyType === "lightbringer" ? 22 :
     bodyType === "asteroid-field" ? 32 :
       bodyType === "black-hole" ? 18 :
         bodyType === "station" ? 10 : 12;

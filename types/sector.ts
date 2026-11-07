@@ -26,7 +26,7 @@ export interface VortexPin {
   hidden?: boolean;         // if true, omitted by the loader
 }
 
-export type MarkerType = "ship" | "fleet" | "anomaly" | "poi" | "black-hole";
+export type MarkerType = "ship" | "fleet" | "lightbringer" | "anomaly" | "poi" | "black-hole";
 
 // Keys MUST match the .slug values 1:1 so `LayerSlug = keyof typeof MAP_LAYERS`
 // matches the DB enum (lib/db/schema.sql + lib/mapEnums.ts). The earlier

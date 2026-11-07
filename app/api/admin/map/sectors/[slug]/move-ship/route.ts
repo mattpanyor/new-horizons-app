@@ -23,6 +23,7 @@ import { revalidatePath } from "next/cache";
 import { getUserByUsername } from "@/lib/db/users";
 import { getSectorRowBySlug } from "@/lib/db/sectors";
 import { withTransaction } from "@/lib/db/tx";
+import { isMovableType } from "@/lib/mapEnums";
 
 async function requireSuperAdmin() {
   const cookieStore = await cookies();
@@ -95,7 +96,7 @@ export async function PUT(
         const body = bodyRes.rows[0];
         if (!body) throw new MoveError("Source body not found", 404);
         if (body.sector_id !== sector.id) throw new MoveError("Source body is in a different sector", 400);
-        if (body.type !== "ship" && body.type !== "fleet") throw new MoveError("Source body is not a ship or fleet", 400);
+        if (!isMovableType(body.type)) throw new MoveError("Source body is not a ship, fleet or lightbringer", 400);
 
         if (dstSystem !== undefined) {
           // body → body (different system). Update system_id, reset orbit
@@ -171,7 +172,7 @@ export async function PUT(
         );
         const marker = markerRes.rows[0];
         if (!marker) throw new MoveError("Source marker not found", 404);
-        if (marker.type !== "ship" && marker.type !== "fleet") throw new MoveError("Source marker is not a ship or fleet", 400);
+        if (!isMovableType(marker.type)) throw new MoveError("Source marker is not a ship, fleet or lightbringer", 400);
 
         if (dstSystem !== undefined) {
           // marker → body in target system. Delete marker, insert body.

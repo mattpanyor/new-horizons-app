@@ -14,6 +14,7 @@ import {
   BODY_TYPES,
   LABEL_POSITIONS,
   SPECIAL_ATTRIBUTE_KEYS,
+  isMovableType,
   type LabelPosition,
   type SpecialAttribute,
 } from "@/lib/mapEnums";
@@ -189,7 +190,7 @@ function BodyForm({
   onChange: (f: Partial<CelestialBody>) => void;
   onDelete: () => void;
 }) {
-  const canMove = (body.type === "ship" || body.type === "fleet") && body.dbId !== undefined;
+  const canMove = isMovableType(body.type) && body.dbId !== undefined;
   const [moveOpen, setMoveOpen] = useState(false);
   return (
     <div className="space-y-2.5">

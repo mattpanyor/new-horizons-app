@@ -28,6 +28,7 @@ const TYPE_COLORS: Record<string, string> = {
   station:          "#34d399", // emerald
   ship:             "#fbbf24", // amber
   fleet:            "#f87171", // red
+  lightbringer:     "#FFE87A", // lightbringer gold
   "asteroid-field": "#78716c", // stone
 };
 

@@ -5,6 +5,7 @@
  * Static connection paths + labels are rendered server-side in SectorMapSvgLayer.
  * This component only handles the interactive marker layer.
  */
+import { LightbringerStar } from "@/components/specialAttributes/SpecialAttributeIcon";
 import type { ConnectionLine, SystemPin, VortexPin, MapMarker } from "@/types/sector";
 import type { SvgViewBox } from "@/components/SvgTooltip";
 import { SvgTooltip } from "@/components/SvgTooltip";
@@ -119,6 +120,8 @@ export function ConnectionMarkerLayer({
               </>
             )}
 
+            {marker.type === "lightbringer" && <LightbringerStar cx={0} cy={0} r={8} glow />}
+
             {marker.type === "fleet" && (
               <g style={{ filter: isActive ? `drop-shadow(0 0 8px ${FLEET_GRAD_TIP})` : undefined }}>
                 {FLEET_SHIPS.map(({ dx, dy, r }, i) => (
@@ -181,7 +184,7 @@ export function ConnectionMarkerLayer({
                     {marker.name}
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {marker.type === "ship" ? "Ship" : marker.type === "fleet" ? "Fleet" : marker.type}
+                    {marker.type === "ship" ? "Ship" : marker.type === "fleet" ? "Fleet" : marker.type === "lightbringer" ? "Lightbringer" : marker.type}
                     {allegiance && (
                       <>
                         <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>

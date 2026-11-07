@@ -2,6 +2,7 @@
  * Renders free-floating markers (not attached to connection lines)
  * on the sector map, with optional territory blobs and info card tooltips.
  */
+import { LightbringerStar } from "@/components/specialAttributes/SpecialAttributeIcon";
 import type { MapMarker } from "@/types/sector";
 import type { SvgViewBox } from "@/components/SvgTooltip";
 import { SvgTooltip } from "@/components/SvgTooltip";
@@ -98,6 +99,8 @@ export function FreeMarkerLayer({
                   style={{ filter: `drop-shadow(0 0 ${isActive ? 8 : 3}px ${colors.color})` }} />
               </>
             )}
+
+            {marker.type === "lightbringer" && <LightbringerStar cx={0} cy={0} r={8} glow />}
 
             {marker.type === "fleet" && (
               <g style={{ filter: isActive ? `drop-shadow(0 0 8px ${colors.color})` : undefined }}>

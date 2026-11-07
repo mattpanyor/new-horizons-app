@@ -15,7 +15,7 @@ import type {
   MarkerType,
 } from "@/types/sector";
 import { ALLEGIANCES, type AllegianceKey } from "@/lib/allegiances";
-import { MARKER_TYPES, LAYERS } from "@/lib/mapEnums";
+import { MARKER_TYPES, LAYERS, isMovableType } from "@/lib/mapEnums";
 import { MoveShipDialog } from "./MoveShipDialog";
 
 const labelClass = "text-[11px] text-slate-400 tracking-wider uppercase mb-1";
@@ -239,7 +239,7 @@ function MarkerForm({ data, onChange, onDelete }: FormProps<MapMarker>) {
   // that target a connection). Far more reliable than the old heuristic of
   // "has position but no x/y", which flipped state mid-edit.
   const isAttached = data.connectionId !== undefined;
-  const canMove = (data.type === "ship" || data.type === "fleet") && data.id !== undefined;
+  const canMove = isMovableType(data.type) && data.id !== undefined;
   const [moveOpen, setMoveOpen] = useState(false);
   return (
     <div className="space-y-2.5">

@@ -9,6 +9,40 @@ interface SpecialAttributeIconProps {
   labelR: number;
 }
 
+/** The lightbringer star. Shared by the special-attribute badge and the lightbringer map object. */
+// r = outer radius; 6 is the badge size. Inner points and stroke scale with it so the shape stays identical.
+// glow: the same 6px halo as the badge, as an SVG filter so Safari renders it (map object only).
+export function LightbringerStar({ cx, cy, r = 6, glow = false }: { cx: number; cy: number; r?: number; glow?: boolean }) {
+  const attr = SPECIAL_ATTRIBUTES.lightbringer;
+  const o = r, i = r * 0.4;
+  const points = `${cx + o},${cy} ${cx + i},${cy + i} ${cx},${cy + o} ${cx - i},${cy + i} ${cx - o},${cy} ${cx - i},${cy - i} ${cx},${cy - o} ${cx + i},${cy - i}`;
+  if (!glow) {
+    return (
+      <polygon points={points} fill={attr.iconFill} stroke={attr.iconStroke} strokeWidth={r / 3}
+        style={{ filter: `drop-shadow(0 0 6px ${attr.glowColor})` }} />
+    );
+  }
+  // SVG <filter>, not CSS drop-shadow: WebKit/Safari ignores CSS filters on SVG shapes.
+  // Repeated defs are identical, so whichever one resolves is correct.
+  const filterId = "lightbringer-glow";
+  return (
+    <g>
+      <defs>
+        <filter id={filterId} x="-200%" y="-200%" width="500%" height="500%">
+          {/* stdDeviation 3 = CSS drop-shadow blur radius 6px */}
+          <feGaussianBlur in="SourceGraphic" stdDeviation={3} result="halo" />
+          <feMerge>
+            <feMergeNode in="halo" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <polygon points={points} fill={attr.iconFill} stroke={attr.iconStroke} strokeWidth={r / 3}
+        filter={`url(#${filterId})`} />
+    </g>
+  );
+}
+
 export function SpecialAttributeIcon({ type, posX, posY, labelR }: SpecialAttributeIconProps) {
   if (!type) return null;
 
@@ -45,15 +79,8 @@ export function SpecialAttributeIcon({ type, posX, posY, labelR }: SpecialAttrib
           fill={attr.iconFill} stroke={attr.iconStroke} strokeWidth="2" strokeLinecap="round"
           style={glowStyle} />
       );
-    case "lightbringer": {
-      const o = 6, i = 2.4;
-      return (
-        <polygon
-          points={`${dx + o},${dy} ${dx + i},${dy + i} ${dx},${dy + o} ${dx - i},${dy + i} ${dx - o},${dy} ${dx - i},${dy - i} ${dx},${dy - o} ${dx + i},${dy - i}`}
-          fill={attr.iconFill} stroke={attr.iconStroke} strokeWidth="2"
-          style={glowStyle} />
-      );
-    }
+    case "lightbringer":
+      return <LightbringerStar cx={dx} cy={dy} />;
     case "cult":
       return (
         <path
