@@ -6,6 +6,7 @@ import { LightbringerStar } from "@/components/specialAttributes/SpecialAttribut
 import type { MapMarker } from "@/types/sector";
 import type { SvgViewBox } from "@/components/SvgTooltip";
 import { SvgTooltip } from "@/components/SvgTooltip";
+import { MapInfoCard, OBJECT_TYPE_LABELS } from "@/components/sectormap/MapInfoCard";
 import { ALLEGIANCES } from "@/lib/allegiances";
 import { MARKER_COLORS, SHIP_COLORS } from "@/lib/bodyColors";
 import { SYS_SCALE, FLEET_SHIPS, triLeft, wavyCloudPath } from "@/lib/sectorMapHelpers";
@@ -223,14 +224,6 @@ export function FreeMarkerLayer({
         const cardW = 220;
         const cardH = 50 + (marker.externalUrl ? 34 : 0);
 
-        const typeLabels: Record<string, string> = {
-          ship: "Ship",
-          fleet: "Fleet",
-          anomaly: "Anomaly",
-          poi: "Point of Interest",
-          "black-hole": "Black Hole",
-        };
-
         return (
           <g transform={`translate(${marker.x.toFixed(1)},${marker.y.toFixed(1)}) scale(${SYS_SCALE * 2})`}>
             <SvgTooltip
@@ -241,39 +234,16 @@ export function FreeMarkerLayer({
               parentOffsetX={marker.x} parentOffsetY={marker.y}
               scale={SYS_SCALE * 2}
               onMouseEnter={markerCardEnter} onMouseLeave={markerCardLeave}>
-              <div style={{ display: "flex", alignItems: "stretch", gap: "6px", marginBottom: "5px" }}>
-                <div style={{ flex: "0 0 70%" }}>
-                  <div style={{ color: cardAccent, fontSize: "11px", fontWeight: 600, marginBottom: "3px" }}>
-                    {marker.name}
-                  </div>
-                  <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {typeLabels[marker.type] ?? marker.type}
-                    {allegiance && (
-                      <>
-                        <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-                        <span style={{ color: allegiance.color }}>{allegiance.name}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {allegiance && (
-                  <div style={{ flex: "0 0 30%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <img src={allegiance.logo} alt={allegiance.name}
-                      style={{ width: "28px", height: "28px", objectFit: "contain" }} />
-                  </div>
-                )}
-              </div>
-              {marker.externalUrl && (
-                <a href={marker.externalUrl} target="_blank" rel="noopener noreferrer" style={{
-                  display: "block", marginTop: "8px", padding: "4px 8px",
-                  background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)",
-                  borderRadius: "4px", color: "rgba(165,180,252,0.9)", fontSize: "9px",
-                  textAlign: "center", letterSpacing: "0.08em", textDecoration: "none",
-                  textTransform: "uppercase", pointerEvents: "auto",
-                }}>
-                  View on Kanka ↗
-                </a>
-              )}
+              <MapInfoCard name={marker.name} color={cardAccent} allegiance={allegiance} externalUrl={marker.externalUrl}
+                subtitle={<>
+                  {OBJECT_TYPE_LABELS[marker.type] ?? marker.type}
+                  {allegiance && (
+                    <>
+                      <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
+                      <span style={{ color: allegiance.color }}>{allegiance.name}</span>
+                    </>
+                  )}
+                </>} />
             </SvgTooltip>
           </g>
         );
