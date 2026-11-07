@@ -110,6 +110,15 @@ export async function getMessageReadByUserIds(messageId: number): Promise<number
   return rows.map((r) => r.user_id as number);
 }
 
+// ON CONFLICT relies on UNIQUE (message_id, user_id); also dedupes ids repeated in the input
+function recipientsInsert(messageId: number, userIds: number[]) {
+  return sql`
+    INSERT INTO message_recipients (message_id, user_id)
+    SELECT ${messageId}, unnest(${userIds}::int[])
+    ON CONFLICT DO NOTHING
+  `;
+}
+
 /** Create a message and insert recipient rows */
 export async function createMessage(fields: {
   kankaEntityId: number | null;
@@ -127,12 +136,7 @@ export async function createMessage(fields: {
 
   const message = rowToMessage(rows[0]);
 
-  for (const userId of fields.recipientUserIds) {
-    await sql`
-      INSERT INTO message_recipients (message_id, user_id)
-      VALUES (${message.id}, ${userId})
-    `;
-  }
+  await recipientsInsert(message.id, fields.recipientUserIds);
 
   return message;
 }
@@ -162,14 +166,11 @@ export async function updateMessage(
 
   if (rows.length === 0) return null;
 
-  // Replace recipients
-  await sql`DELETE FROM message_recipients WHERE message_id = ${id}`;
-  for (const userId of fields.recipientUserIds) {
-    await sql`
-      INSERT INTO message_recipients (message_id, user_id)
-      VALUES (${id}, ${userId})
-    `;
-  }
+  // Replace recipients atomically; concurrent saves used to interleave and stack duplicate rows
+  await sql.transaction([
+    sql`DELETE FROM message_recipients WHERE message_id = ${id}`,
+    recipientsInsert(id, fields.recipientUserIds),
+  ]);
 
   return rowToMessage(rows[0]);
 }

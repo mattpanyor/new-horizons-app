@@ -57,6 +57,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [archivedMessages, setArchivedMessages] = useState<MessageRow[]>([]);
   const [editing, setEditing] = useState<EditForm | null>(null);
+  const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [fullyReadOpen, setFullyReadOpen] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -142,11 +143,12 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
       recipientUserIds: editing.sendToAll ? [] : editing.recipientUserIds,
     };
 
+    setSaving(true);
     const res = await fetch("/api/admin/messages", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    });
+    }).finally(() => setSaving(false));
 
     if (!res.ok) {
       const data = await res.json();
@@ -558,7 +560,7 @@ export default function AdminMessagesPanel({ users }: { users: User[] }) {
               </button>
               <button
                 onClick={handleSave}
-                disabled={!editing.subject || !editing.body || (!editing.sendToAll && editing.recipientUserIds.length === 0)}
+                disabled={saving || !editing.subject || !editing.body || (!editing.sendToAll && editing.recipientUserIds.length === 0)}
                 className="px-3 py-1.5 text-sm rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {editing.id ? "Save" : "Send"}
