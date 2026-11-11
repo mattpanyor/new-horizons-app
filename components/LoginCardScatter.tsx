@@ -1,5 +1,7 @@
 "use client";
 
+// DEPRECATED: removed from LoginScreen 2026-11-10; unused, candidate for deletion along with its public/login/ art.
+
 // Crew cards dealt face-up around the login box, as if someone tossed them onto
 // the table. Decorative only — the layer is pointer-events-none so it never
 // intercepts the form. Sits above the dot-grid traveller (which paints earlier
